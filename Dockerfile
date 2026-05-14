@@ -1,0 +1,14 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir uv
+
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
+
+RUN uv sync --frozen --no-dev
+
+EXPOSE 8787
+
+CMD ["uv", "run", "uvicorn", "plugin_market_backend.app:app", "--host", "0.0.0.0", "--port", "8787"]
