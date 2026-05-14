@@ -1,12 +1,11 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: plugin_market
       POSTGRES_USER: plugin_market
       POSTGRES_PASSWORD: plugin_market
-    ports:
-      - "5432:5432"
     volumes:
       - plugin_market_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,13 +16,14 @@ services:
 
   api:
     build: .
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     env_file:
-      - .env.example
+      - .env
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
 
 volumes:
   plugin_market_pgdata:

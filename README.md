@@ -44,6 +44,53 @@ docker compose up --build
 
 生产部署前应复制 `.env.example` 并替换所有 token 和 webhook secret。
 
+当前仓库内置的 `docker-compose.yml` 适合以下生产拓扑：
+
+- `postgres` 仅在 Docker 网络内暴露，不直接开放到公网。
+- `api` 仅绑定宿主机 `127.0.0.1:8787`，用于给 Nginx、Caddy 等反向代理转发。
+- 反向代理再把公网域名，例如 `https://market.mofox-sama.com`，转发到 `http://127.0.0.1:8787`。
+
+建议部署步骤：
+
+```bash
+cp .env.example .env
+# 编辑 .env，替换数据库、OAuth、session secret、token 等配置
+docker compose up -d --build
+docker compose logs -f api
+```
+
+如果你要通过域名访问服务，至少需要：
+
+- 将 `market.mofox-sama.com` 的 DNS A 记录指向部署服务器公网 IP。
+- 将 `PLUGIN_MARKET_GITHUB_OAUTH_REDIRECT_URI` 改为 `https://market.mofox-sama.com/api/v1/auth/github/callback`。
+- 在反向代理中把域名转发到 `127.0.0.1:8787`。
+
+Nginx 反代示例：
+
+```nginx
+server {
+	listen 80;
+	server_name market.mofox-sama.com;
+	return 301 https://$host$request_uri;
+}
+
+server {
+	listen 443 ssl http2;
+	server_name market.mofox-sama.com;
+
+	ssl_certificate /etc/letsencrypt/live/market.mofox-sama.com/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/market.mofox-sama.com/privkey.pem;
+
+	location / {
+		proxy_pass http://127.0.0.1:8787;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto https;
+	}
+}
+```
+
 ## 配置
 
 环境变量前缀为 `PLUGIN_MARKET_`：
@@ -135,6 +182,106 @@ X-Hub-Signature-256: sha256=<signature>
 ```
 
 设置 `PLUGIN_MARKET_GITHUB_WEBHOOK_SECRET` 后会强制验签。当前 webhook 先做事件持久化和审计，为后续 GitHub Release 复核任务提供输入。
+
+## API 路由清单
+
+以下为当前后端对外暴露的主要接口，路由来源于 [src/plugin_market_backend/app.py](src/plugin_market_backend/app.py)。
+
+### 健康检查与站点信息
+
+```text
+GET    /health
+GET    /ready
+GET    /api/v1/brand
+```
+
+### 公共插件市场接口
+
+```text
+GET    /api/v1/plugins
+GET    /api/v1/market/featured
+GET    /api/v1/market/trending-authors
+GET    /api/v1/market/stats
+GET    /api/v1/plugins/{plugin_id}
+GET    /api/v1/plugins/{plugin_id}/community
+GET    /api/v1/plugins/{plugin_id}/rating
+POST   /api/v1/plugins/{plugin_id}/rating
+DELETE /api/v1/plugins/{plugin_id}/rating
+POST   /api/v1/plugins/{plugin_id}/like
+GET    /api/v1/plugins/{plugin_id}/comments
+POST   /api/v1/plugins/{plugin_id}/comments
+DELETE /api/v1/plugins/{plugin_id}/comments/{comment_id}
+POST   /api/v1/plugins/{plugin_id}/install-record
+GET    /api/v1/plugins/{plugin_id}/versions
+GET    /api/v1/plugins/{plugin_id}/versions/{version}
+GET    /api/v1/plugins/{plugin_id}/recommended-version
+GET    /api/v1/plugins/{plugin_id}/install
+GET    /api/v1/categories
+GET    /api/v1/tags
+```
+
+### GitHub 登录与当前用户接口
+
+```text
+GET    /api/v1/auth/github/login
+GET    /api/v1/auth/github/callback
+POST   /api/v1/auth/logout
+GET    /api/v1/me
+GET    /api/v1/me/plugins
+GET    /api/v1/me/plugins/{plugin_id}
+POST   /api/v1/me/plugins/{plugin_id}/versions/{version}/yank
+DELETE /api/v1/me/plugins/{plugin_id}
+```
+
+### 作者发布接口
+
+```text
+POST   /api/v1/plugins
+PUT    /api/v1/plugins/{plugin_id}
+POST   /api/v1/plugins/{plugin_id}/versions
+POST   /api/v1/plugins/{plugin_id}/sync
+POST   /api/v1/plugins/{plugin_id}/versions/{version}/yank
+GET    /api/v1/plugins/{plugin_id}/status
+```
+
+### 管理后台接口
+
+```text
+GET    /api/v1/admin/reviews
+GET    /api/v1/admin/plugins
+GET    /api/v1/admin/plugins/{plugin_id}
+GET    /api/v1/admin/dashboard
+GET    /api/v1/admin/system
+GET    /api/v1/admin/stats
+POST   /api/v1/admin/plugins/{plugin_id}/reject
+POST   /api/v1/admin/plugins/{plugin_id}/publish
+POST   /api/v1/admin/plugins/{plugin_id}/trust-level/{trust_level}
+POST   /api/v1/admin/plugins/{plugin_id}/block
+POST   /api/v1/admin/plugins/{plugin_id}/deprecate
+DELETE /api/v1/admin/plugins/{plugin_id}
+POST   /api/v1/admin/plugins/{plugin_id}/versions/{version}/reject
+POST   /api/v1/admin/plugins/{plugin_id}/versions/{version}/publish
+POST   /api/v1/admin/plugins/{plugin_id}/versions/{version}/yank
+POST   /api/v1/admin/plugins/{plugin_id}/versions/{version}/block
+```
+
+### GitHub Webhook 接口
+
+```text
+POST   /api/v1/github/webhooks
+```
+
+### 前端页面路由
+
+这些路由由同一个 FastAPI 服务直接托管静态前端：
+
+```text
+GET /               # 插件市场首页
+GET /admin          # 管理后台
+GET /me             # 当前用户插件管理页
+GET /plugin/{plugin_id}
+GET /author/{author_id}
+```
 
 ## 测试
 
