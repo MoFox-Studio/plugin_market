@@ -147,7 +147,7 @@ app.add_exception_handler(RequestValidationError, validation_error_handler)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 SERVER_STARTED_AT = datetime.now(timezone.utc)
 ensure_plugin_media_dirs()
-app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
+app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 app.mount("/plugin-media", StaticFiles(directory=PLUGIN_MEDIA_DIR), name="plugin-media")
 
 
@@ -217,12 +217,19 @@ async def author_page(author_id: str) -> FileResponse:  # noqa: ARG001
     return frontend_file("index.html")
 
 
+@app.get("/logo.png", include_in_schema=False)
+async def logo_file() -> FileResponse:
+    """Serve the market logo used by the SPA shell."""
+
+    return frontend_file("logo.png")
+
+
 @app.get("/api/v1/brand")
 async def brand_assets() -> dict[str, str | None]:
     """Return optional brand assets available to the frontend."""
 
     logo_path = STATIC_DIR / "logo.png"
-    return {"logo_url": "/assets/logo.png" if logo_path.exists() else None}
+    return {"logo_url": "/logo.png" if logo_path.exists() else None}
 
 
 @app.get("/health")
