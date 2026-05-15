@@ -43,6 +43,41 @@ async def test_public_plugin_detail_and_versions(client: AsyncClient) -> None:
     assert recommended.json()["version"] == "1.0.0"
 
 
+async def test_public_plugin_readme_endpoint(client: AsyncClient) -> None:
+    """README endpoint should report absence cleanly for plugins without README content."""
+
+    response = await client.get("/api/v1/plugins/demo_plugin/readme")
+
+    assert response.status_code == 200
+    assert response.json() == {"plugin_id": "demo_plugin", "exists": False, "html": None}
+
+
+async def test_public_plugin_dependencies_endpoint(client: AsyncClient) -> None:
+    """Dependency endpoint should resolve marketplace matches and preserve version constraints."""
+
+    await client.post("/api/v1/plugins", json=plugin_payload("asr_adapter", display_name="ASR Adapter"), headers=AUTHOR_HEADERS)
+    payload = plugin_payload("funasr_asr_provider", display_name="FunASR Provider")
+    payload["plugin_dependencies"] = ["asr_adapter>=1.0.0"]
+    await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
+
+    response = await client.get("/api/v1/plugins/funasr_asr_provider/dependencies")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "plugin_id": "funasr_asr_provider",
+        "items": [
+            {
+                "plugin_id": "asr_adapter",
+                "raw": "asr_adapter>=1.0.0",
+                "version_spec": ">=1.0.0",
+                "exists_in_market": True,
+                "display_name": "ASR Adapter",
+                "icon_url": None,
+            }
+        ],
+    }
+
+
 async def test_public_install_info(client: AsyncClient) -> None:
     """Install info should include plugin and recommended version metadata."""
 

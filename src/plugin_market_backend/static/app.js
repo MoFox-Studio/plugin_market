@@ -492,7 +492,12 @@
   // ---------- Plugin Detail ----------
   async function renderPluginDetail(pluginId) {
     appRoot.innerHTML='<div class="loading-screen">\u52a0\u8f7d\u63d2\u4ef6\u8be6\u60c5\u2026</div>';
-    const [snapshot,versions]=await Promise.all([API.get(`/api/v1/plugins/${encodeURIComponent(pluginId)}/community`),API.get(`/api/v1/plugins/${encodeURIComponent(pluginId)}/versions`).catch(()=>({items:[]}))]);
+    const [snapshot,versions,readme,dependencies]=await Promise.all([
+      API.get(`/api/v1/plugins/${encodeURIComponent(pluginId)}/community`),
+      API.get(`/api/v1/plugins/${encodeURIComponent(pluginId)}/versions`).catch(()=>({items:[]})),
+      API.get(`/api/v1/plugins/${encodeURIComponent(pluginId)}/readme`).catch(()=>({exists:false,html:null})),
+      API.get(`/api/v1/plugins/${encodeURIComponent(pluginId)}/dependencies`).catch(()=>({items:[]}))
+    ]);
     const plugin=snapshot.plugin, rating=snapshot.rating;
     appRoot.innerHTML=`
       <div class="shell" style="padding-top:16px;color:var(--muted);font-size:0.82rem"><a href="/" data-route="/">\u5e02\u573a</a><span style="margin:0 6px">/</span>${escape(plugin.display_name)}</div>
@@ -506,6 +511,8 @@
         <div class="tabs" data-tabs><button type="button" class="active" data-tab="overview">\u7b80\u4ecb</button><button type="button" data-tab="versions">\u7248\u672c<span class="count">${versions.items.length}</span></button><button type="button" data-tab="comments">\u8bc4\u8bba<span class="count">${plugin.comments_count}</span></button></div>
         <div data-tab-panels>
           <section data-panel="overview"><div class="panel"><h3>\u63d2\u4ef6\u7b80\u4ecb</h3><div class="description">${escape(plugin.description||plugin.summary)}</div></div>
+            ${dependencyPanelMarkup(dependencies)}
+            ${readmePanelMarkup(readme)}
             <div class="panel"><h3>\u5206\u7c7b\u4e0e\u6807\u7b7e</h3><div class="card-tags">${(plugin.categories||[]).map(categoryTagMarkup).join("")}${(plugin.tags||[]).map(t=>`<span class="tag">#${escape(t)}</span>`).join("")}</div></div>
             <div class="panel"><h3>\u7ef4\u62a4\u8005</h3><div style="color:var(--muted);font-size:0.86rem">${plugin.maintainers.map(m=>`<a href="/author/${encodeURIComponent(m)}" data-route="/author">${escape(m)}</a>`).join(" \u00b7 ")}</div></div></section>
           <section data-panel="versions" hidden><div class="panel"><h3>\u53d1\u5e03\u5386\u53f2</h3>${riskWarningMarkup("inline")}<div>${versions.items.length?versions.items.map(versionRow).join(""):emptyState("\u6682\u65e0\u7248\u672c","\u4f5c\u8005\u5c1a\u672a\u53d1\u5e03\u4efb\u4f55\u5df2\u5ba1\u6838\u901a\u8fc7\u7684\u7248\u672c\u3002")}</div></div></section>
@@ -530,6 +537,33 @@
       </div></aside></div>`;
     bindDetailEvents(plugin,rating);
     renderComments(plugin.plugin_id);
+  }
+
+  function readmePanelMarkup(readme) {
+    if(!readme?.exists || !readme.html) return "";
+    return `<div class="panel"><h3>README</h3><div class="markdown-content">${readme.html}</div></div>`;
+  }
+
+  function dependencyPanelMarkup(payload) {
+    const items = payload?.items || [];
+    if (!items.length) return "";
+    return `<div class="panel"><h3>\u4f9d\u8d56\u63d2\u4ef6</h3><div class="dependency-list">${items.map(dependencyItemMarkup).join("")}</div></div>`;
+  }
+
+  function dependencyItemMarkup(item) {
+    const title = item.display_name || item.plugin_id;
+    const spec = item.version_spec ? `<span class="dependency-spec">${escape(item.version_spec)}</span>` : "";
+    const meta = item.exists_in_market
+      ? `<span class="dependency-meta">\u5df2\u6536\u5f55\u4e8e\u5e02\u573a</span>`
+      : `<span class="dependency-meta">\u5c1a\u672a\u5728\u5e02\u573a\u4e2d\u627e\u5230</span>`;
+    const icon = item.icon_url
+      ? `<img class="dependency-icon" src="${escape(item.icon_url)}" alt="">`
+      : `<span class="dependency-icon dependency-icon-fallback">${escape(title.trim()[0]?.toUpperCase() || "P")}</span>`;
+    const content = `${icon}<span class="dependency-copy"><strong>${escape(title)}</strong><span>${escape(item.plugin_id)}</span></span>${spec}${meta}`;
+    if (item.exists_in_market) {
+      return `<a class="dependency-chip is-link" href="/plugin/${encodeURIComponent(item.plugin_id)}" data-route="/plugin">${content}</a>`;
+    }
+    return `<div class="dependency-chip">${content}</div>`;
   }
 
   function versionRow(v) {
@@ -1102,16 +1136,32 @@
   // ---------- Search ----------
   qs("[data-search-form]")?.addEventListener("submit",(e)=>{
     e.preventDefault();
+    setMobileNavOpen(false);
     const q=qs("[data-search-input]").value.trim();
     marketState.query=q; marketState.offset=0;
     if(parseRoute().name!=="market"){navigate("/?"+(q?`q=${encodeURIComponent(q)}`:""));}
     else{history.replaceState(null,"",q?`/?q=${encodeURIComponent(q)}`:"/");updateFeaturedVisibility();renderMarketGrid();}
   });
 
+  function setMobileNavOpen(open) {
+    const nav = qs("[data-topbar-nav]");
+    const toggle = qs("[data-mobile-toggle]");
+    if (!nav || !toggle) return;
+    if (open) nav.dataset.mobileOpen = "true";
+    else delete nav.dataset.mobileOpen;
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
   qs("[data-mobile-toggle]")?.addEventListener("click",()=>{
     const nav=qs("[data-topbar-nav]"); if(!nav) return;
-    if(nav.dataset.hideMobile==="true") delete nav.dataset.hideMobile; else nav.dataset.hideMobile="true";
+    setMobileNavOpen(nav.dataset.mobileOpen !== "true");
   });
+
+  qs("[data-topbar-nav]")?.addEventListener("click",(event)=>{
+    if(event.target.closest("a,button")) setMobileNavOpen(false);
+  });
+
+  setMobileNavOpen(false);
 
   // ---------- Boot ----------
   showFirstVisitDisclaimer();

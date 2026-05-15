@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 
@@ -59,6 +60,11 @@ async def init_database() -> None:
 
     async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        columns = await conn.run_sync(lambda sync_conn: {item["name"] for item in inspect(sync_conn).get_columns("plugins")})
+        if "readme_markdown" not in columns:
+            await conn.execute(text("ALTER TABLE plugins ADD COLUMN readme_markdown TEXT"))
+        if "plugin_dependencies" not in columns:
+            await conn.execute(text("ALTER TABLE plugins ADD COLUMN plugin_dependencies JSON"))
 
 
 async def drop_database() -> None:

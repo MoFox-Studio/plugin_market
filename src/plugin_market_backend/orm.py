@@ -72,6 +72,8 @@ class PluginORM(Base):
     display_name: Mapped[str] = mapped_column(String(200))
     summary: Mapped[str] = mapped_column(String(500))
     description: Mapped[str] = mapped_column(Text, default="")
+    readme_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
+    plugin_dependencies: Mapped[list[str]] = mapped_column(JSON, default=list)
     icon_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     homepage: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     repository_url: Mapped[str] = mapped_column(String(1000))

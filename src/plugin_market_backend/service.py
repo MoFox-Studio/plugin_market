@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import datetime, timedelta
+import re
 from typing import Any
 
 from packaging.version import InvalidVersion, Version
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from plugin_market_backend.config import get_settings
+from plugin_market_backend.content import delete_plugin_icon, normalize_readme_markdown, render_readme_html, store_plugin_icon
 from plugin_market_backend.enums import AuthorType, PluginStatus, ReviewAction, SyncStatus, TrustLevel, VersionStatus
 from plugin_market_backend.errors import ApiError
 from plugin_market_backend.orm import AuthorORM, PluginCommentORM, PluginLikeORM, PluginMaintainerORM, PluginORM, PluginRatingORM, PluginVersionORM, ReviewRecordORM, WebhookEventORM, utc_now
@@ -25,7 +27,10 @@ from plugin_market_backend.schemas import (
     MarketStats,
     Plugin,
     PluginCreate,
+    PluginDependenciesResponse,
+    PluginDependency,
     PluginGovernanceSnapshot,
+    PluginReadmeResponse,
     PluginStatusResponse,
     PluginUpdate,
     PluginVersion,
@@ -56,6 +61,11 @@ def _version_key(value: str) -> tuple[int, Version | str]:
         return (1, Version(value))
     except InvalidVersion:
         return (0, value)
+
+
+_PLUGIN_DEPENDENCY_PATTERN = re.compile(
+    r"^(?P<name>[A-Za-z0-9_-]+)(?P<spec>\s*(?:===|==|!=|~=|>=|<=|>|<).+)?$"
+)
 
 
 class MarketService:
@@ -119,12 +129,15 @@ class MarketService:
         if await self.session.get(PluginORM, payload.plugin_id) is not None:
             raise ApiError(409, "PLUGIN_ALREADY_EXISTS", "Plugin already exists.", {"plugin_id": payload.plugin_id})
         now = utc_now()
+        icon_url = store_plugin_icon(payload.plugin_id, payload.icon_png_base64) if payload.icon_png_base64 else (str(payload.icon_url) if payload.icon_url else None)
         plugin = PluginORM(
             plugin_id=payload.plugin_id,
             display_name=payload.display_name,
             summary=payload.summary,
             description=payload.description,
-            icon_url=str(payload.icon_url) if payload.icon_url else None,
+            readme_markdown=normalize_readme_markdown(payload.readme_markdown),
+            plugin_dependencies=self._normalize_plugin_dependencies(payload.plugin_dependencies),
+            icon_url=icon_url,
             homepage=str(payload.homepage) if payload.homepage else None,
             repository_url=str(payload.repository_url),
             license=payload.license,
@@ -244,20 +257,70 @@ class MarketService:
         stats = await self._community_stats_for([plugin_id], viewer_id)
         return self._plugin_schema(plugin, stats.get(plugin_id))
 
+    async def get_plugin_dependencies(self, plugin_id: str) -> PluginDependenciesResponse:
+        """Return resolved plugin dependency data for one plugin detail page."""
+
+        plugin = await self._get_plugin_orm(plugin_id)
+        raw_items = self._normalize_plugin_dependencies(plugin.plugin_dependencies)
+        parsed_items: list[tuple[str, str, str | None]] = []
+        referenced_ids: list[str] = []
+
+        for raw in raw_items:
+            dependency_id, version_spec = self._parse_plugin_dependency_ref(raw)
+            parsed_items.append((raw, dependency_id or raw, version_spec))
+            if dependency_id:
+                referenced_ids.append(dependency_id)
+
+        existing: dict[str, PluginORM] = {}
+        if referenced_ids:
+            stmt = select(PluginORM).where(PluginORM.plugin_id.in_(sorted(set(referenced_ids))))
+            existing = {
+                item.plugin_id: item
+                for item in list((await self.session.scalars(stmt)).all())
+            }
+
+        return PluginDependenciesResponse(
+            plugin_id=plugin.plugin_id,
+            items=[
+                PluginDependency(
+                    plugin_id=dependency_id,
+                    raw=raw,
+                    version_spec=version_spec,
+                    exists_in_market=dependency_id in existing,
+                    display_name=existing[dependency_id].display_name if dependency_id in existing else None,
+                    icon_url=existing[dependency_id].icon_url if dependency_id in existing else None,
+                )
+                for raw, dependency_id, version_spec in parsed_items
+            ],
+        )
+
     async def update_plugin(self, plugin_id: str, payload: PluginUpdate, operator_id: str) -> Plugin:
         """Update mutable plugin metadata and keep it published unless blocked."""
 
         plugin = await self._get_plugin_orm(plugin_id)
         await self._ensure_owner(plugin, operator_id)
-        update_data = payload.model_dump(exclude_none=True)
+        update_data = payload.model_dump(exclude_unset=True)
         if not update_data:
             return self._plugin_schema(plugin)
         before = plugin.status
+        if "icon_png_base64" in update_data:
+            icon_data = update_data.pop("icon_png_base64")
+            if icon_data:
+                plugin.icon_url = store_plugin_icon(plugin_id, icon_data)
+            else:
+                delete_plugin_icon(plugin_id)
+                plugin.icon_url = None
+        if "readme_markdown" in update_data:
+            plugin.readme_markdown = normalize_readme_markdown(update_data.pop("readme_markdown"))
+        if "plugin_dependencies" in update_data:
+            plugin.plugin_dependencies = self._normalize_plugin_dependencies(update_data.pop("plugin_dependencies"))
         for key, value in update_data.items():
             if key in {"icon_url", "homepage", "repository_url"} and value is not None:
                 value = str(value)
             if key == "maintainers":
                 continue
+            if key == "icon_url" and value is None:
+                delete_plugin_icon(plugin_id)
             setattr(plugin, key, value)
         if plugin.status != PluginStatus.BLOCKED:
             plugin.status = PluginStatus.PENDING_REVIEW if self._review_required() else PluginStatus.PUBLISHED
@@ -712,6 +775,13 @@ class MarketService:
         )
         return [self._review_schema(item) for item in await self.session.scalars(stmt)]
 
+    async def get_plugin_readme(self, plugin_id: str) -> PluginReadmeResponse:
+        """Return rendered README content for a plugin detail page."""
+
+        plugin = await self._get_plugin_orm(plugin_id)
+        html = render_readme_html(plugin.readme_markdown)
+        return PluginReadmeResponse(plugin_id=plugin.plugin_id, exists=html is not None, html=html)
+
     def _plugin_schema(self, plugin: PluginORM, stats: dict[str, Any] | None = None) -> Plugin:
         """Convert a plugin ORM object to API schema."""
 
@@ -727,6 +797,7 @@ class MarketService:
             summary=plugin.summary,
             description=plugin.description,
             icon_url=plugin.icon_url,
+            has_readme=bool(normalize_readme_markdown(plugin.readme_markdown)),
             homepage=plugin.homepage,
             repository_url=plugin.repository_url,
             license=plugin.license,
@@ -752,6 +823,32 @@ class MarketService:
             viewer_has_liked=bool(stats.get("viewer_has_liked", False)),
             viewer_rating=stats.get("viewer_rating"),
         )
+
+    def _normalize_plugin_dependencies(self, values: Iterable[str] | None) -> list[str]:
+        """Normalize plugin dependency references from manifest payloads."""
+
+        normalized: list[str] = []
+        for value in values or []:
+            item = str(value).strip()
+            if item:
+                normalized.append(item)
+        return normalized
+
+    def _parse_plugin_dependency_ref(self, ref: str) -> tuple[str, str | None]:
+        """Split a dependency reference into plugin id and version spec."""
+
+        value = str(ref or "").strip()
+        if not value:
+            return "", None
+
+        name, separator, remainder = value.partition(":")
+        if separator and remainder.lstrip().startswith(("===", "==", "!=", "~=", ">=", "<=", ">", "<")):
+            return name.strip(), remainder.strip() or None
+
+        match = _PLUGIN_DEPENDENCY_PATTERN.match(value)
+        if match:
+            return match.group("name"), (match.group("spec") or "").strip() or None
+        return value, None
 
     def _version_schema(self, version: PluginVersionORM) -> PluginVersion:
         """Convert a version ORM object to API schema."""

@@ -6,14 +6,15 @@ from httpx import AsyncClient
 from plugin_market_backend.session_auth import create_browser_session
 
 AUTHOR_HEADERS = {"Authorization": "Bearer dev-token"}
+PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5W7i8AAAAASUVORK5CYII="
 
 
-def plugin_payload(plugin_id: str = "sample_plugin") -> dict[str, object]:
+def plugin_payload(plugin_id: str = "sample_plugin", *, display_name: str = "Sample Plugin") -> dict[str, object]:
     """Return a valid plugin registration payload."""
 
     return {
         "plugin_id": plugin_id,
-        "display_name": "Sample Plugin",
+        "display_name": display_name,
         "summary": "Sample summary",
         "description": "Sample description",
         "homepage": "https://example.com/sample_plugin",
@@ -118,6 +119,49 @@ async def test_update_plugin_metadata_returns_pending_review(client: AsyncClient
     assert response.json()["status"] == "published"
 
 
+async def test_register_plugin_stores_icon_and_readme(client: AsyncClient) -> None:
+    """Plugin registration should normalize icon uploads and expose README availability."""
+
+    payload = plugin_payload()
+    payload["icon_png_base64"] = PNG_BASE64
+    payload["readme_markdown"] = "# Sample Plugin\n\n**Hello** from the README."
+
+    response = await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
+    readme = await client.get("/api/v1/plugins/sample_plugin/readme")
+
+    assert response.status_code == 200
+    assert response.json()["icon_url"] == "/plugin-media/icons/sample_plugin.png"
+    assert response.json()["has_readme"] is True
+    assert readme.status_code == 200
+    assert readme.json()["exists"] is True
+    assert "<h1>Sample Plugin</h1>" in readme.json()["html"]
+    assert "<strong>Hello</strong>" in readme.json()["html"]
+
+
+async def test_register_plugin_stores_plugin_dependencies(client: AsyncClient) -> None:
+    """Plugin registration should persist dependency metadata for detail views."""
+
+    await client.post(
+        "/api/v1/plugins",
+        json=plugin_payload("asr_adapter", display_name="ASR Adapter"),
+        headers=AUTHOR_HEADERS,
+    )
+    payload = plugin_payload("funasr_asr_provider", display_name="FunASR Provider")
+    payload["plugin_dependencies"] = ["asr_adapter>=1.0.0", "missing_plugin"]
+
+    response = await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
+    dependencies = await client.get("/api/v1/plugins/funasr_asr_provider/dependencies")
+
+    assert response.status_code == 200
+    assert dependencies.status_code == 200
+    assert dependencies.json()["items"][0]["plugin_id"] == "asr_adapter"
+    assert dependencies.json()["items"][0]["version_spec"] == ">=1.0.0"
+    assert dependencies.json()["items"][0]["exists_in_market"] is True
+    assert dependencies.json()["items"][0]["display_name"] == "ASR Adapter"
+    assert dependencies.json()["items"][1]["plugin_id"] == "missing_plugin"
+    assert dependencies.json()["items"][1]["exists_in_market"] is False
+
+
 async def test_author_yank_version(client: AsyncClient) -> None:
     """Plugin owners should be able to yank a version."""
 
@@ -151,3 +195,25 @@ async def test_me_plugin_management_snapshot_and_delete(client: AsyncClient) -> 
     assert snapshot.json()["versions"][0]["version"] == "1.0.0"
     assert deleted.status_code == 204
     assert missing.status_code == 404
+
+
+async def test_comment_submit_accepts_forwarded_https_origin(client: AsyncClient) -> None:
+    """Browser writes should stay allowed behind an HTTPS reverse proxy."""
+
+    await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
+    session_id = await create_browser_session("mock-author", "browser-test-token")
+    client.cookies.set("plugin_market_session", session_id, path="/")
+
+    response = await client.post(
+        "/api/v1/plugins/sample_plugin/comments",
+        json={"content": "Looks good."},
+        headers={
+            "Origin": "https://market.mofox-sama.com",
+            "X-Forwarded-Proto": "https",
+            "X-Forwarded-Host": "market.mofox-sama.com",
+            "Host": "127.0.0.1:8787",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["content"] == "Looks good."

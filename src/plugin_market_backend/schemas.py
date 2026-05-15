@@ -45,12 +45,15 @@ class PluginCreate(BaseModel):
     summary: str = Field(min_length=1)
     description: str = Field(default="")
     icon_url: HttpUrl | None = None
+    icon_png_base64: str | None = None
     homepage: HttpUrl | None = None
     repository_url: HttpUrl
     license: str = Field(min_length=1)
     categories: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     maintainers: list[str] = Field(default_factory=list)
+    plugin_dependencies: list[str] = Field(default_factory=list)
+    readme_markdown: str | None = None
 
 
 class PluginUpdate(BaseModel):
@@ -60,12 +63,26 @@ class PluginUpdate(BaseModel):
     summary: str | None = Field(default=None, min_length=1)
     description: str | None = None
     icon_url: HttpUrl | None = None
+    icon_png_base64: str | None = None
     homepage: HttpUrl | None = None
     repository_url: HttpUrl | None = None
     license: str | None = Field(default=None, min_length=1)
     categories: list[str] | None = None
     tags: list[str] | None = None
     maintainers: list[str] | None = None
+    plugin_dependencies: list[str] | None = None
+    readme_markdown: str | None = None
+
+
+class PluginDependency(BaseModel):
+    """Resolved plugin dependency for detail views."""
+
+    plugin_id: str
+    raw: str
+    version_spec: str | None = None
+    exists_in_market: bool = False
+    display_name: str | None = None
+    icon_url: str | None = None
 
 
 class Plugin(BaseModel):
@@ -76,6 +93,7 @@ class Plugin(BaseModel):
     summary: str
     description: str
     icon_url: str | None = None
+    has_readme: bool = False
     homepage: str | None = None
     repository_url: str
     license: str
@@ -261,6 +279,21 @@ class WebhookResponse(BaseModel):
 
     accepted: bool
     event_id: str
+
+
+class PluginReadmeResponse(BaseModel):
+    """Rendered README payload for plugin detail pages."""
+
+    plugin_id: str
+    exists: bool
+    html: str | None = None
+
+
+class PluginDependenciesResponse(BaseModel):
+    """Resolved plugin dependency payload for detail pages."""
+
+    plugin_id: str
+    items: list[PluginDependency] = Field(default_factory=list)
 
 
 class CommentAuthor(BaseModel):

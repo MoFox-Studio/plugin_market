@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from plugin_market_backend.auth import require_author_token
 from plugin_market_backend.config import get_settings
+from plugin_market_backend.content import PLUGIN_MEDIA_DIR, ensure_plugin_media_dirs
 from plugin_market_backend.database import configure_database, init_database, session_scope
 from plugin_market_backend.enums import PluginStatus, ReviewAction, TrustLevel, VersionStatus
 from plugin_market_backend.errors import ApiError, api_error_handler, validation_error_handler
@@ -34,8 +35,10 @@ from plugin_market_backend.schemas import (
     MarketStats,
     Plugin,
     PluginCreate,
+    PluginDependenciesResponse,
     PluginGovernanceSnapshot,
     PluginListResponse,
+    PluginReadmeResponse,
     PluginUpdate,
     PluginVersion,
     PluginVersionCreate,
@@ -62,6 +65,57 @@ from plugin_market_backend.session_auth import (
     require_browser_author,
     upsert_github_author,
 )
+
+
+def _first_proxy_header_value(value: str | None) -> str | None:
+    """Return the first value from a comma-separated proxy header."""
+
+    if not value:
+        return None
+    first = value.split(",", 1)[0].strip()
+    return first or None
+
+
+def _forwarded_header_value(value: str | None, key: str) -> str | None:
+    """Extract one field from the RFC 7239 Forwarded header."""
+
+    first = _first_proxy_header_value(value)
+    if not first:
+        return None
+    for part in first.split(";"):
+        name, _, raw = part.strip().partition("=")
+        if name.lower() != key:
+            continue
+        cleaned = raw.strip().strip('"')
+        return cleaned or None
+    return None
+
+
+def _normalize_origin(value: str) -> str:
+    """Normalize origins for reliable comparison."""
+
+    parsed = urlparse(value)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+    return value.rstrip("/").lower()
+
+
+def _expected_request_origin(request: Request) -> str:
+    """Reconstruct the browser-facing origin, preferring proxy headers."""
+
+    forwarded = request.headers.get("forwarded")
+    scheme = (
+        _first_proxy_header_value(request.headers.get("x-forwarded-proto"))
+        or _forwarded_header_value(forwarded, "proto")
+        or request.url.scheme
+    )
+    host = (
+        _first_proxy_header_value(request.headers.get("x-forwarded-host"))
+        or _forwarded_header_value(forwarded, "host")
+        or request.headers.get("host")
+        or request.url.netloc
+    )
+    return _normalize_origin(f"{scheme}://{host}")
 
 
 @asynccontextmanager
@@ -92,7 +146,9 @@ app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 SERVER_STARTED_AT = datetime.now(timezone.utc)
+ensure_plugin_media_dirs()
 app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
+app.mount("/plugin-media", StaticFiles(directory=PLUGIN_MEDIA_DIR), name="plugin-media")
 
 
 def frontend_file(name: str = "index.html") -> FileResponse:
@@ -121,9 +177,13 @@ def ensure_same_origin_browser_write(request: Request) -> None:
     parsed = urlparse(source)
     if not parsed.scheme or not parsed.netloc:
         raise ApiError(403, "FORBIDDEN", "Browser request origin is invalid.")
-    expected_origin = f"{request.url.scheme}://{request.url.netloc}"
-    request_origin = f"{parsed.scheme}://{parsed.netloc}"
-    allowed_origins = {expected_origin, *get_settings().cors_origins}
+    expected_origin = _expected_request_origin(request)
+    request_origin = _normalize_origin(f"{parsed.scheme}://{parsed.netloc}")
+    allowed_origins = {
+        expected_origin,
+        _normalize_origin(f"{request.url.scheme}://{request.url.netloc}"),
+        *(_normalize_origin(item) for item in get_settings().cors_origins),
+    }
     if request_origin not in allowed_origins:
         raise ApiError(403, "FORBIDDEN", "Cross-origin browser writes are not allowed.")
 
@@ -245,6 +305,22 @@ async def get_plugin(plugin_id: str, request: Request) -> Plugin:
     viewer_id = viewer.author_id if viewer else None
     async with session_scope() as session:
         return await MarketService(session).get_plugin(plugin_id, viewer_id)
+
+
+@app.get("/api/v1/plugins/{plugin_id}/readme", response_model=PluginReadmeResponse)
+async def get_plugin_readme(plugin_id: str) -> PluginReadmeResponse:
+    """Return rendered README content for the plugin detail view."""
+
+    async with session_scope() as session:
+        return await MarketService(session).get_plugin_readme(plugin_id)
+
+
+@app.get("/api/v1/plugins/{plugin_id}/dependencies", response_model=PluginDependenciesResponse)
+async def get_plugin_dependencies(plugin_id: str) -> PluginDependenciesResponse:
+    """Return resolved plugin dependency data for the plugin detail view."""
+
+    async with session_scope() as session:
+        return await MarketService(session).get_plugin_dependencies(plugin_id)
 
 
 @app.get("/api/v1/plugins/{plugin_id}/community", response_model=CommunitySnapshot)

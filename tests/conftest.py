@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
+import shutil
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -21,12 +23,15 @@ async def reset_database(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[None
     monkeypatch.setenv("PLUGIN_MARKET_REQUIRE_REVIEW", "false")
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     reset_settings_cache()
+    media_dir = Path("data") / "plugin_media"
+    shutil.rmtree(media_dir, ignore_errors=True)
     await close_database()
     configure_database("sqlite+aiosqlite:///:memory:")
     await init_database()
     async with session_scope() as session:
         await seed_database(session)
     yield
+    shutil.rmtree(media_dir, ignore_errors=True)
     await drop_database()
     await close_database()
 
