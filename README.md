@@ -149,20 +149,78 @@ Authorization: Bearer admin-token
 
 固定 token 仍保留给自动化和兼容测试使用；面向用户的网页登录与发布归属应使用 GitHub 身份。
 
-## 前端功能
+## 前端
+
+前端使用 Vue 3 + TypeScript + Vite 构建，源码位于 `frontend/` 目录。
+
+### 技术栈
+
+- Vue 3 (Composition API + `<script setup lang="ts">`)
+- Vue Router 4 (History mode)
+- Pinia (状态管理)
+- TypeScript 5
+- Vite 6
+
+### 目录结构
+
+```text
+frontend/
+├── src/
+│   ├── api/          # fetch 封装
+│   ├── assets/       # 全局 CSS
+│   ├── components/   # 通用组件
+│   ├── router/       # 路由定义
+│   ├── stores/       # Pinia stores (auth, taxonomy, toast)
+│   ├── types/        # TypeScript 接口定义
+│   ├── utils/        # 工具函数
+│   └── views/        # 页面视图
+├── public/           # 静态资源
+├── index.html
+├── tsconfig.json
+├── vite.config.js
+└── package.json
+```
+
+### 前端开发
+
+```bash
+cd frontend
+npm install
+npm run dev          # 启动开发服务器，API 代理到 http://127.0.0.1:8000
+npm run build        # 构建产物输出到 src/plugin_market_backend/static/
+npm run typecheck    # TypeScript 类型检查
+```
+
+开发模式下 Vite 会将 `/api` 请求代理到后端，无需额外配置。
+
+### 构建部署
+
+`npm run build` 会将产物直接输出到后端的 `src/plugin_market_backend/static/` 目录，FastAPI 直接 serve 该目录，无需额外部署步骤。
+
+### 前端功能
 
 插件市场 `/` 包含：
 
 - 排行榜：按版本活跃度和更新时间排序。
 - 最新插件：最近更新的已发布插件。
-- 随机推荐：从已发布插件中轮换展示。
-- 查看全部：展开完整插件列表并支持搜索。
+- 分类/标签筛选：侧边栏快速导航。
+- 搜索：支持关键字、分类、标签和信任等级组合筛选。
+- 网格/列表视图切换。
+
+个人工作台 `/me` 包含：
+
+- 插件列表与版本管理。
+- 一键下架版本。
+- 删除插件。
+- 查看治理记录。
 
 管理后台 `/admin` 包含：
 
-- 插件列表：查看状态、owner、摘要并执行通过、退回、封禁。
-- 审核记录：查看治理审计事件。
-- 服务监控：数据库、OAuth、webhook、待审核数量、用户数和最新审核时间。
+- 插件治理：上架、退回、封禁、下架、删除。
+- 版本治理：恢复、退回、下架、封禁。
+- 社区标识切换：官方、认证、社区。
+- 7 天活动图表与状态分布。
+- 热门插件观察与审核流。
 
 ## 推荐版本接口
 
