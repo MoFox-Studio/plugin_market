@@ -60,7 +60,8 @@ def _bootstrap_revision(sync_conn) -> str | None:
         "comment_mentions",
         "plugin_metadata_changes",
     }
-    if overhaul_tables.issubset(tables) and "mention_payload" in comment_columns:
+    existing_overhaul_tables = overhaul_tables.intersection(tables)
+    if existing_overhaul_tables:
         revision = HEAD_REVISION
 
     return revision
