@@ -75,9 +75,8 @@ async def _detect_bootstrap_revision() -> str | None:
         await engine.dispose()
 
 
-async def _bootstrap() -> None:
+def _run_alembic(revision: str | None) -> None:
     config = _alembic_config()
-    revision = await _detect_bootstrap_revision()
     if revision is not None:
         command.stamp(config, revision)
     command.upgrade(config, "head")
@@ -86,7 +85,8 @@ async def _bootstrap() -> None:
 def main() -> None:
     import asyncio
 
-    asyncio.run(_bootstrap())
+    revision = asyncio.run(_detect_bootstrap_revision())
+    _run_alembic(revision)
 
 
 if __name__ == "__main__":
