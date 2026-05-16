@@ -275,6 +275,24 @@ async def test_list_active_returns_visible_announcements() -> None:
         assert "Disabled" not in titles
 
 
+async def test_create_ensures_operator_author_exists() -> None:
+    """Create should backfill a missing operator author record."""
+
+    async with session_scope() as session:
+        service = AnnouncementsService(session)
+
+        created = await service.create(
+            AnnouncementCreate(title="Seedless Admin", display_mode="banner", audience="all"),
+            operator_id="mock-admin",
+        )
+
+        author = await session.get(AuthorORM, "mock-admin")
+
+        assert created.created_by == "mock-admin"
+        assert author is not None
+        assert author.is_admin is True
+
+
 async def test_list_active_single_modal_property() -> None:
     """At most one modal announcement should be returned (Property 3)."""
 

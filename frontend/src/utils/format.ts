@@ -46,6 +46,25 @@ export function formatDate(v: unknown): string {
   return parsed ? parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '\u2014'
 }
 
+export function toDatetimeLocalValue(value: unknown): string {
+  const parsed = parseApiDate(value)
+  if (!parsed) return ''
+
+  const year = parsed.getFullYear()
+  const month = String(parsed.getMonth() + 1).padStart(2, '0')
+  const day = String(parsed.getDate()).padStart(2, '0')
+  const hours = String(parsed.getHours()).padStart(2, '0')
+  const minutes = String(parsed.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+export function datetimeLocalToIso(value: string | null | undefined): string | null {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const parsed = new Date(raw)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+}
+
 export function formatUptime(seconds: number | string | null | undefined): string {
   const total = Number(seconds || 0)
   const days = Math.floor(total / 86400)

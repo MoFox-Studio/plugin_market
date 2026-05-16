@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import api from '@/api'
 import { useAnnouncementsStore } from '@/stores/announcements'
 import { useToastStore } from '@/stores/toast'
-import { formatDate, formatRelative } from '@/utils/format'
+import { datetimeLocalToIso, formatDate, formatRelative, toDatetimeLocalValue } from '@/utils/format'
 import type { Announcement, Audience, DisplayMode, Severity } from '@/types'
 
 interface AnnouncementDraft {
@@ -45,10 +45,6 @@ function createDraft(): AnnouncementDraft {
     audience: 'all',
     emit_inbox: false,
   }
-}
-
-function toDatetimeLocal(value?: string | null): string {
-  return value ? value.slice(0, 16) : ''
 }
 
 function startCreate(): void {
@@ -95,8 +91,8 @@ async function saveDraft(): Promise<void> {
       ...draft.value,
       title: draft.value.title.trim(),
       body_markdown: draft.value.body_markdown.trim(),
-      starts_at: draft.value.starts_at || null,
-      ends_at: draft.value.ends_at || null,
+      starts_at: datetimeLocalToIso(draft.value.starts_at),
+      ends_at: datetimeLocalToIso(draft.value.ends_at),
     }
     if (editingId.value === null) {
       await api.admin.announcements.create(payload)
@@ -177,11 +173,11 @@ onMounted(() => {
       </label>
       <label>
         <span>开始时间</span>
-        <input :value="toDatetimeLocal(draft.starts_at)" type="datetime-local" @input="draft.starts_at = ($event.target as HTMLInputElement).value || null">
+        <input :value="toDatetimeLocalValue(draft.starts_at)" type="datetime-local" @input="draft.starts_at = ($event.target as HTMLInputElement).value || null">
       </label>
       <label>
         <span>结束时间</span>
-        <input :value="toDatetimeLocal(draft.ends_at)" type="datetime-local" @input="draft.ends_at = ($event.target as HTMLInputElement).value || null">
+        <input :value="toDatetimeLocalValue(draft.ends_at)" type="datetime-local" @input="draft.ends_at = ($event.target as HTMLInputElement).value || null">
       </label>
       <label class="curation-editor-toggle">
         <input :checked="draft.dismissible" type="checkbox" @change="draft.dismissible = ($event.target as HTMLInputElement).checked">
