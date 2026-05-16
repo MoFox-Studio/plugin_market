@@ -27,4 +27,4 @@ RUN uv sync --frozen --no-dev
 
 EXPOSE 8787
 
-CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn plugin_market_backend.app:app --host 0.0.0.0 --port 8787"]
+CMD ["sh", "-c", "uv run python -m plugin_market_backend.bootstrap && uv run uvicorn plugin_market_backend.app:app --host 0.0.0.0 --port 8787"]

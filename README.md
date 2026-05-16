@@ -59,7 +59,12 @@ docker compose up -d --build
 docker compose logs -f api
 ```
 
-容器启动时会先执行 `alembic upgrade head`，再启动 API。这样 PostgreSQL 上的旧库会自动补齐最新 schema；如果你是从旧版本升级，首次重启时出现迁移日志属于正常现象。
+容器启动时会先执行数据库引导：
+
+- 如果数据库已经被 Alembic 管理，直接执行 `alembic upgrade head`。
+- 如果数据库是历史版本通过 `create_all` 建出来、但没有 `alembic_version`，会先按已存在表结构自动 `stamp` 到合适基线，再继续升级到最新。
+
+这样 PostgreSQL 上的旧库也能平滑接管；如果你是从旧版本升级，首次重启时出现迁移日志属于正常现象。
 
 如果你要通过域名访问服务，至少需要：
 
