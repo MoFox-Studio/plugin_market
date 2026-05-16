@@ -13,6 +13,8 @@ Neo-MoFox 插件市场中心后端，用于保存插件元数据、版本索引�
 - GitHub webhook：支持 `X-Hub-Signature-256` 验签和事件持久化审计。
 - 兼容性决策：按宿主版本、插件 API 版本、平台和预发布策略选择推荐版本。
 
+完整后端接口文档见 [BACKEND_API.md](BACKEND_API.md)。
+
 ## 本地启动
 
 ```bash
