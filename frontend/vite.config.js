@@ -4,6 +4,10 @@ import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [vue()],
+  test: {
+    environment: 'jsdom',
+    globals: false,
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

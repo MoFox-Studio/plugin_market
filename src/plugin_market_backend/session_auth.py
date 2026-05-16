@@ -7,7 +7,7 @@ import secrets
 from typing import Any
 
 from fastapi import Header, Request
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
 from plugin_market_backend.config import get_settings
 from plugin_market_backend.database import session_scope

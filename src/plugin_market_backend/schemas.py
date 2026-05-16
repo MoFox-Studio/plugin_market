@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -306,6 +307,15 @@ class CommentAuthor(BaseModel):
     is_admin: bool = False
 
 
+class MentionCandidate(BaseModel):
+    """Resolved mention candidate for search and comment rendering."""
+
+    author_id: str
+    github_login: str
+    display_name: str
+    avatar_url: str | None = None
+
+
 class Comment(BaseModel):
     """User comment on a plugin."""
 
@@ -317,6 +327,7 @@ class Comment(BaseModel):
     updated_at: datetime
     is_deleted: bool = False
     author: CommentAuthor
+    mentions: list[MentionCandidate] = Field(default_factory=list)
 
 
 class CommentCreate(BaseModel):
@@ -401,6 +412,443 @@ class TrendingItem(BaseModel):
     github_login: str
     display_name: str
     avatar_url: str | None = None
+    bio: str | None = None
     plugins_count: int
     likes_received: int
     downloads_total: int
+    rating_avg: float = 0.0
+    rating_count: int = 0
+    best_plugin: "TrendingPlugin | None" = None
+
+
+class TrendingPlugin(BaseModel):
+    """Compact plugin block used as fallback signature for an author."""
+
+    plugin_id: str
+    display_name: str
+    summary: str
+    icon_url: str | None = None
+    latest_version: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# plugin-market-overhaul phase 1 (task 2): incremental Pydantic schemas
+# ---------------------------------------------------------------------------
+
+
+# Shared literal vocabularies -------------------------------------------------
+
+AudienceLiteral = Literal[
+    "all",
+    "logged_in",
+    "anonymous",
+    "admins",
+    "authors_with_plugin",
+]
+"""Audience selectors shared by curation entries and announcements."""
+
+DisplayModeLiteral = Literal["banner", "modal"]
+"""Announcement presentation modes."""
+
+SeverityLiteral = Literal["info", "warning", "critical"]
+"""Announcement severity levels."""
+
+SlotTypeLiteral = Literal[
+    "featured_plugin",
+    "featured_author",
+    "signature_plugin",
+    "hero",
+    "sidebar",
+]
+"""Curation slot kinds rendered in the home showcase."""
+
+TargetTypeLiteral = Literal["plugin", "author"]
+"""Resource a curation entry references."""
+
+InboxMessageType = Literal["mention", "reply", "governance", "announcement", "system"]
+"""Inbox message categories."""
+
+InboxMessageStatus = Literal["unread", "read", "revoked"]
+"""Inbox message lifecycle status."""
+
+InboxLinkKind = Literal["comment", "plugin", "announcement", "system"]
+"""Where activating an inbox message should navigate."""
+
+BulkActionLiteral = Literal[
+    "publish",
+    "reject",
+    "block",
+    "deprecate",
+    "set_trust_level",
+    "delete",
+]
+"""Bulk admin actions accepted by ``POST /api/v1/admin/plugins/bulk``."""
+
+
+# Field-level helpers ---------------------------------------------------------
+
+
+def _ensure_https(value: HttpUrl | None) -> HttpUrl | None:
+    """Reject non-https URLs for sensitive media references."""
+
+    if value is None:
+        return None
+    if value.scheme != "https":
+        raise ValueError("URL must use https scheme")
+    return value
+
+
+def _validate_tag_list(values: list[str]) -> list[str]:
+    """Apply tag-set length and per-tag length constraints."""
+
+    if len(values) > 10:
+        raise ValueError("at most 10 tags are allowed")
+    for tag in values:
+        if not isinstance(tag, str) or not (1 <= len(tag) <= 40):
+            raise ValueError("each tag must be between 1 and 40 characters")
+    return values
+
+
+# Author profile / personal space --------------------------------------------
+
+
+class AuthorProfile(BaseModel):
+    """Personal-space profile payload returned to the Market frontend."""
+
+    author_id: str
+    bio: str = Field(default="", max_length=2000)
+    background_image_url: str | None = None
+    background_image_kind: Literal["url", "upload"] = "url"
+    updated_at: datetime | None = None
+
+
+class AuthorProfileUpdate(BaseModel):
+    """Partial update payload for ``PUT /api/v1/me/profile``."""
+
+    bio: str | None = Field(default=None, max_length=2000)
+    # Accept https URLs OR an internal /plugin-media/ path (uploaded image),
+    # OR an empty string meaning "clear the current background".
+    background_image_url: str | None = None
+
+    @field_validator("background_image_url")
+    @classmethod
+    def _validate_background(cls, value: str | None) -> str | None:
+        """Allow https URL, internal media path, or empty string (clear)."""
+
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            return ""
+        if stripped.startswith("/plugin-media/"):
+            return stripped
+        lowered = stripped.lower()
+        if lowered.startswith("https://"):
+            return stripped
+        raise ValueError(
+            "background_image_url must use https or be an internal /plugin-media/ path."
+        )
+
+
+# Pinned plugins --------------------------------------------------------------
+
+
+class PinnedPluginItem(BaseModel):
+    """One active pinned-plugin slot for an author."""
+
+    plugin_id: str
+    pinned_reason: str | None = Field(default=None, max_length=200)
+    pinned_at: datetime
+    plugin: Plugin | None = None
+
+
+class PinCreate(BaseModel):
+    """Request body for ``POST /api/v1/me/pins``."""
+
+    plugin_id: str = Field(min_length=1)
+    pinned_reason: str | None = Field(default=None, max_length=200)
+
+
+class PinUpdate(BaseModel):
+    """Request body for ``PUT /api/v1/me/pins/{plugin_id}``."""
+
+    pinned_reason: str | None = Field(default=None, max_length=200)
+
+
+# Inline plugin metadata patch -----------------------------------------------
+
+
+class PluginMetadataPatch(BaseModel):
+    """Partial plugin metadata edit (display_name / icon / categories / tags)."""
+
+    display_name: str | None = Field(default=None, min_length=1, max_length=200)
+    # icon_url accepts an https URL OR an internal /plugin-media/ path produced
+    # by the upload endpoint. Detailed scheme/path validation lives in
+    # ``InlineEditService._validate_icon_url`` so both shapes are accepted.
+    icon_url: str | None = None
+    categories: list[str] | None = None
+    tags: list[str] | None = None
+
+    @field_validator("tags")
+    @classmethod
+    def _check_tags(cls, value: list[str] | None) -> list[str] | None:
+        """Cap tag count and bound individual tag lengths."""
+
+        if value is None:
+            return None
+        return _validate_tag_list(value)
+
+
+# Inbox -----------------------------------------------------------------------
+
+
+class InboxMessageSource(BaseModel):
+    """Author who triggered an inbox message (mention / reply / governance)."""
+
+    author_id: str
+    github_login: str
+    display_name: str
+    avatar_url: str | None = None
+
+
+class InboxMessageLink(BaseModel):
+    """Navigation hint for an inbox message."""
+
+    kind: InboxLinkKind
+    plugin_id: str | None = None
+    comment_id: int | None = None
+    announcement_id: int | None = None
+
+
+class InboxMessage(BaseModel):
+    """Single inbox message returned to the recipient."""
+
+    id: int
+    type: InboxMessageType
+    status: InboxMessageStatus
+    preview: str = ""
+    payload: dict[str, Any] = Field(default_factory=dict)
+    source: InboxMessageSource | None = None
+    link: InboxMessageLink | None = None
+    related_plugin_id: str | None = None
+    related_comment_id: int | None = None
+    related_announcement_id: int | None = None
+    created_at: datetime
+    read_at: datetime | None = None
+
+
+class InboxUnreadCount(BaseModel):
+    """Lightweight unread-count response used by the navbar bell."""
+
+    count: int = Field(ge=0)
+
+
+class InboxMessageListResponse(BaseModel):
+    """Paginated inbox message response."""
+
+    items: list[InboxMessage] = Field(default_factory=list)
+    total: int = Field(ge=0)
+
+
+# Announcements ---------------------------------------------------------------
+
+
+class AnnouncementDTO(BaseModel):
+    """Announcement projected for both public and admin consumption."""
+
+    id: int
+    title: str = Field(min_length=1, max_length=200)
+    body_markdown: str = ""
+    display_mode: DisplayModeLiteral
+    severity: SeverityLiteral
+    dismissible: bool = True
+    enabled: bool = True
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    audience: AudienceLiteral
+    emit_inbox: bool = False
+    dismiss_token: int = 0
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class AnnouncementCreate(BaseModel):
+    """Request body for ``POST /api/v1/admin/announcements``."""
+
+    title: str = Field(min_length=1, max_length=200)
+    body_markdown: str = ""
+    display_mode: DisplayModeLiteral = "banner"
+    severity: SeverityLiteral = "info"
+    dismissible: bool = True
+    enabled: bool = True
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    audience: AudienceLiteral = "all"
+    emit_inbox: bool = False
+
+
+class AnnouncementUpdate(BaseModel):
+    """Request body for ``PUT /api/v1/admin/announcements/{id}``."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    body_markdown: str | None = None
+    display_mode: DisplayModeLiteral | None = None
+    severity: SeverityLiteral | None = None
+    dismissible: bool | None = None
+    enabled: bool | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    audience: AudienceLiteral | None = None
+    emit_inbox: bool | None = None
+
+
+class AnnouncementDismissResponse(BaseModel):
+    """Result of ``POST /api/v1/announcements/{id}/dismiss``."""
+
+    announcement_id: int
+    dismissed: bool = True
+    dismiss_token: int
+
+
+class AnnouncementListResponse(BaseModel):
+    """Paginated announcement list for admin surfaces."""
+
+    items: list[AnnouncementDTO] = Field(default_factory=list)
+    total: int = Field(ge=0)
+
+
+# Curation entries ------------------------------------------------------------
+
+
+class CurationEntryDTO(BaseModel):
+    """Curation entry expanded with referenced plugin / author payloads."""
+
+    id: int
+    slot_type: SlotTypeLiteral
+    target_type: TargetTypeLiteral
+    target_id: str
+    signature_plugin_id: str | None = None
+    sort_order: int = 0
+    enabled: bool = True
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    audience: AudienceLiteral = "all"
+    display_meta: dict[str, Any] = Field(default_factory=dict)
+    plugin: Plugin | None = None
+    author: Author | None = None
+    signature_plugin: Plugin | None = None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class CurationEntryCreate(BaseModel):
+    """Request body for ``POST /api/v1/admin/curation/entries``."""
+
+    slot_type: SlotTypeLiteral
+    target_type: TargetTypeLiteral
+    target_id: str = Field(min_length=1)
+    signature_plugin_id: str | None = None
+    sort_order: int = 0
+    enabled: bool = True
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    audience: AudienceLiteral = "all"
+    display_meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class CurationEntryUpdate(BaseModel):
+    """Request body for ``PUT /api/v1/admin/curation/entries/{id}``."""
+
+    slot_type: SlotTypeLiteral | None = None
+    target_type: TargetTypeLiteral | None = None
+    target_id: str | None = Field(default=None, min_length=1)
+    signature_plugin_id: str | None = None
+    sort_order: int | None = None
+    enabled: bool | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    audience: AudienceLiteral | None = None
+    display_meta: dict[str, Any] | None = None
+
+
+class CurationOrderUpdate(BaseModel):
+    """Request body for ``PUT /api/v1/admin/curation/order``."""
+
+    ids_in_order: list[int] = Field(min_length=1)
+
+    @field_validator("ids_in_order")
+    @classmethod
+    def _unique_ids(cls, value: list[int]) -> list[int]:
+        """Reject duplicate ids in the ordering payload."""
+
+        if len(set(value)) != len(value):
+            raise ValueError("ids_in_order must not contain duplicates")
+        return value
+
+
+class CurationEntryListResponse(BaseModel):
+    """List payload for admin curation screens."""
+
+    items: list[CurationEntryDTO] = Field(default_factory=list)
+    total: int = Field(ge=0)
+
+
+# Admin bulk actions ----------------------------------------------------------
+
+
+class BulkActionRequest(BaseModel):
+    """Request body for ``POST /api/v1/admin/plugins/bulk``."""
+
+    plugin_ids: list[str] = Field(min_length=1, max_length=100)
+    action: BulkActionLiteral
+    params: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("plugin_ids")
+    @classmethod
+    def _non_empty_ids(cls, value: list[str]) -> list[str]:
+        """Reject blank plugin ids inside the batch."""
+
+        for plugin_id in value:
+            if not isinstance(plugin_id, str) or not plugin_id.strip():
+                raise ValueError("plugin_ids entries must be non-empty strings")
+        return value
+
+
+class BulkActionItemError(BaseModel):
+    """Per-row error payload inside a bulk-action response."""
+
+    code: str
+    message: str
+
+
+class BulkActionItemResult(BaseModel):
+    """Result for a single plugin inside a bulk-action response."""
+
+    plugin_id: str
+    ok: bool
+    after: Plugin | None = None
+    error: BulkActionItemError | None = None
+
+
+class BulkActionResult(BaseModel):
+    """Response body for ``POST /api/v1/admin/plugins/bulk`` (HTTP 207)."""
+
+    results: list[BulkActionItemResult] = Field(default_factory=list)
+
+
+# Market home aggregate -------------------------------------------------------
+
+
+class MarketHome(BaseModel):
+    """Aggregate response for ``GET /api/v1/market/home``."""
+
+    showcase: list[CurationEntryDTO] = Field(default_factory=list)
+    featured_plugins: list[Plugin] = Field(default_factory=list)
+    trending_authors: list[TrendingItem] = Field(default_factory=list)
+    latest: list[Plugin] = Field(default_factory=list)
+    top_rated: list[Plugin] = Field(default_factory=list)
+    categories_preview: dict[str, list[Plugin]] = Field(default_factory=dict)
+    stats: MarketStats
+    active_announcements: list[AnnouncementDTO] = Field(default_factory=list)

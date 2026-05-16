@@ -3,16 +3,19 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import InboxBell from '@/components/InboxBell.vue'
+
+defineEmits<{
+  (e: 'toggle-sidebar'): void
+}>()
 
 const router = useRouter()
 const auth = useAuthStore()
 const toast = useToastStore()
 
 const searchQuery = ref('')
-const mobileNavOpen = ref(false)
 
 function onSearch() {
-  mobileNavOpen.value = false
   const q = searchQuery.value.trim()
   router.push(q ? `/?q=${encodeURIComponent(q)}` : '/')
 }
@@ -21,10 +24,6 @@ async function onLogout() {
   await auth.logout()
   toast.show('已退出登录', 'ok')
   router.push('/')
-}
-
-function closeMobileNav() {
-  mobileNavOpen.value = false
 }
 </script>
 
@@ -50,11 +49,13 @@ function closeMobileNav() {
       <button type="submit" class="btn btn-primary btn-sm">搜索</button>
     </form>
 
-    <nav class="topbar-nav" :data-mobile-open="mobileNavOpen || undefined" @click="closeMobileNav">
-      <router-link class="navlink" to="/" active-class="active" exact>市场</router-link>
+    <nav class="topbar-nav">
+      <router-link class="navlink" to="/" active-class="active" exact>推荐</router-link>
+      <router-link class="navlink" to="/browse" active-class="active">浏览</router-link>
       <router-link class="navlink" to="/me" active-class="active">我的</router-link>
-      <span class="auth-slot">
+      <span class="auth-slot" data-auth-slot>
         <template v-if="auth.isAuthenticated && auth.viewer">
+          <InboxBell />
           <router-link
             class="navlink navlink-profile"
             :to="`/author/${encodeURIComponent(auth.viewer.author_id)}`"
@@ -86,9 +87,9 @@ function closeMobileNav() {
 
     <button
       class="mobile-menu-toggle"
-      :aria-expanded="mobileNavOpen"
-      aria-label="菜单"
-      @click="mobileNavOpen = !mobileNavOpen"
+      aria-expanded="false"
+      aria-label="打开导航"
+      @click="$emit('toggle-sidebar')"
     >☰</button>
   </header>
 </template>

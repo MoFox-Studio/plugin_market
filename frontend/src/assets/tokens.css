@@ -1,0 +1,380 @@
+/* =============================================================
+   MoFox Plugin Market · Design Tokens
+   --------------------------------------------------------------
+   单一来源（single source of truth）。组件层禁止使用字面 hex；
+   所有颜色 / 间距 / 字号 / 圆角 / 阴影 / 动效都从这里取。
+   双主题：data-theme="light" (默认) / data-theme="dark"
+   减少动效：data-reduced-motion="reduce"
+   ============================================================= */
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* paper / surface — 注意：底色不是纯白，是带 0.8% 蓝偏的暖白 */
+  --paper:            #fafbff;
+  --paper-grain:      #f0f4fc;
+  --surface:          #ffffff;
+  --surface-soft:     #f3f7ff;
+  --surface-hover:    #eef3fc;
+  --surface-elevated: #ffffff;
+
+  /* divider */
+  --line:         #dbe3f0;
+  --line-soft:    #e6ecf5;
+  --line-strong:  #c4cfde;
+
+  /* ink */
+  --ink-900: #0b1220;
+  --ink-700: #1f2a3a;
+  --ink-500: #5a6677;
+  --ink-300: #94a3b8;
+  --ink-200: #b6c1d2;
+  --ink-on-blue: #ffffff;
+
+  /* blue (主色) */
+  --blue-50:  #f1f8fe;
+  --blue-100: #e8f7fe;
+  --blue-200: #bfe5fb;
+  --blue-300: #7ed0f7;
+  --blue-500: #26a8f1;
+  --blue-600: #0f87cf;
+  --blue-700: #0a5fa0;
+  --blue-900: #072e4e;
+
+  /* 节奏色：使用克制 */
+  --coral:       #ff5a5f;
+  --coral-soft:  #ffe4e5;
+  --lemon:       #ffd54a;
+  --lemon-soft:  #fff5cf;
+  --mint:        #3fd0a3;
+  --mint-soft:   #d8f5ea;
+  --plum:        #7c5cff;
+  --plum-soft:   #ece4ff;
+
+  /* 状态语义 */
+  --success:       var(--mint);
+  --success-soft:  var(--mint-soft);
+  --success-ink:   #1f8c70;
+  --warning:       #c79320;
+  --warning-soft:  var(--lemon-soft);
+  --warning-ink:   #8b6710;
+  --danger:        var(--coral);
+  --danger-soft:   var(--coral-soft);
+  --danger-ink:    #c93b3f;
+  --info:          var(--blue-600);
+  --info-soft:     var(--blue-100);
+
+  /* 阴影 */
+  --shadow-1: 0 1px 2px rgba(11,18,32,.06);
+  --shadow-2: 0 10px 28px -12px rgba(11,18,32,.16), 0 2px 6px rgba(11,18,32,.06);
+  --shadow-3: 0 20px 50px -22px rgba(11,18,32,.28), 0 4px 10px rgba(11,18,32,.08);
+  --shadow-poster: 4px 4px 0 var(--ink-900);
+  --shadow-poster-soft: 3px 3px 0 var(--blue-700);
+
+  /* 半透明覆盖 */
+  --overlay-strong: rgba(11,18,32,.62);
+  --overlay-soft:   rgba(11,18,32,.32);
+  --backdrop-blur:  saturate(140%) blur(10px);
+
+  /* 半色调 / 网点纹理（杂志感装饰） */
+  --halftone: radial-gradient(var(--blue-500) 1px, transparent 1.4px) 0 0/12px 12px;
+
+  /* 字体 */
+  --font-sans: "Noto Sans SC", "Inter", -apple-system, BlinkMacSystemFont,
+               "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+  --font-display: "Noto Serif SC", "Source Han Serif SC", "Songti SC",
+                  "STSong", Georgia, serif;
+  --font-brand: "Bebas Neue", "Inter", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", "Cascadia Code",
+               Consolas, Menlo, monospace;
+
+  /* 字号 — 推荐页大字 / 工具页紧凑并存 */
+  --fs-display-1: clamp(40px, 6vw, 72px);
+  --fs-display-2: clamp(28px, 3.6vw, 40px);
+  --fs-h1: 28px;
+  --fs-h2: 20px;
+  --fs-h3: 16px;
+  --fs-lg: 16px;
+  --fs-base: 14px;
+  --fs-sm: 12.5px;
+  --fs-xs: 11.5px;
+  --fs-mini: 10.5px;
+
+  --lh-tight: 1.12;
+  --lh-snug:  1.32;
+  --lh-base:  1.55;
+  --lh-loose: 1.72;
+
+  --letter-tight: -0.012em;
+  --letter-base:   0;
+  --letter-wide:   0.04em;
+  --letter-bebas:  0.06em;
+  --letter-kicker: 0.16em;
+
+  /* 间距 (4 基) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* 圆角 — 整体克制 */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* 动效 */
+  --dur-fast:  120ms;
+  --dur-base:  180ms;
+  --dur-slow:  280ms;
+  --ease-pop:        cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard:   cubic-bezier(0.2, 0, 0, 1);
+
+  /* 布局 */
+  --shell-max:  1480px;
+  --sidebar-w:  248px;
+  --topbar-h:   72px;
+  --kicker-h:   36px;
+
+  /* 焦点环 */
+  --ring: 0 0 0 3px var(--blue-100);
+  --ring-strong: 0 0 0 3px var(--blue-200);
+
+  /* === 兼容旧 token 别名（让既有大量样式无痛迁移） === */
+  --bg:           var(--paper);
+  --surface-2:    var(--surface-soft);
+  --line:         var(--line);
+  --line-strong:  var(--line-strong);
+  --ink:          var(--ink-900);
+  --ink-2:        var(--ink-700);
+  --muted:        var(--ink-500);
+  --muted-2:      var(--ink-300);
+  --brand:        var(--blue-500);
+  --brand-strong: var(--blue-700);
+  --brand-soft:   var(--blue-100);
+  --accent:       var(--blue-300);
+  --accent-soft:  var(--blue-50);
+  --ok:           var(--success);
+  --ok-soft:      var(--success-soft);
+  --warn:         var(--warning);
+  --warn-soft:    var(--warning-soft);
+  --bad:          var(--danger);
+  --bad-soft:     var(--danger-soft);
+  --info:         var(--info);
+  --info-soft:    var(--info-soft);
+  --radius:       var(--radius-md);
+  --star:         var(--lemon);
+  --color-fg:        var(--ink-900);
+  --color-fg-strong: var(--ink-700);
+  --color-fg-muted:  var(--ink-500);
+  --color-fg-subtle: var(--ink-300);
+  --color-fg-inverse: #ffffff;
+  --color-bg:        var(--paper);
+  --color-surface:   var(--surface);
+  --color-surface-muted: var(--surface-soft);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-soft:  var(--surface-soft);
+  --color-border:        var(--line);
+  --color-border-strong: var(--line-strong);
+  --color-accent:        var(--blue-500);
+  --color-accent-strong: var(--blue-700);
+  --color-accent-soft:   var(--blue-100);
+  --color-accent-soft-alt: var(--blue-50);
+  --color-accent-border: var(--blue-200);
+  --color-accent-info-border: var(--blue-200);
+  --color-success:       var(--success);
+  --color-success-soft:  var(--success-soft);
+  --color-success-border: var(--success);
+  --color-warning:       var(--warning);
+  --color-warning-soft:  var(--warning-soft);
+  --color-warning-border: var(--warning);
+  --color-warning-border-strong: var(--warning);
+  --color-warning-ink:   var(--warning-ink);
+  --color-warning-panel: var(--lemon-soft);
+  --color-warning-panel-alt: var(--lemon-soft);
+  --color-warning-surface: var(--lemon-soft);
+  --color-caution-soft:  var(--coral-soft);
+  --color-caution-border: var(--coral);
+  --color-caution-ink:   var(--danger-ink);
+  --color-danger:        var(--danger);
+  --color-danger-soft:   var(--danger-soft);
+  --color-danger-border: var(--danger);
+  --color-info:          var(--info);
+  --color-info-soft:     var(--info-soft);
+  --color-neutral-soft:  var(--surface-soft);
+  --color-neutral-strong: var(--ink-700);
+  --color-code-fg:       var(--blue-200);
+  --color-install-fg:    var(--blue-200);
+  --color-disabled-bg:   var(--ink-300);
+  --color-disabled-fg:   var(--paper);
+  --color-star:          var(--lemon);
+  --color-overlay:       var(--overlay-strong);
+  --color-backdrop-border: rgba(255,255,255,.72);
+  --color-card-border:      var(--line);
+  --color-card-border-soft: var(--line-soft);
+  --color-brand-halo:        rgba(38, 168, 241, .14);
+  --color-brand-halo-soft:   rgba(38, 168, 241, .08);
+  --color-brand-halo-strong: rgba(38, 168, 241, .32);
+  --color-brand-halo-stronger: rgba(38, 168, 241, .42);
+  --color-brand-glow:        rgba(38, 168, 241, .08);
+  --color-brand-glow-soft:   rgba(38, 168, 241, .02);
+  --color-brand-glow-panel:  rgba(38, 168, 241, .06);
+  --color-brand-glow-border: rgba(38, 168, 241, .38);
+  --color-brand-glow-hero:   rgba(38, 168, 241, .12);
+  --color-brand-panel-start: rgba(232, 247, 254, .98);
+  --color-brand-panel-end:   rgba(241, 251, 255, .98);
+  --color-shadow-ink-soft:    rgba(11,18,32,.04);
+  --color-shadow-ink:         rgba(11,18,32,.06);
+  --color-shadow-ink-mid:     rgba(11,18,32,.08);
+  --color-shadow-ink-strong:  rgba(11,18,32,.12);
+  --color-shadow-ink-stronger: rgba(11,18,32,.28);
+  --color-shadow-brand-soft:  rgba(38, 168, 241, .08);
+  --color-shadow-brand:       rgba(38, 168, 241, .14);
+  --color-shadow-brand-strong: rgba(38, 168, 241, .22);
+  --color-warning-outline:      rgba(255, 213, 74, .32);
+  --color-warning-outline-soft: rgba(255, 213, 74, .22);
+  --color-warning-glow:         rgba(255, 213, 74, .14);
+  --color-star-track:           var(--line);
+  --color-activity-plugin-start:  var(--blue-300);
+  --color-activity-plugin-end:    var(--blue-500);
+  --color-activity-comment-start: var(--coral);
+  --color-activity-comment-end:   #e0464a;
+  --color-activity-rating-start:  var(--lemon);
+  --color-activity-rating-end:    #e0a830;
+  --color-white: #ffffff;
+  --shadow-xs:    var(--shadow-1);
+  --shadow-sm:    var(--shadow-1);
+  --shadow-md:    var(--shadow-2);
+  --shadow-card:  var(--shadow-2);
+  --shadow-card-hover: var(--shadow-3);
+  --shadow-panel: var(--shadow-2);
+  --shadow-panel-strong: var(--shadow-3);
+  --shadow-modal: var(--shadow-3);
+  --topbar-offset: var(--topbar-h);
+  --font-body: var(--font-sans);
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+  --radius-xl: var(--radius-lg);
+}
+
+/* =============================================================
+   Dark mode — 深空蓝（不是 GitHub 黑）
+   ============================================================= */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper:            #0a1220;
+  --paper-grain:      #0e1729;
+  --surface:          #13203a;
+  --surface-soft:     #0f1a30;
+  --surface-hover:    #192848;
+  --surface-elevated: #18253f;
+
+  --line:        #243454;
+  --line-soft:   #1c2a48;
+  --line-strong: #314870;
+
+  --ink-900: #e6edf6;
+  --ink-700: #c2cee0;
+  --ink-500: #8fa1bb;
+  --ink-300: #5a6c87;
+  --ink-200: #44546f;
+  --ink-on-blue: #0a1220;
+
+  --blue-50:  #142844;
+  --blue-100: #1a3550;
+  --blue-200: #1f4a7a;
+  --blue-300: #2c6ea8;
+  --blue-500: #5fb8ff;
+  --blue-600: #7ec6ff;
+  --blue-700: #a5d8ff;
+  --blue-900: #dcedff;
+
+  --coral:      #ff7a7f;
+  --coral-soft: #3d1a1c;
+  --lemon:      #ffe06a;
+  --lemon-soft: #3a2f0d;
+  --mint:       #5fdcb3;
+  --mint-soft:  #0f3026;
+  --plum:       #9d85ff;
+  --plum-soft:  #1e1838;
+
+  --success-ink: #66dab8;
+  --warning-ink: #ffd97c;
+  --danger-ink:  #ff9398;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,.5);
+  --shadow-2: 0 14px 36px -14px rgba(0,0,0,.65), 0 4px 10px rgba(0,0,0,.3);
+  --shadow-3: 0 28px 60px -20px rgba(0,0,0,.78), 0 8px 18px rgba(0,0,0,.4);
+  --shadow-poster: 4px 4px 0 #000;
+  --shadow-poster-soft: 3px 3px 0 var(--blue-300);
+
+  --overlay-strong: rgba(0,0,0,.72);
+  --overlay-soft:   rgba(0,0,0,.42);
+
+  --halftone: radial-gradient(var(--blue-500) 1px, transparent 1.4px) 0 0/12px 12px;
+
+  --ring:        0 0 0 3px var(--blue-100);
+  --ring-strong: 0 0 0 3px var(--blue-200);
+
+  /* 深色下别名 */
+  --color-fg-inverse:        #0a1220;
+  --color-brand-halo:        rgba(95, 184, 255, .18);
+  --color-brand-halo-soft:   rgba(95, 184, 255, .1);
+  --color-brand-halo-strong: rgba(95, 184, 255, .32);
+  --color-brand-halo-stronger: rgba(95, 184, 255, .42);
+  --color-brand-glow:        rgba(95, 184, 255, .12);
+  --color-brand-glow-soft:   rgba(95, 184, 255, .04);
+  --color-brand-glow-panel:  rgba(95, 184, 255, .08);
+  --color-brand-glow-border: rgba(95, 184, 255, .42);
+  --color-brand-glow-hero:   rgba(95, 184, 255, .14);
+  --color-brand-panel-start: rgba(26, 53, 80, .98);
+  --color-brand-panel-end:   rgba(15, 26, 48, .98);
+  --color-shadow-ink-soft:    rgba(0,0,0,.34);
+  --color-shadow-ink:         rgba(0,0,0,.46);
+  --color-shadow-ink-mid:     rgba(0,0,0,.58);
+  --color-shadow-ink-strong:  rgba(0,0,0,.7);
+  --color-shadow-ink-stronger: rgba(0,0,0,.85);
+  --color-shadow-brand-soft:  rgba(95, 184, 255, .14);
+  --color-shadow-brand:       rgba(95, 184, 255, .22);
+  --color-shadow-brand-strong: rgba(95, 184, 255, .32);
+  --color-backdrop-border: rgba(255,255,255,.06);
+  --color-card-border:      var(--line);
+  --color-card-border-soft: var(--line-soft);
+  --color-warning-panel:    var(--lemon-soft);
+  --color-warning-panel-alt: var(--lemon-soft);
+  --color-warning-surface:  var(--lemon-soft);
+  --color-caution-soft:     var(--coral-soft);
+  --color-caution-ink:      var(--danger-ink);
+  --color-warning-ink:      var(--warning-ink);
+  --color-success-soft:     var(--mint-soft);
+}
+
+/* =============================================================
+   Reduced motion — 任何时长 ≤ 80ms，禁用装饰性动画
+   ============================================================= */
+:root[data-reduced-motion="reduce"] {
+  --dur-fast: 0ms;
+  --dur-base: 80ms;
+  --dur-slow: 80ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 80ms;
+    --dur-slow: 80ms;
+  }
+}

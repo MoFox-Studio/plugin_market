@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -9,6 +9,8 @@ import type { Plugin, RatingInfo, PluginVersion, Dependency, Comment } from '@/t
 import TrustBadge from '@/components/TrustBadge.vue'
 import RiskWarning from '@/components/RiskWarning.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import MentionInput from '@/components/MentionInput.vue'
+import { parseMentionsRoundTrip } from '@/utils/mentions'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -25,7 +27,14 @@ const comments = ref<Comment[]>([])
 const loading = ref(true)
 const activeTab = ref('overview')
 const commentContent = ref('')
+const commentMentionIds = ref<string[]>([])
 const submittingComment = ref(false)
+const expandedReplyThreads = ref<Record<string, boolean>>({})
+
+interface CommentThread {
+  root: Comment
+  replies: Comment[]
+}
 
 const pluginId = computed(() => props.id || route.params.id as string)
 
@@ -56,6 +65,54 @@ async function loadComments() {
   comments.value = result.items || []
 }
 
+const commentThreads = computed<CommentThread[]>(() => {
+  const commentsById = new Map<number, Comment>()
+  const repliesByParent = new Map<number, Comment[]>()
+  const topLevel: Comment[] = []
+
+  for (const comment of comments.value) {
+    commentsById.set(Number(comment.id), comment)
+  }
+
+  for (const comment of comments.value) {
+    if (comment.parent_id === null || comment.parent_id === undefined) {
+      topLevel.push(comment)
+      continue
+    }
+
+    const parentId = Number(comment.parent_id)
+    if (!commentsById.has(parentId)) {
+      topLevel.push(comment)
+      continue
+    }
+
+    const bucket = repliesByParent.get(parentId) || []
+    bucket.push(comment)
+    repliesByParent.set(parentId, bucket)
+  }
+
+  return topLevel.map((root) => ({
+    root,
+    replies: (repliesByParent.get(Number(root.id)) || []).slice().sort((left, right) => {
+      return new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
+    }),
+  }))
+})
+
+const ratingRows = computed(() => {
+  const total = plugin.value?.rating_count || 0
+  return [5, 4, 3, 2, 1].map((score) => {
+    const count = Number(rating.value?.distribution?.[String(score)] || 0)
+    return {
+      score,
+      count,
+      percent: total ? Math.round((count / total) * 100) : 0,
+    }
+  })
+})
+
+const viewerRating = computed(() => rating.value?.viewer_rating || 0)
+
 async function submitComment() {
   const content = commentContent.value.trim()
   if (!content) return
@@ -63,6 +120,7 @@ async function submitComment() {
   try {
     await api.post(`/api/v1/plugins/${encodeURIComponent(pluginId.value)}/comments`, { content })
     commentContent.value = ''
+    commentMentionIds.value = []
     toast.show('已发布', 'ok')
     await loadComments()
   } catch (e) {
@@ -142,17 +200,51 @@ function canDeleteComment(comment: Comment) {
   return auth.viewer.author_id === comment.author.author_id || auth.viewer.is_admin
 }
 
+function renderCommentContent(comment: Comment) {
+  return parseMentionsRoundTrip(comment.content, comment.mentions || [])
+}
+
+function visibleReplies(thread: CommentThread): Comment[] {
+  if (thread.replies.length <= 3 || expandedReplyThreads.value[String(thread.root.id)]) {
+    return thread.replies
+  }
+  return thread.replies.slice(0, 3)
+}
+
+function hiddenReplyCount(thread: CommentThread): number {
+  return Math.max(0, thread.replies.length - visibleReplies(thread).length)
+}
+
+function toggleReplies(threadId: string | number): void {
+  const key = String(threadId)
+  expandedReplyThreads.value = {
+    ...expandedReplyThreads.value,
+    [key]: !expandedReplyThreads.value[key],
+  }
+}
+
+watch(pluginId, async (nextId, prevId) => {
+  if (!nextId || nextId === prevId) {
+    return
+  }
+  activeTab.value = 'overview'
+  commentContent.value = ''
+  commentMentionIds.value = []
+  expandedReplyThreads.value = {}
+  await loadData()
+  window.scrollTo({ top: 0, behavior: 'auto' })
+})
+
 onMounted(loadData)
 </script>
 
 <template>
   <div v-if="loading" class="loading-screen">加载插件详情…</div>
   <template v-else-if="plugin">
-    <!-- Breadcrumb -->
-    <div style="padding-top:16px;color:var(--muted);font-size:0.82rem">
-      <router-link to="/">市场</router-link>
-      <span style="margin:0 6px">/</span>
-      {{ plugin.display_name }}
+    <div class="detail-breadcrumb">
+      <router-link to="/" class="detail-breadcrumb-link">市场</router-link>
+      <span class="detail-breadcrumb-sep">/</span>
+      <span class="detail-breadcrumb-current">{{ plugin.display_name }}</span>
     </div>
 
     <div class="detail">
@@ -277,15 +369,15 @@ onMounted(loadData)
             <!-- Comment form -->
             <div v-if="auth.isAuthenticated">
               <form class="comment-form" @submit.prevent="submitComment">
-                <textarea
+                <MentionInput
                   v-model="commentContent"
-                  maxlength="4000"
-                  placeholder="分享你的安装体验或提出问题..."
-                  required
+                  :maxlength="4000"
+                  placeholder="分享你的安装体验或提出问题，用 @login 提及作者..."
                   :disabled="submittingComment"
-                ></textarea>
+                  @update:mentionedAuthorIds="commentMentionIds = $event"
+                />
                 <div class="comment-form-actions">
-                  <small>支持多行文字。不要发送广告或个人隐私信息。</small>
+                  <small>支持多行文字与 @ 提及。当前识别 {{ commentMentionIds.length }} 位作者，不要发送广告或个人隐私信息。</small>
                   <button class="btn btn-primary btn-sm" type="submit" :disabled="submittingComment">发布评论</button>
                 </div>
               </form>
@@ -301,24 +393,68 @@ onMounted(loadData)
             </div>
             <!-- Comment list -->
             <div style="margin-top:14px">
-              <div v-if="comments.length">
-                <div v-for="c in comments" :key="c.id" class="comment">
-                  <div class="comment-avatar">
-                    <img v-if="c.author.avatar_url" :src="c.author.avatar_url" alt="">
-                    <template v-else>{{ c.author.display_name?.[0]?.toUpperCase() || '?' }}</template>
+              <div v-if="commentThreads.length">
+                <div v-for="thread in commentThreads" :id="`comment-${thread.root.id}`" :key="thread.root.id" class="comment-thread">
+                  <div class="comment">
+                    <div class="comment-avatar">
+                      <img v-if="thread.root.author.avatar_url" :src="thread.root.author.avatar_url" alt="">
+                      <template v-else>{{ thread.root.author.display_name?.[0]?.toUpperCase() || '?' }}</template>
+                    </div>
+                    <div>
+                      <div class="comment-meta">
+                        <strong>{{ thread.root.author.display_name }}</strong>
+                        <span>@{{ thread.root.author.github_login }}</span>
+                        <span v-if="thread.root.author.is_admin" class="badge trust-official">管理员</span>
+                        <span>·</span>
+                        <span>{{ formatRelative(thread.root.created_at) }}</span>
+                      </div>
+                      <p class="comment-content rich-mention-content">
+                        <template v-for="(segment, index) in renderCommentContent(thread.root)" :key="`${thread.root.id}-${index}`">
+                          <router-link v-if="segment.type === 'mention' && segment.mention" class="mention-link" :to="`/author/${encodeURIComponent(segment.mention.author_id)}`">{{ segment.text }}</router-link>
+                          <span v-else>{{ segment.text }}</span>
+                        </template>
+                      </p>
+                      <div class="comment-actions">
+                        <button v-if="canDeleteComment(thread.root)" type="button" @click="deleteComment(thread.root.id)">删除</button>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div class="comment-meta">
-                      <strong>{{ c.author.display_name }}</strong>
-                      <span>@{{ c.author.github_login }}</span>
-                      <span v-if="c.author.is_admin" class="badge trust-official">管理员</span>
-                      <span>·</span>
-                      <span>{{ formatRelative(c.created_at) }}</span>
+
+                  <div v-if="thread.replies.length" class="comment-replies">
+                    <div v-for="reply in visibleReplies(thread)" :id="`comment-${reply.id}`" :key="reply.id" class="comment comment-reply">
+                      <div class="comment-avatar">
+                        <img v-if="reply.author.avatar_url" :src="reply.author.avatar_url" alt="">
+                        <template v-else>{{ reply.author.display_name?.[0]?.toUpperCase() || '?' }}</template>
+                      </div>
+                      <div>
+                        <div class="comment-meta">
+                          <strong>{{ reply.author.display_name }}</strong>
+                          <span>@{{ reply.author.github_login }}</span>
+                          <span v-if="reply.author.is_admin" class="badge trust-official">管理员</span>
+                          <span>·</span>
+                          <span>{{ formatRelative(reply.created_at) }}</span>
+                        </div>
+                        <p class="comment-content rich-mention-content">
+                          <template v-for="(segment, index) in renderCommentContent(reply)" :key="`${reply.id}-${index}`">
+                            <router-link v-if="segment.type === 'mention' && segment.mention" class="mention-link" :to="`/author/${encodeURIComponent(segment.mention.author_id)}`">{{ segment.text }}</router-link>
+                            <span v-else>{{ segment.text }}</span>
+                          </template>
+                        </p>
+                        <div class="comment-actions">
+                          <button v-if="canDeleteComment(reply)" type="button" @click="deleteComment(reply.id)">删除</button>
+                        </div>
+                      </div>
                     </div>
-                    <p class="comment-content">{{ c.content }}</p>
-                    <div class="comment-actions">
-                      <button v-if="canDeleteComment(c)" type="button" @click="deleteComment(c.id)">删除</button>
-                    </div>
+
+                    <button
+                      v-if="thread.replies.length > 3"
+                      type="button"
+                      class="btn btn-ghost btn-sm"
+                      style="justify-self:start"
+                      @click="toggleReplies(thread.root.id)"
+                    >
+                      {{ expandedReplyThreads[String(thread.root.id)] ? '收起回复' : `展开其余 ${hiddenReplyCount(thread)} 条回复` }}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -341,9 +477,18 @@ onMounted(loadData)
           <div v-else style="color:var(--muted)">暂无可安装版本</div>
 
           <div class="install-stats">
-            <div><b>{{ formatNumber(plugin.downloads_count) }}</b><span>下载</span></div>
-            <div><b>{{ formatNumber(plugin.likes_count) }}</b><span>点赞</span></div>
-            <div><b>{{ plugin.rating_avg.toFixed(1) }}</b><span>{{ plugin.rating_count }} 评价</span></div>
+            <div class="install-stat-card">
+              <b>{{ formatNumber(plugin.downloads_count) }}</b>
+              <span>累计下载</span>
+            </div>
+            <div class="install-stat-card">
+              <b>{{ formatNumber(plugin.likes_count) }}</b>
+              <span>收到点赞</span>
+            </div>
+            <div class="install-stat-card">
+              <b>{{ plugin.rating_avg.toFixed(2) }}</b>
+              <span>{{ plugin.rating_count }} 条评价</span>
+            </div>
           </div>
 
           <div class="install-actions">
@@ -361,46 +506,48 @@ onMounted(loadData)
 
         <!-- Rating panel -->
         <div class="panel">
-          <h3>评分<span style="font-size:0.8rem;color:var(--muted);font-weight:400">{{ plugin.rating_count }} 票</span></h3>
-          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
-            <div style="font-size:2rem;font-weight:700;color:var(--ink)">{{ plugin.rating_avg.toFixed(1) }}</div>
-            <div class="rating">
-              <span class="stars" aria-hidden="true">
-                ★★★★★
-                <span class="fill" :style="{ width: starPercent(plugin.rating_avg) + '%' }">★★★★★</span>
-              </span>
+          <h3>评分 <span class="rating-ticket">{{ plugin.rating_count }} 票</span></h3>
+          <div class="rating-head">
+            <div class="rating-average">{{ plugin.rating_avg.toFixed(1) }}</div>
+            <div class="rating-meta">
+              <div class="rating">
+                <span class="stars" aria-hidden="true">
+                  ★★★★★
+                  <span class="fill" :style="{ width: starPercent(plugin.rating_avg) + '%' }">★★★★★</span>
+                </span>
+              </div>
+              <p>来自 {{ plugin.rating_count }} 位用户的评分反馈</p>
             </div>
           </div>
-          <!-- Distribution -->
-          <div class="rating-dist">
-            <div v-for="s in [5, 4, 3, 2, 1]" :key="s" class="rating-dist-row">
-              <span>{{ s }}★</span>
+          <div class="rating-dist" aria-label="评分分布">
+            <div v-for="row in ratingRows" :key="row.score" class="rating-dist-row" :title="`${row.score} 星：${row.count} 票`">
+              <span class="rating-dist-label">{{ row.score }}★</span>
               <span class="rating-dist-bar">
-                <span :style="{ width: (plugin.rating_count ? Math.round((rating?.distribution?.[String(s)] || 0) / plugin.rating_count * 100) : 0) + '%' }"></span>
+                <span :style="{ width: `${row.percent}%` }"></span>
               </span>
-              <span>{{ rating?.distribution?.[String(s)] || 0 }}</span>
             </div>
           </div>
-          <!-- My rating -->
-          <div style="margin-top:12px">
-            <div style="font-size:0.8rem;color:var(--muted);margin-bottom:4px">我的评分</div>
+          <div class="rating-mine">
+            <div class="rating-mine-head">
+              <span>我的评分</span>
+              <small v-if="viewerRating">已评 {{ viewerRating }} 星</small>
+            </div>
             <div class="rating-picker">
               <button
                 v-for="n in 5"
                 :key="n"
                 type="button"
-                :class="{ active: (rating?.viewer_rating || 0) >= n }"
+                :class="['rating-star', { active: viewerRating >= n }]"
                 @click="handleRate(n)"
               >&#9733;</button>
               <button
-                v-if="rating?.viewer_rating"
+                v-if="viewerRating"
                 type="button"
                 class="btn btn-xs btn-ghost"
-                style="margin-left:6px"
                 @click="clearRating"
               >清除</button>
             </div>
-            <div v-if="!auth.isAuthenticated" style="font-size:0.78rem;color:var(--muted);margin-top:4px">登录后可以评分和评论。</div>
+            <div v-if="!auth.isAuthenticated" class="rating-login-tip">登录后可以评分和评论。</div>
           </div>
         </div>
       </aside>

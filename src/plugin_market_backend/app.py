@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
-from fastapi import Depends, FastAPI, Header, Query, Request, Response, status
+from fastapi import Depends, FastAPI, File, Header, Query, Request, Response, UploadFile, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func, select
 
 from plugin_market_backend.auth import require_author_token
+from plugin_market_backend.caching import aget_or_set, cache_bus
 from plugin_market_backend.config import get_settings
 from plugin_market_backend.content import PLUGIN_MEDIA_DIR, ensure_plugin_media_dirs
 from plugin_market_backend.database import configure_database, init_database, session_scope
@@ -22,26 +27,49 @@ from plugin_market_backend.enums import PluginStatus, ReviewAction, TrustLevel, 
 from plugin_market_backend.errors import ApiError, api_error_handler, validation_error_handler
 from plugin_market_backend.github import verify_github_signature
 from plugin_market_backend.github_oauth import exchange_oauth_code
+from plugin_market_backend.orm import InboxMessageORM, PluginORM
 from plugin_market_backend.schemas import (
     AdminDashboard,
+    AnnouncementCreate,
+    AnnouncementDismissResponse,
+    AnnouncementDTO,
+    AnnouncementListResponse,
+    AnnouncementUpdate,
     AuthStatus,
     Author,
+    AuthorProfile,
+    AuthorProfileUpdate,
+    BulkActionRequest,
+    BulkActionResult,
     Comment,
     CommentCreate,
     CommentListResponse,
     CommunitySnapshot,
+    CurationEntryCreate,
+    CurationEntryDTO,
+    CurationEntryListResponse,
+    CurationEntryUpdate,
+    CurationOrderUpdate,
     InstallInfo,
+    InboxMessageListResponse,
+    InboxUnreadCount,
     LikeResponse,
+    MarketHome,
     MarketStats,
+    MentionCandidate,
+    PinCreate,
+    PinUpdate,
     Plugin,
     PluginCreate,
     PluginDependenciesResponse,
     PluginGovernanceSnapshot,
     PluginListResponse,
+    PluginMetadataPatch,
     PluginReadmeResponse,
     PluginUpdate,
     PluginVersion,
     PluginVersionCreate,
+    PinnedPluginItem,
     RatingRequest,
     RatingSummary,
     ReviewDecision,
@@ -54,6 +82,7 @@ from plugin_market_backend.schemas import (
 )
 from plugin_market_backend.seed import seed_rich_demo
 from plugin_market_backend.service import MarketService
+from plugin_market_backend.services import AnnouncementsService, BulkOpsService, CurationService, InboxService, InlineEditService, ProfileService
 from plugin_market_backend.session_auth import (
     author_schema,
     clear_browser_session,
@@ -116,6 +145,58 @@ def _expected_request_origin(request: Request) -> str:
         or request.url.netloc
     )
     return _normalize_origin(f"{scheme}://{host}")
+
+
+def _stable_etag(payload: Any) -> str:
+    """Return a deterministic ETag for a JSON-serializable payload."""
+
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return f'"{hashlib.sha256(encoded).hexdigest()}"'
+
+
+async def _viewer_owns_plugin(author_id: str | None) -> bool:
+    if not author_id:
+        return False
+    async with session_scope() as session:
+        count = await session.scalar(
+            select(func.count()).select_from(PluginORM).where(PluginORM.owner_id == author_id)
+        )
+        return bool(count)
+
+
+async def _load_home_sections(viewer_id: str | None) -> dict[str, list[Plugin]]:
+    async with session_scope() as session:
+        return await MarketService(session).featured_plugins(limit=6, viewer_id=viewer_id)
+
+
+async def _load_home_trending_authors() -> list[TrendingItem]:
+    async with session_scope() as session:
+        return await MarketService(session).trending_authors(limit=6)
+
+
+async def _load_home_categories_preview(viewer_id: str | None) -> dict[str, list[Plugin]]:
+    async with session_scope() as session:
+        return await MarketService(session).home_categories_preview(viewer_id=viewer_id)
+
+
+async def _load_home_stats() -> MarketStats:
+    async with session_scope() as session:
+        return await MarketService(session).stats()
+
+
+async def _load_home_showcase(viewer: Any, viewer_has_plugin: bool) -> list[Any]:
+    async with session_scope() as session:
+        return await MarketService(session).home_showcase(viewer, viewer_has_plugin=viewer_has_plugin)
+
+
+async def _load_home_announcements(viewer: Any, viewer_has_plugin: bool) -> list[Any]:
+    async with session_scope() as session:
+        return await AnnouncementsService(session).list_active(viewer, viewer_has_plugin=viewer_has_plugin)
 
 
 @asynccontextmanager
@@ -302,6 +383,45 @@ async def public_market_stats() -> MarketStats:
 
     async with session_scope() as session:
         return await MarketService(session).stats()
+
+
+@app.get("/api/v1/market/home", response_model=MarketHome)
+async def market_home(request: Request) -> Response | MarketHome:
+    """Return the cached market home aggregate with ETag support."""
+
+    viewer = await current_author_from_request(request)
+    viewer_id = viewer.author_id if viewer else None
+    viewer_has_plugin = await _viewer_owns_plugin(viewer_id)
+    cache_key = ("home", viewer_id or "anonymous")
+
+    async def loader() -> dict[str, Any]:
+        sections, trending, categories_preview, stats, showcase, announcements = await asyncio.gather(
+            _load_home_sections(viewer_id),
+            _load_home_trending_authors(),
+            _load_home_categories_preview(viewer_id),
+            _load_home_stats(),
+            _load_home_showcase(viewer, viewer_has_plugin),
+            _load_home_announcements(viewer, viewer_has_plugin),
+        )
+        body = MarketHome(
+            showcase=showcase,
+            featured_plugins=sections.get("ranking", []),
+            trending_authors=trending,
+            latest=sections.get("latest", []),
+            top_rated=sections.get("top_rated", []),
+            categories_preview=categories_preview,
+            stats=stats,
+            active_announcements=announcements,
+        )
+        payload = body.model_dump(mode="json")
+        return {"body": payload, "etag": _stable_etag(payload)}
+
+    cached = await aget_or_set(cache_key, 60, loader)
+    etag = cached["etag"]
+    headers = {"Cache-Control": "private, max-age=60", "ETag": etag}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    return JSONResponse(content=cached["body"], headers=headers)
 
 
 @app.get("/api/v1/plugins/{plugin_id}", response_model=Plugin)
@@ -557,6 +677,153 @@ async def current_user(request: Request) -> AuthStatus:
     return AuthStatus(authenticated=True, user=Author(**author_schema(author)))
 
 
+@app.get("/api/v1/me/profile", response_model=AuthorProfile)
+async def my_profile(author_id: str = Depends(require_browser_author)) -> AuthorProfile:
+    """Return the current browser author's public profile fields."""
+
+    async with session_scope() as session:
+        return await ProfileService(session).get_profile(author_id)
+
+
+@app.put("/api/v1/me/profile", response_model=AuthorProfile)
+async def update_my_profile(
+    payload: AuthorProfileUpdate,
+    request: Request,
+    author_id: str = Depends(require_browser_author),
+) -> AuthorProfile:
+    """Update the current browser author's bio / background."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        return await ProfileService(session).update_profile(
+            author_id,
+            bio=payload.bio,
+            background_image_url=(str(payload.background_image_url) if payload.background_image_url is not None else None),
+        )
+
+
+@app.post("/api/v1/me/profile/background", response_model=AuthorProfile)
+async def upload_my_background(
+    request: Request,
+    file: UploadFile = File(...),
+    author_id: str = Depends(require_browser_author),
+) -> AuthorProfile:
+    """Accept a multipart upload as the new personal-space background image."""
+
+    ensure_same_origin_browser_write(request)
+    raw = await file.read()
+    async with session_scope() as session:
+        return await ProfileService(session).set_background_from_upload(author_id, raw)
+
+
+@app.post("/api/v1/me/plugins/{plugin_id}/icon", response_model=Plugin)
+async def upload_my_plugin_icon(
+    plugin_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    author_id: str = Depends(require_browser_author),
+) -> Plugin:
+    """Accept a multipart upload as the plugin's new icon (owner / maintainer / admin only)."""
+
+    ensure_same_origin_browser_write(request)
+    raw = await file.read()
+    async with session_scope() as session:
+        from plugin_market_backend.content import store_plugin_icon_from_bytes
+        from plugin_market_backend.services import assert_can_edit_plugin_metadata
+
+        await assert_can_edit_plugin_metadata(session, plugin_id, author_id)
+        new_url = store_plugin_icon_from_bytes(plugin_id, raw)
+        await InlineEditService(session).patch_metadata(
+            author_id, plugin_id, {"icon_url": new_url}
+        )
+        cache_bus.invalidate("home")
+        return await MarketService(session).get_plugin(plugin_id)
+
+
+@app.get("/api/v1/authors/{author_id}/profile", response_model=AuthorProfile)
+async def author_profile(author_id: str) -> AuthorProfile:
+    """Return the public personal-space profile for any author."""
+
+    async with session_scope() as session:
+        return await ProfileService(session).get_profile(author_id)
+
+
+@app.get("/api/v1/authors/{author_id}/pins", response_model=list[PinnedPluginItem])
+async def author_pins(author_id: str) -> list[PinnedPluginItem]:
+    """Return the public pinned plugins for any author."""
+
+    async with session_scope() as session:
+        return await ProfileService(session).list_pins(author_id)
+
+
+@app.get("/api/v1/authors/search", response_model=list[MentionCandidate])
+async def author_search(
+    prefix: str = Query(min_length=1, max_length=39),
+    limit: int = Query(default=8, ge=1, le=20),
+) -> list[MentionCandidate]:
+    """Return mention candidates for a login/display-name prefix."""
+
+    async with session_scope() as session:
+        return await MarketService(session).search_authors(prefix, limit=limit)
+
+
+@app.get("/api/v1/me/pins", response_model=list[PinnedPluginItem])
+async def my_pins(author_id: str = Depends(require_browser_author)) -> list[PinnedPluginItem]:
+    """Return the current browser author's pinned plugins."""
+
+    async with session_scope() as session:
+        return await ProfileService(session).list_pins(author_id)
+
+
+@app.post("/api/v1/me/pins", response_model=PinnedPluginItem)
+async def add_my_pin(
+    payload: PinCreate,
+    request: Request,
+    author_id: str = Depends(require_browser_author),
+) -> PinnedPluginItem:
+    """Add one pinned plugin for the current browser author."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        return await ProfileService(session).add_pin(
+            author_id,
+            payload.plugin_id,
+            reason=payload.pinned_reason,
+        )
+
+
+@app.put("/api/v1/me/pins/{plugin_id}", response_model=PinnedPluginItem)
+async def update_my_pin(
+    plugin_id: str,
+    payload: PinUpdate,
+    request: Request,
+    author_id: str = Depends(require_browser_author),
+) -> PinnedPluginItem:
+    """Update the pinned reason for one existing pin."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        return await ProfileService(session).update_pin_reason(
+            author_id,
+            plugin_id,
+            payload.pinned_reason,
+        )
+
+
+@app.delete("/api/v1/me/pins/{plugin_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_pin(
+    plugin_id: str,
+    request: Request,
+    author_id: str = Depends(require_browser_author),
+) -> Response:
+    """Remove one pin from the current browser author's personal space."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        await ProfileService(session).remove_pin(author_id, plugin_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.get("/api/v1/me/plugins", response_model=PluginListResponse)
 async def my_plugins(author_id: str = Depends(require_browser_author)) -> PluginListResponse:
     """Return plugins owned or maintained by the current user."""
@@ -597,6 +864,279 @@ async def my_plugin_delete(plugin_id: str, request: Request, author_id: str = De
     async with session_scope() as session:
         await MarketService(session).delete_owner_plugin(plugin_id, author_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.patch("/api/v1/me/plugins/{plugin_id}/metadata", response_model=Plugin)
+async def patch_my_plugin_metadata(
+    plugin_id: str,
+    payload: PluginMetadataPatch,
+    request: Request,
+    author_id: str = Depends(require_browser_author),
+) -> Plugin:
+    """Allow the owner / maintainer to patch display-facing metadata inline."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        await InlineEditService(session).patch_metadata(
+            author_id,
+            plugin_id,
+            payload.model_dump(exclude_unset=True),
+        )
+        cache_bus.invalidate("home")
+        return await MarketService(session).get_plugin(plugin_id)
+
+
+@app.get("/api/v1/inbox/messages", response_model=InboxMessageListResponse)
+async def inbox_messages(
+    type: str | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    author_id: str = Depends(require_browser_author),
+) -> InboxMessageListResponse:
+    """Return the current browser author's inbox page."""
+
+    async with session_scope() as session:
+        items, total = await InboxService(session).list_messages(
+            author_id,
+            type=type,
+            offset=offset,
+            limit=limit,
+        )
+        return InboxMessageListResponse(items=items, total=total)
+
+
+@app.get("/api/v1/inbox/unread-count", response_model=InboxUnreadCount)
+async def inbox_unread_count(author_id: str = Depends(require_browser_author)) -> InboxUnreadCount:
+    """Return the current browser author's unread inbox count."""
+
+    async with session_scope() as session:
+        count = await InboxService(session).unread_count(author_id)
+        return InboxUnreadCount(count=count)
+
+
+@app.post("/api/v1/inbox/messages/{message_id}/read")
+async def inbox_mark_read(
+    message_id: int,
+    request: Request,
+    author_id: str = Depends(require_browser_author),
+) -> dict[str, int]:
+    """Mark one inbox message as read for the current browser author."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        message = await session.get(InboxMessageORM, message_id)
+        if message is None:
+            raise ApiError(404, "INBOX_MESSAGE_NOT_FOUND", "Inbox message not found.")
+        if message.recipient_id != author_id:
+            raise ApiError(403, "INBOX_FORBIDDEN", "Inbox access is forbidden.")
+        updated = await InboxService(session).mark_read(author_id, [message_id])
+        return {"updated": updated}
+
+
+@app.post("/api/v1/inbox/read-all")
+async def inbox_mark_all_read(
+    request: Request,
+    author_id: str = Depends(require_browser_author),
+) -> dict[str, int]:
+    """Mark all inbox messages as read for the current browser author."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        updated = await InboxService(session).mark_all_read(author_id)
+        return {"updated": updated}
+
+
+@app.get("/api/v1/announcements/active", response_model=list[AnnouncementDTO])
+async def active_announcements(request: Request) -> list[AnnouncementDTO]:
+    """Return announcements visible to the current viewer."""
+
+    viewer = await current_author_from_request(request)
+    async with session_scope() as session:
+        viewer_has_plugin = False
+        if viewer is not None:
+            viewer_plugins = await session.scalar(
+                select(func.count()).select_from(PluginORM).where(PluginORM.owner_id == viewer.author_id)
+            )
+            viewer_has_plugin = bool(viewer_plugins)
+        return await AnnouncementsService(session).list_active(
+            viewer,
+            viewer_has_plugin=viewer_has_plugin,
+        )
+
+
+@app.post("/api/v1/announcements/{announcement_id}/dismiss", response_model=AnnouncementDismissResponse)
+async def dismiss_announcement(
+    announcement_id: int,
+    request: Request,
+    author_id: str = Depends(require_browser_author),
+) -> AnnouncementDismissResponse:
+    """Dismiss one announcement for the current browser author."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        dismissed_id, dismiss_token = await AnnouncementsService(session).dismiss(
+            announcement_id,
+            author_id,
+        )
+        return AnnouncementDismissResponse(
+            announcement_id=dismissed_id,
+            dismissed=True,
+            dismiss_token=dismiss_token,
+        )
+
+
+@app.get("/api/v1/admin/announcements", response_model=AnnouncementListResponse)
+async def admin_announcements(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    _: str = Depends(require_admin_operator),
+) -> AnnouncementListResponse:
+    """Return the admin announcement list."""
+
+    async with session_scope() as session:
+        items, total = await AnnouncementsService(session).admin_list(offset=offset, limit=limit)
+        return AnnouncementListResponse(items=items, total=total)
+
+
+@app.post("/api/v1/admin/announcements", response_model=AnnouncementDTO)
+async def create_announcement(
+    payload: AnnouncementCreate,
+    _: Request,
+    operator_id: str = Depends(require_admin_operator),
+) -> AnnouncementDTO:
+    """Create one announcement."""
+
+    async with session_scope() as session:
+        announcement = await AnnouncementsService(session).create(payload, operator_id)
+        cache_bus.invalidate("announcements_active")
+        return announcement
+
+
+@app.put("/api/v1/admin/announcements/{announcement_id}", response_model=AnnouncementDTO)
+async def update_announcement(
+    announcement_id: int,
+    payload: AnnouncementUpdate,
+    _: Request,
+    operator_id: str = Depends(require_admin_operator),
+) -> AnnouncementDTO:
+    """Update one announcement."""
+
+    async with session_scope() as session:
+        announcement = await AnnouncementsService(session).update(announcement_id, payload, operator_id)
+        cache_bus.invalidate("announcements_active")
+        return announcement
+
+
+@app.post("/api/v1/admin/announcements/{announcement_id}/disable", response_model=AnnouncementDTO)
+async def disable_announcement(
+    announcement_id: int,
+    _: Request,
+    operator_id: str = Depends(require_admin_operator),
+) -> AnnouncementDTO:
+    """Disable one announcement."""
+
+    async with session_scope() as session:
+        announcement = await AnnouncementsService(session).disable(announcement_id, operator_id)
+        cache_bus.invalidate("announcements_active")
+        return announcement
+
+
+@app.post("/api/v1/admin/announcements/{announcement_id}/resurface", response_model=AnnouncementDTO)
+async def resurface_announcement(
+    announcement_id: int,
+    _: Request,
+    operator_id: str = Depends(require_admin_operator),
+) -> AnnouncementDTO:
+    """Resurface one announcement by bumping its dismiss token."""
+
+    async with session_scope() as session:
+        announcement = await AnnouncementsService(session).resurface(announcement_id, operator_id)
+        cache_bus.invalidate("announcements_active")
+        return announcement
+
+
+@app.get("/api/v1/admin/curation/entries", response_model=CurationEntryListResponse)
+async def admin_curation_entries(_: str = Depends(require_admin_operator)) -> CurationEntryListResponse:
+    """Return all curation entries for the admin console."""
+
+    async with session_scope() as session:
+        items = await CurationService(session).list_entries()
+        return CurationEntryListResponse(items=items, total=len(items))
+
+
+@app.post("/api/v1/admin/curation/entries", response_model=CurationEntryDTO)
+async def create_curation_entry(
+    payload: CurationEntryCreate,
+    operator_id: str = Depends(require_admin_operator),
+) -> CurationEntryDTO:
+    """Create one curation entry."""
+
+    async with session_scope() as session:
+        entry = await CurationService(session).create(payload, operator_id)
+        cache_bus.invalidate("home")
+        return entry
+
+
+@app.put("/api/v1/admin/curation/entries/{entry_id}", response_model=CurationEntryDTO)
+async def update_curation_entry(
+    entry_id: int,
+    payload: CurationEntryUpdate,
+    operator_id: str = Depends(require_admin_operator),
+) -> CurationEntryDTO:
+    """Update one curation entry."""
+
+    async with session_scope() as session:
+        entry = await CurationService(session).update(entry_id, payload, operator_id)
+        cache_bus.invalidate("home")
+        return entry
+
+
+@app.post("/api/v1/admin/curation/entries/{entry_id}/disable", response_model=CurationEntryDTO)
+async def disable_curation_entry(
+    entry_id: int,
+    operator_id: str = Depends(require_admin_operator),
+) -> CurationEntryDTO:
+    """Disable one curation entry."""
+
+    async with session_scope() as session:
+        entry = await CurationService(session).disable(entry_id, operator_id)
+        cache_bus.invalidate("home")
+        return entry
+
+
+@app.put("/api/v1/admin/curation/order", response_model=list[CurationEntryDTO])
+async def reorder_curation_entries(
+    payload: CurationOrderUpdate,
+    operator_id: str = Depends(require_admin_operator),
+) -> list[CurationEntryDTO]:
+    """Persist a new curation sort order."""
+
+    async with session_scope() as session:
+        items = await CurationService(session).reorder(payload.ids_in_order, operator_id)
+        cache_bus.invalidate("home")
+        return items
+
+
+@app.post(
+    "/api/v1/admin/plugins/bulk",
+    response_model=BulkActionResult,
+    status_code=status.HTTP_207_MULTI_STATUS,
+)
+async def bulk_apply_plugins(
+    payload: BulkActionRequest,
+    operator_id: str = Depends(require_admin_operator),
+) -> BulkActionResult:
+    """Apply one bulk governance action across multiple plugins."""
+
+    async with session_scope() as session:
+        result = await BulkOpsService(session).bulk_apply(
+            operator_id,
+            payload.plugin_ids,
+            payload.action,
+            payload.params,
+        )
+        cache_bus.invalidate("home")
+        return result
 
 
 @app.post("/api/v1/plugins", response_model=Plugin)

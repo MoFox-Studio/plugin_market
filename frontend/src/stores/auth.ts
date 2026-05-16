@@ -1,17 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/api'
-
-export interface Viewer {
-  author_id: string
-  github_login: string
-  display_name: string
-  avatar_url: string | null
-  is_admin: boolean
-}
+import type { AuthStatus, Author } from '@/types'
 
 export const useAuthStore = defineStore('auth', () => {
-  const viewer = ref<Viewer | null>(null)
+  const viewer = ref<Author | null>(null)
   const loading = ref(false)
 
   const isAuthenticated = computed(() => !!viewer.value)
@@ -21,7 +14,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (!force && viewer.value !== null) return
     loading.value = true
     try {
-      const auth = await api.get<{ authenticated: boolean; user?: Viewer }>('/api/v1/me')
+      const auth = await api.get<AuthStatus>('/api/v1/me')
       viewer.value = auth?.authenticated ? (auth.user ?? null) : null
     } catch {
       viewer.value = null

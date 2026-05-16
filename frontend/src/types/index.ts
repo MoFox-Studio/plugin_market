@@ -2,6 +2,45 @@
  * Shared type definitions for the plugin market frontend
  */
 
+export type Audience = 'all' | 'logged_in' | 'anonymous' | 'admins' | 'authors_with_plugin'
+export type DisplayMode = 'banner' | 'modal'
+export type Severity = 'info' | 'warning' | 'critical'
+export type SlotType = 'featured_plugin' | 'featured_author' | 'signature_plugin' | 'hero' | 'sidebar'
+export type TargetType = 'plugin' | 'author'
+export type InboxMessageType = 'mention' | 'reply' | 'governance' | 'announcement' | 'system'
+export type InboxMessageStatus = 'unread' | 'read' | 'revoked'
+export type InboxLinkKind = 'comment' | 'plugin' | 'announcement' | 'system'
+export type BulkAction = 'publish' | 'reject' | 'block' | 'deprecate' | 'set_trust_level' | 'delete'
+
+export interface Author {
+  author_id: string
+  github_user_id?: string | null
+  github_login: string
+  display_name: string
+  avatar_url?: string | null
+  author_type?: string
+  verified_at?: string | null
+  is_admin: boolean
+}
+
+export interface AuthStatus {
+  authenticated: boolean
+  user?: Author | null
+}
+
+export interface AuthorProfile {
+  author_id: string
+  bio: string
+  background_image_url?: string | null
+  background_image_kind: 'url' | 'upload'
+  updated_at?: string | null
+}
+
+export interface AuthorProfileUpdate {
+  bio?: string | null
+  background_image_url?: string | null
+}
+
 export interface Plugin {
   plugin_id: string
   display_name: string
@@ -63,19 +102,26 @@ export interface RatingInfo {
 
 export interface ReviewItem {
   id?: string
+  target_type: string
   action: string
   target_id: string
   status_before?: string
   status_after?: string
+  reason?: string | null
   operator_id: string
   created_at: string
 }
 
 export interface Comment {
   id: string
+  plugin_id?: string
+  parent_id?: number | null
   content: string
   created_at: string
+  updated_at?: string
+  is_deleted?: boolean
   author: CommentAuthor
+  mentions?: MentionCandidate[]
 }
 
 export interface CommentAuthor {
@@ -84,6 +130,13 @@ export interface CommentAuthor {
   display_name: string
   avatar_url?: string
   is_admin?: boolean
+}
+
+export interface MentionCandidate {
+  author_id: string
+  github_login: string
+  display_name: string
+  avatar_url?: string | null
 }
 
 export interface Dependency {
@@ -99,6 +152,35 @@ export interface MarketStats {
   plugins_total?: number
   versions_total?: number
   authors_total?: number
+  comments_total?: number
+  ratings_total?: number
+  likes_total?: number
+  downloads_total?: number
+  pending_plugins?: number
+  pending_versions?: number
+  webhooks_total?: number
+}
+
+export interface TrendingItem {
+  author_id: string
+  github_login: string
+  display_name: string
+  avatar_url?: string | null
+  bio?: string | null
+  plugins_count: number
+  likes_received: number
+  downloads_total: number
+  rating_avg?: number
+  rating_count?: number
+  best_plugin?: TrendingPlugin | null
+}
+
+export interface TrendingPlugin {
+  plugin_id: string
+  display_name: string
+  summary: string
+  icon_url?: string | null
+  latest_version?: string | null
 }
 
 export interface FeaturedData {
@@ -106,6 +188,210 @@ export interface FeaturedData {
   top_rated?: Plugin[]
   latest?: Plugin[]
   [key: string]: Plugin[] | undefined
+}
+
+export interface PinnedPlugin {
+  plugin_id: string
+  pinned_reason?: string | null
+  pinned_at: string
+  plugin?: Plugin | null
+}
+
+export interface PinCreate {
+  plugin_id: string
+  pinned_reason?: string | null
+}
+
+export interface PinUpdate {
+  pinned_reason?: string | null
+}
+
+export interface PluginMetadataPatch {
+  display_name?: string | null
+  icon_url?: string | null
+  categories?: string[] | null
+  tags?: string[] | null
+}
+
+export interface InboxMessageSource {
+  author_id: string
+  github_login: string
+  display_name: string
+  avatar_url?: string | null
+}
+
+export interface InboxMessageLink {
+  kind: InboxLinkKind
+  plugin_id?: string | null
+  comment_id?: number | null
+  announcement_id?: number | null
+}
+
+export interface InboxMessage {
+  id: number
+  type: InboxMessageType
+  status: InboxMessageStatus
+  preview: string
+  payload: Record<string, unknown>
+  source?: InboxMessageSource | null
+  link?: InboxMessageLink | null
+  related_plugin_id?: string | null
+  related_comment_id?: number | null
+  related_announcement_id?: number | null
+  created_at: string
+  read_at?: string | null
+}
+
+export interface InboxUnreadCount {
+  count: number
+}
+
+export interface InboxMessageListResponse {
+  items: InboxMessage[]
+  total: number
+}
+
+export interface Announcement {
+  id: number
+  title: string
+  body_markdown: string
+  display_mode: DisplayMode
+  severity: Severity
+  dismissible: boolean
+  enabled: boolean
+  starts_at?: string | null
+  ends_at?: string | null
+  audience: Audience
+  emit_inbox: boolean
+  dismiss_token: number
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AnnouncementCreate {
+  title: string
+  body_markdown?: string
+  display_mode?: DisplayMode
+  severity?: Severity
+  dismissible?: boolean
+  enabled?: boolean
+  starts_at?: string | null
+  ends_at?: string | null
+  audience?: Audience
+  emit_inbox?: boolean
+}
+
+export interface AnnouncementUpdate {
+  title?: string | null
+  body_markdown?: string | null
+  display_mode?: DisplayMode | null
+  severity?: Severity | null
+  dismissible?: boolean | null
+  enabled?: boolean | null
+  starts_at?: string | null
+  ends_at?: string | null
+  audience?: Audience | null
+  emit_inbox?: boolean | null
+}
+
+export interface AnnouncementDismissResponse {
+  announcement_id: number
+  dismissed: boolean
+  dismiss_token: number
+}
+
+export interface AnnouncementListResponse {
+  items: Announcement[]
+  total: number
+}
+
+export interface CurationEntry {
+  id: number
+  slot_type: SlotType
+  target_type: TargetType
+  target_id: string
+  signature_plugin_id?: string | null
+  sort_order: number
+  enabled: boolean
+  starts_at?: string | null
+  ends_at?: string | null
+  audience: Audience
+  display_meta: Record<string, unknown>
+  plugin?: Plugin | null
+  author?: Author | null
+  signature_plugin?: Plugin | null
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CurationEntryCreate {
+  slot_type: SlotType
+  target_type: TargetType
+  target_id: string
+  signature_plugin_id?: string | null
+  sort_order?: number
+  enabled?: boolean
+  starts_at?: string | null
+  ends_at?: string | null
+  audience?: Audience
+  display_meta?: Record<string, unknown>
+}
+
+export interface CurationEntryUpdate {
+  slot_type?: SlotType | null
+  target_type?: TargetType | null
+  target_id?: string | null
+  signature_plugin_id?: string | null
+  sort_order?: number | null
+  enabled?: boolean | null
+  starts_at?: string | null
+  ends_at?: string | null
+  audience?: Audience | null
+  display_meta?: Record<string, unknown> | null
+}
+
+export interface CurationEntryListResponse {
+  items: CurationEntry[]
+  total: number
+}
+
+export interface CurationOrderUpdate {
+  ids_in_order: number[]
+}
+
+export interface BulkActionRequest {
+  plugin_ids: string[]
+  action: BulkAction
+  params?: Record<string, unknown>
+}
+
+export interface BulkActionItemError {
+  code: string
+  message: string
+}
+
+export interface BulkActionItemResult {
+  plugin_id: string
+  ok: boolean
+  after?: Plugin | null
+  error?: BulkActionItemError | null
+}
+
+export interface BulkActionResult {
+  results: BulkActionItemResult[]
+}
+
+export interface MarketHome {
+  showcase: CurationEntry[]
+  featured_plugins: Plugin[]
+  trending_authors: TrendingItem[]
+  latest: Plugin[]
+  top_rated: Plugin[]
+  categories_preview: Record<string, Plugin[]>
+  stats: MarketStats
+  active_announcements: Announcement[]
 }
 
 export interface SystemInfo {

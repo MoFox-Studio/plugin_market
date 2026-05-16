@@ -8,7 +8,7 @@ from datetime import timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from plugin_market_backend.enums import AuthorType, PluginStatus, ReviewAction, TrustLevel, VersionStatus
+from plugin_market_backend.enums import AuthorType, TrustLevel
 from plugin_market_backend.orm import (
     AuthorORM,
     PluginCommentORM,

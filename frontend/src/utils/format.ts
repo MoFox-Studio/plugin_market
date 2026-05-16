@@ -64,20 +64,31 @@ export function escapeHtml(value: unknown): string {
 export const CATEGORY_LABELS: Readonly<Record<string, string>> = Object.freeze({
   ai: 'AI增强',
   automation: '自动化',
+  chat: '聊天互动',
   dev: '开发辅助',
   devtools: '开发工具',
   education: '学习教育',
   fun: '休闲娱乐',
   game: '游戏相关',
   image: '图像处理',
+  information: '信息资讯',
   life: '生活服务',
   media: '音视频',
+  moderation: '社区管理',
   productivity: '效率办公',
   social: '社交互动',
   tool: '实用工具',
   tools: '工具合集',
   utility: '实用增强',
 })
+
+export const EDITABLE_PLUGIN_CATEGORIES = Object.freeze([
+  'chat',
+  'fun',
+  'information',
+  'moderation',
+  'tool',
+])
 
 export function categoryLabel(value: string | null | undefined): string {
   const raw = String(value ?? '').trim()

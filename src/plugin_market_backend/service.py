@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from packaging.version import InvalidVersion, Version
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -17,14 +17,17 @@ from plugin_market_backend.config import get_settings
 from plugin_market_backend.content import delete_plugin_icon, normalize_readme_markdown, render_readme_html, store_plugin_icon
 from plugin_market_backend.enums import AuthorType, PluginStatus, ReviewAction, SyncStatus, TrustLevel, VersionStatus
 from plugin_market_backend.errors import ApiError
-from plugin_market_backend.orm import AuthorORM, PluginCommentORM, PluginLikeORM, PluginMaintainerORM, PluginORM, PluginRatingORM, PluginVersionORM, ReviewRecordORM, WebhookEventORM, utc_now
+from plugin_market_backend.orm import AuthorORM, AuthorProfileORM, CommentMentionORM, CurationEntryORM, PluginCommentORM, PluginLikeORM, PluginMaintainerORM, PluginORM, PluginRatingORM, PluginVersionORM, ReviewRecordORM, WebhookEventORM, utc_now
 from plugin_market_backend.schemas import (
     ActivityPoint,
     AdminDashboard,
+    Author,
     Comment,
     CommentAuthor,
+    CurationEntryDTO,
     LikeResponse,
     MarketStats,
+    MentionCandidate,
     Plugin,
     PluginCreate,
     PluginDependenciesResponse,
@@ -38,6 +41,7 @@ from plugin_market_backend.schemas import (
     RatingSummary,
     ReviewRecord,
     TrendingItem,
+    TrendingPlugin,
     VersionStatusItem,
     VersionSyncRequest,
 )
@@ -121,6 +125,34 @@ class MarketService:
         self.session.add(record)
         await self.session.flush()
         return record
+
+    async def search_authors(self, prefix: str, *, limit: int = 8) -> list[MentionCandidate]:
+        """Return authors matching a GitHub login or display-name prefix."""
+
+        normalized = prefix.strip().lower()
+        if not normalized:
+            return []
+        prefix_like = f"{normalized}%"
+        stmt = (
+            select(AuthorORM)
+            .where(
+                or_(
+                    func.lower(AuthorORM.github_login).like(prefix_like),
+                    func.lower(AuthorORM.display_name).like(prefix_like),
+                )
+            )
+            .order_by(
+                case(
+                    (func.lower(AuthorORM.github_login) == normalized, 0),
+                    (func.lower(AuthorORM.github_login).like(prefix_like), 1),
+                    else_=2,
+                ),
+                func.lower(AuthorORM.github_login),
+            )
+            .limit(limit)
+        )
+        rows = list((await self.session.scalars(stmt)).all())
+        return [self._mention_candidate_schema(author) for author in rows]
 
     async def register_plugin(self, payload: PluginCreate, owner_id: str) -> Plugin:
         """Register a plugin and publish it immediately."""
@@ -249,6 +281,144 @@ class MarketService:
             "most_downloaded": [self._plugin_schema(item, stats.get(item.plugin_id)) for item in most_downloaded],
             "trending": [self._plugin_schema(item, stats.get(item.plugin_id)) for item in trending],
         }
+
+    async def home_categories_preview(
+        self,
+        *,
+        per_category_limit: int = 6,
+        categories_limit: int = 6,
+        viewer_id: str | None = None,
+    ) -> dict[str, list[Plugin]]:
+        """Return preview buckets for the most populated published categories."""
+
+        stmt = (
+            select(PluginORM)
+            .options(
+                selectinload(PluginORM.maintainers),
+                selectinload(PluginORM.owner),
+                selectinload(PluginORM.versions),
+            )
+            .where(PluginORM.status == PluginStatus.PUBLISHED)
+        )
+        rows = list((await self.session.scalars(stmt)).all())
+        if not rows:
+            return {}
+
+        stats = await self._community_stats_for([plugin.plugin_id for plugin in rows], viewer_id)
+        counts: dict[str, int] = {}
+        for plugin in rows:
+            for category in plugin.categories or []:
+                counts[category] = counts.get(category, 0) + 1
+
+        category_order = sorted(counts, key=lambda item: (-counts[item], item))[:categories_limit]
+        preview: dict[str, list[Plugin]] = {}
+        for category in category_order:
+            matching = [plugin for plugin in rows if category in (plugin.categories or [])]
+            ranked = self._sort_plugins(matching, stats, "trending")[:per_category_limit]
+            preview[category] = [self._plugin_schema(plugin, stats.get(plugin.plugin_id)) for plugin in ranked]
+        return preview
+
+    async def home_showcase(
+        self,
+        viewer: AuthorORM | None,
+        *,
+        viewer_has_plugin: bool = False,
+        now: datetime | None = None,
+    ) -> list[CurationEntryDTO]:
+        """Return visible curation entries expanded for the home aggregate."""
+
+        from plugin_market_backend.services.curation_service import is_visible as curation_is_visible
+
+        when = now or utc_now()
+        stmt = select(CurationEntryORM).order_by(
+            CurationEntryORM.sort_order.asc(),
+            CurationEntryORM.created_at.asc(),
+            CurationEntryORM.id.asc(),
+        )
+        entries = list((await self.session.scalars(stmt)).all())
+        if not entries:
+            return []
+
+        plugin_ids: set[str] = set()
+        author_ids: set[str] = set()
+        for entry in entries:
+            if entry.target_type == "plugin":
+                plugin_ids.add(entry.target_id)
+            if entry.target_type == "author":
+                author_ids.add(entry.target_id)
+            if entry.signature_plugin_id:
+                plugin_ids.add(entry.signature_plugin_id)
+
+        plugin_map: dict[str, PluginORM] = {}
+        if plugin_ids:
+            plugin_stmt = (
+                select(PluginORM)
+                .options(
+                    selectinload(PluginORM.maintainers),
+                    selectinload(PluginORM.owner),
+                    selectinload(PluginORM.versions),
+                )
+                .where(
+                    PluginORM.plugin_id.in_(sorted(plugin_ids)),
+                    PluginORM.status == PluginStatus.PUBLISHED,
+                )
+            )
+            plugin_rows = list((await self.session.scalars(plugin_stmt)).all())
+            plugin_map = {plugin.plugin_id: plugin for plugin in plugin_rows}
+        plugin_stats = await self._community_stats_for(list(plugin_map), viewer.author_id if viewer else None)
+
+        author_map: dict[str, AuthorORM] = {}
+        if author_ids:
+            author_rows = list((await self.session.scalars(select(AuthorORM).where(AuthorORM.author_id.in_(sorted(author_ids))))).all())
+            author_map = {author.author_id: author for author in author_rows}
+
+        result: list[CurationEntryDTO] = []
+        for entry in entries:
+            if not curation_is_visible(entry, viewer, when, viewer_has_plugin=viewer_has_plugin):
+                continue
+
+            plugin_schema: Plugin | None = None
+            author_schema: Author | None = None
+            signature_schema: Plugin | None = None
+
+            if entry.target_type == "plugin":
+                plugin_row = plugin_map.get(entry.target_id)
+                if plugin_row is None:
+                    continue
+                plugin_schema = self._plugin_schema(plugin_row, plugin_stats.get(plugin_row.plugin_id))
+            else:
+                author_row = author_map.get(entry.target_id)
+                if author_row is None:
+                    continue
+                author_schema = self._author_schema(author_row)
+                if entry.signature_plugin_id is not None:
+                    signature_row = plugin_map.get(entry.signature_plugin_id)
+                    if signature_row is None:
+                        continue
+                    signature_schema = self._plugin_schema(signature_row, plugin_stats.get(signature_row.plugin_id))
+
+            result.append(
+                CurationEntryDTO(
+                    id=entry.id,
+                    slot_type=entry.slot_type,  # type: ignore[arg-type]
+                    target_type=entry.target_type,  # type: ignore[arg-type]
+                    target_id=entry.target_id,
+                    signature_plugin_id=entry.signature_plugin_id,
+                    sort_order=entry.sort_order,
+                    enabled=entry.enabled,
+                    starts_at=entry.starts_at,
+                    ends_at=entry.ends_at,
+                    audience=entry.audience,  # type: ignore[arg-type]
+                    display_meta=dict(entry.display_meta or {}),
+                    plugin=plugin_schema,
+                    author=author_schema,
+                    signature_plugin=signature_schema,
+                    created_by=entry.created_by,
+                    created_at=entry.created_at,
+                    updated_at=entry.updated_at,
+                )
+            )
+        return result
 
     async def get_plugin(self, plugin_id: str, viewer_id: str | None = None) -> Plugin:
         """Return plugin details or raise not found."""
@@ -522,6 +692,10 @@ class MarketService:
         plugin.status = status
         plugin.updated_at = utc_now()
         await self._record("plugin", plugin_id, action, before, status, operator_id, reason)
+        if await self._is_admin_operator(operator_id):
+            from plugin_market_backend.services.inbox_service import InboxService
+
+            await InboxService(self.session).fan_out_for_governance(plugin, action.value, operator_id, reason)
         await self.session.flush()
         return await self.get_plugin(plugin_id)
 
@@ -539,6 +713,10 @@ class MarketService:
         plugin.trust_level = trust_level
         plugin.updated_at = utc_now()
         await self._record("plugin", plugin_id, ReviewAction.SET_TRUST_LEVEL, before, trust_level, operator_id, reason)
+        if await self._is_admin_operator(operator_id):
+            from plugin_market_backend.services.inbox_service import InboxService
+
+            await InboxService(self.session).fan_out_for_governance(plugin, ReviewAction.SET_TRUST_LEVEL.value, operator_id, reason)
         await self.session.flush()
         return await self.get_plugin(plugin_id)
 
@@ -561,6 +739,11 @@ class MarketService:
             record.is_yanked = is_yanked
         record.updated_at = utc_now()
         await self._record("version", f"{plugin_id}@{version}", action, before, status, operator_id, reason)
+        if action in {ReviewAction.YANK_VERSION, ReviewAction.BLOCK_VERSION} and await self._is_admin_operator(operator_id):
+            from plugin_market_backend.services.inbox_service import InboxService
+
+            plugin = await self._get_plugin_orm(plugin_id)
+            await InboxService(self.session).fan_out_for_governance(plugin, action.value, operator_id, reason)
         await self.session.flush()
         return self._version_schema(record)
 
@@ -890,6 +1073,20 @@ class MarketService:
             created_at=record.created_at,
         )
 
+    def _author_schema(self, author: AuthorORM) -> Author:
+        """Convert an author ORM object to the public author schema."""
+
+        return Author(
+            author_id=author.author_id,
+            github_user_id=author.github_user_id,
+            github_login=author.github_login,
+            display_name=author.display_name,
+            avatar_url=author.avatar_url,
+            author_type=author.author_type,
+            verified_at=author.verified_at,
+            is_admin=author.is_admin,
+        )
+
     def _maintainer_ids(self, maintainers: Iterable[str], owner_id: str) -> list[str]:
         """Normalize maintainer lists and always include the owner."""
 
@@ -897,6 +1094,12 @@ class MarketService:
         if owner_id not in values:
             values.append(owner_id)
         return list(dict.fromkeys(values))
+
+    async def _is_admin_operator(self, operator_id: str) -> bool:
+        """Return whether ``operator_id`` currently belongs to an admin."""
+
+        author = await self.session.get(AuthorORM, operator_id)
+        return bool(author and author.is_admin)
 
     def _matches_host(self, version: PluginVersionORM, host_version: str | None) -> bool:
         """Return whether the version supports the requested host version."""
@@ -1140,27 +1343,37 @@ class MarketService:
         )
         rows = list((await self.session.scalars(stmt)).all())
         authors = await self._load_authors([row.author_id for row in rows])
-        return [self._comment_schema(row, authors) for row in rows], int(total or 0)
+        mentions = await self._load_comment_mentions([row.id for row in rows])
+        return [self._comment_schema(row, authors, mentions) for row in rows], int(total or 0)
 
     async def add_comment(self, plugin_id: str, viewer_id: str, content: str, parent_id: int | None) -> Comment:
         """Create a new comment on a plugin."""
 
         plugin = await self._get_plugin_orm(plugin_id)
         await self.ensure_author(viewer_id)
+        normalized_content = content.strip()
         if parent_id is not None:
             parent = await self.session.get(PluginCommentORM, parent_id)
             if parent is None or parent.plugin_id != plugin.plugin_id or parent.is_deleted:
                 raise ApiError(404, "COMMENT_NOT_FOUND", "Parent comment was not found.", {"parent_id": parent_id})
+            if parent.parent_id is not None:
+                raise ApiError(400, "COMMENT_REPLY_DEPTH_EXCEEDED", "Replies may only target top-level comments.", {"parent_id": parent_id})
         comment = PluginCommentORM(
             plugin_id=plugin.plugin_id,
             author_id=viewer_id,
             parent_id=parent_id,
-            content=content.strip(),
+            content=normalized_content,
         )
         self.session.add(comment)
         await self.session.flush()
+        from plugin_market_backend.services.inbox_service import InboxService
+
+        inbox_service = InboxService(self.session)
+        mentions = await inbox_service.parse_mentions(normalized_content, viewer_id)
+        await inbox_service.fan_out_for_comment(comment, mentions)
         authors = await self._load_authors([viewer_id])
-        return self._comment_schema(comment, authors)
+        comment_mentions = await self._load_comment_mentions([comment.id])
+        return self._comment_schema(comment, authors, comment_mentions)
 
     async def delete_comment(self, plugin_id: str, comment_id: int, viewer_id: str, is_admin: bool) -> None:
         """Soft-delete a comment owned by the author or by an admin."""
@@ -1174,6 +1387,9 @@ class MarketService:
         comment.content = ""
         comment.updated_at = utc_now()
         await self.session.flush()
+        from plugin_market_backend.services.inbox_service import InboxService
+
+        await InboxService(self.session).revoke_messages_for_comment(comment_id)
 
     async def record_install(self, plugin_id: str, version: str | None = None) -> PluginVersion:
         """Increment the download counter and return the affected version."""
@@ -1199,6 +1415,9 @@ class MarketService:
         rows = list((await self.session.scalars(stmt)).all())
         stats = await self._community_stats_for([plugin.plugin_id for plugin in rows], None)
         buckets: dict[str, dict[str, Any]] = {}
+        # Track each author's plugin metrics so we can pick a "best" one as a
+        # fallback signature plugin for the home page.
+        plugins_by_author: dict[str, list[tuple[float, PluginORM]]] = {}
         for plugin in rows:
             owner = plugin.owner
             if owner is None:
@@ -1214,12 +1433,69 @@ class MarketService:
                     "plugins_count": 0,
                     "likes_received": 0,
                     "downloads_total": 0,
+                    "rating_score_total": 0.0,
+                    "rating_count": 0,
                 },
             )
             bucket["plugins_count"] += 1
-            bucket["likes_received"] += int(data.get("likes_count", 0) or 0)
-            bucket["downloads_total"] += int(data.get("downloads_count", 0) or 0)
-        items = [TrendingItem(**bucket) for bucket in buckets.values()]
+            likes = int(data.get("likes_count", 0) or 0)
+            downloads = int(data.get("downloads_count", 0) or 0)
+            rating_avg = float(data.get("rating_avg", 0) or 0)
+            rating_count = int(data.get("rating_count", 0) or 0)
+            bucket["likes_received"] += likes
+            bucket["downloads_total"] += downloads
+            bucket["rating_score_total"] += rating_avg * rating_count
+            bucket["rating_count"] += rating_count
+            # Score is biased toward published plugins so we don't surface
+            # drafts as someone's signature work.
+            published_bonus = 0.0
+            if plugin.status == PluginStatus.PUBLISHED:
+                published_bonus = 1.0
+            score = (
+                published_bonus * 1000
+                + likes * 3
+                + downloads
+                + rating_avg * 50
+            )
+            plugins_by_author.setdefault(owner.author_id, []).append((score, plugin))
+
+        items: list[TrendingItem] = []
+        # Batch-load profiles for bio enrichment.
+        author_ids = list(buckets.keys())
+        bios: dict[str, str] = {}
+        if author_ids:
+            profiles = (await self.session.scalars(
+                select(AuthorProfileORM).where(AuthorProfileORM.author_id.in_(author_ids))
+            )).all()
+            for profile in profiles:
+                if profile.bio and profile.bio.strip():
+                    bios[profile.author_id] = profile.bio.strip()
+        for bucket in buckets.values():
+            best_plugin: TrendingPlugin | None = None
+            rating_count = int(bucket.get("rating_count", 0) or 0)
+            rating_score_total = float(bucket.pop("rating_score_total", 0.0) or 0.0)
+            bucket["rating_avg"] = (rating_score_total / rating_count) if rating_count else 0.0
+            ranked = plugins_by_author.get(bucket["author_id"], [])
+            if ranked:
+                ranked.sort(key=lambda pair: pair[0], reverse=True)
+                top = ranked[0][1]
+                latest_version: str | None = None
+                if top.versions:
+                    latest_published = max(
+                        (v for v in top.versions if v.status == VersionStatus.PUBLISHED and not v.is_yanked),
+                        key=lambda v: v.published_at,
+                        default=None,
+                    )
+                    if latest_published is not None:
+                        latest_version = latest_published.version
+                best_plugin = TrendingPlugin(
+                    plugin_id=top.plugin_id,
+                    display_name=top.display_name,
+                    summary=top.summary,
+                    icon_url=top.icon_url,
+                    latest_version=latest_version,
+                )
+            items.append(TrendingItem(**bucket, best_plugin=best_plugin, bio=bios.get(bucket["author_id"])))
         items.sort(key=lambda item: (item.likes_received, item.downloads_total, item.plugins_count), reverse=True)
         return items[:limit]
 
@@ -1232,7 +1508,30 @@ class MarketService:
         rows = await self.session.scalars(select(AuthorORM).where(AuthorORM.author_id.in_(unique_ids)))
         return {author.author_id: author for author in rows}
 
-    def _comment_schema(self, comment: PluginCommentORM, authors: dict[str, AuthorORM]) -> Comment:
+    async def _load_comment_mentions(self, comment_ids: list[int]) -> dict[int, list[MentionCandidate]]:
+        """Fetch resolved mentions for each comment keyed by comment id."""
+
+        unique_ids = [value for value in dict.fromkeys(comment_ids)]
+        if not unique_ids:
+            return {}
+        stmt = (
+            select(CommentMentionORM.comment_id, AuthorORM)
+            .join(AuthorORM, AuthorORM.author_id == CommentMentionORM.mentioned_author_id)
+            .where(CommentMentionORM.comment_id.in_(unique_ids))
+            .order_by(CommentMentionORM.comment_id.asc(), CommentMentionORM.created_at.asc())
+        )
+        rows = (await self.session.execute(stmt)).all()
+        bucket: dict[int, list[MentionCandidate]] = {}
+        for comment_id, author in rows:
+            bucket.setdefault(int(comment_id), []).append(self._mention_candidate_schema(author))
+        return bucket
+
+    def _comment_schema(
+        self,
+        comment: PluginCommentORM,
+        authors: dict[str, AuthorORM],
+        mentions: dict[int, list[MentionCandidate]],
+    ) -> Comment:
         """Convert a comment ORM object to schema."""
 
         author = authors.get(comment.author_id)
@@ -1251,4 +1550,15 @@ class MarketService:
                 avatar_url=author.avatar_url if author else None,
                 is_admin=bool(author.is_admin) if author else False,
             ),
+            mentions=mentions.get(comment.id, []),
+        )
+
+    def _mention_candidate_schema(self, author: AuthorORM) -> MentionCandidate:
+        """Convert an author ORM object into a mention candidate payload."""
+
+        return MentionCandidate(
+            author_id=author.author_id,
+            github_login=author.github_login,
+            display_name=author.display_name,
+            avatar_url=author.avatar_url,
         )

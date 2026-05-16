@@ -183,6 +183,8 @@ frontend/
 
 ### 前端开发
 
+以下 npm 命令必须在 `frontend/` 目录内执行；仓库根目录 `plugin-market/` 不包含 `package.json`。
+
 ```bash
 cd frontend
 npm install

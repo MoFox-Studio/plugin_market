@@ -3,20 +3,29 @@ import { ref, onMounted } from 'vue'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
-import { formatNumber, formatRelative, formatDate, formatBytes, statusText, categoryLabel, reviewActionText } from '@/utils/format'
-import type { Plugin, PluginSnapshot } from '@/types'
+import { useTaxonomyStore } from '@/stores/taxonomy'
+import { formatNumber, formatRelative, formatDate, formatBytes, statusText, categoryLabel, reviewActionText, EDITABLE_PLUGIN_CATEGORIES } from '@/utils/format'
+import type { Plugin, PluginMetadataPatch, PluginSnapshot } from '@/types'
 import TrustBadge from '@/components/TrustBadge.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
 const auth = useAuthStore()
 const toast = useToastStore()
+const taxonomy = useTaxonomyStore()
 
 const plugins = ref<Plugin[]>([])
 const selectedId = ref<string | null>(null)
 const snapshot = ref<PluginSnapshot | null>(null)
 const loading = ref(true)
-
 const selectedPlugin = ref<Plugin | null>(null)
+const metadataOpen = ref(false)
+const metadataSaving = ref(false)
+const metadataDisplayName = ref('')
+const metadataIconUrl = ref('')
+const metadataCategory = ref('')
+const metadataTags = ref('')
+const iconFileInput = ref<HTMLInputElement | null>(null)
+const iconUploading = ref(false)
 
 async function loadPlugins() {
   const result = await api.get('/api/v1/me/plugins').catch(() => ({ items: [] }))
@@ -39,6 +48,68 @@ async function loadSnapshot() {
 async function selectPlugin(id: string) {
   selectedId.value = id
   await loadSnapshot()
+}
+
+function openMetadataEditor() {
+  if (!selectedPlugin.value) return
+  metadataDisplayName.value = selectedPlugin.value.display_name || ''
+  metadataIconUrl.value = selectedPlugin.value.icon_url || ''
+  metadataCategory.value = selectedPlugin.value.categories?.[0] || ''
+  metadataTags.value = (selectedPlugin.value.tags || []).join(', ')
+  metadataOpen.value = true
+}
+
+function closeMetadataEditor() { metadataOpen.value = false }
+
+function pickIcon() {
+  iconFileInput.value?.click()
+}
+
+async function onIconFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !selectedPlugin.value) return
+  if (file.size > 2 * 1024 * 1024) {
+    toast.show('图标不能超过 2 MiB', 'error')
+    return
+  }
+  iconUploading.value = true
+  try {
+    const updated = await api.me.plugins.uploadIcon(selectedPlugin.value.plugin_id, file)
+    selectedPlugin.value = updated
+    metadataIconUrl.value = updated.icon_url || ''
+    plugins.value = plugins.value.map((plugin) => plugin.plugin_id === updated.plugin_id ? updated : plugin)
+    if (snapshot.value) snapshot.value = { ...snapshot.value, plugin: updated }
+    toast.show('图标已上传', 'ok')
+  } catch (e) {
+    toast.show((e as Error).message || '上传失败', 'error')
+  } finally {
+    iconUploading.value = false
+  }
+}
+
+async function saveMetadataPatch() {
+  if (!selectedPlugin.value) return
+  const payload: PluginMetadataPatch = {
+    display_name: metadataDisplayName.value.trim() || selectedPlugin.value.display_name,
+    icon_url: metadataIconUrl.value.trim() || null,
+    categories: metadataCategory.value ? [metadataCategory.value] : [],
+    tags: metadataTags.value.split(',').map((item) => item.trim()).filter(Boolean),
+  }
+  metadataSaving.value = true
+  try {
+    const updated = await api.me.plugins.patchMetadata(selectedPlugin.value.plugin_id, payload)
+    selectedPlugin.value = updated
+    plugins.value = plugins.value.map((plugin) => plugin.plugin_id === updated.plugin_id ? updated : plugin)
+    if (snapshot.value) snapshot.value = { ...snapshot.value, plugin: updated }
+    metadataOpen.value = false
+    toast.show('插件资料已更新', 'ok')
+  } catch (e) {
+    toast.show((e as Error).message || '更新失败', 'error')
+  } finally {
+    metadataSaving.value = false
+  }
 }
 
 async function yankVersion(pluginId: string, version: string) {
@@ -69,168 +140,617 @@ async function deletePlugin(pluginId: string) {
 
 onMounted(async () => {
   loading.value = true
-  await loadPlugins()
+  await Promise.all([loadPlugins(), taxonomy.load()])
   loading.value = false
 })
 </script>
 
 <template>
-  <!-- Not logged in -->
-  <div v-if="!auth.isAuthenticated" style="padding-top:40px">
-    <EmptyState title="请先登录" message="使用 GitHub 账号登录后，才能管理自己的插件与版本。" />
-    <div style="text-align:center;margin-top:12px">
-      <a class="btn btn-primary" :href="auth.getLoginUrl('/me')">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-        GitHub 登录
-      </a>
+  <div class="me-page" v-if="!auth.isAuthenticated">
+    <div class="me-empty">
+      <EmptyState title="请先登录" message="使用 GitHub 账号登录后，才能管理自己的插件与版本。" />
+      <div class="me-empty-cta">
+        <a class="btn btn-primary" :href="auth.getLoginUrl('/me')">GitHub 登录</a>
+      </div>
     </div>
   </div>
 
-   <!-- Logged in -->
-  <div v-else class="control-room">
+  <div class="me-page" v-else>
     <!-- Hero -->
-    <section v-if="auth.viewer" class="control-hero creator-hero">
-      <div class="control-hero-copy">
-        <span class="control-kicker">Creator Studio</span>
-        <h1>我的插件工作台</h1>
-        <p>在这里处理版本下架、检查最近审核反馈、决定是否彻底删除插件。</p>
-        <div class="control-pills">
-          <span class="control-pill">@{{ auth.viewer.github_login }}</span>
-          <span class="control-pill">{{ plugins.length }} 个管理中的插件</span>
-          <span class="control-pill">{{ plugins.filter(p => p.status === 'published').length }} 个正在上架</span>
+    <header class="me-hero" v-if="auth.viewer" data-anim="enter-1">
+      <div class="me-hero-bg" aria-hidden="true"></div>
+      <div class="me-hero-inner">
+        <div class="me-hero-left">
+          <span class="kicker">CREATOR STUDIO</span>
+          <h1>我的插件工作台</h1>
+          <p>治理与版本操作留在这里，个人空间资料请到独立页面维护。</p>
+          <div class="me-hero-pills">
+            <span class="pill">@{{ auth.viewer.github_login }}</span>
+            <span class="pill">{{ plugins.length }} 个插件</span>
+            <span class="pill">{{ plugins.filter(p => p.status === 'published').length }} 个上架中</span>
+          </div>
         </div>
-      </div>
-      <div class="profile-card">
-        <img v-if="auth.viewer.avatar_url" :src="auth.viewer.avatar_url" alt="">
-        <div v-else class="profile-card-fallback">M</div>
-        <div>
-          <strong>{{ auth.viewer.display_name }}</strong>
-          <span>{{ auth.viewer.author_id }}</span>
-          <div class="table-actions">
-            <router-link class="btn btn-sm" :to="`/author/${encodeURIComponent(auth.viewer.author_id)}`">公开主页</router-link>
-            <a class="btn btn-sm btn-ghost" :href="`https://github.com/${encodeURIComponent(auth.viewer.github_login)}`" target="_blank" rel="noreferrer noopener">GitHub</a>
+        <div class="me-hero-right">
+          <div class="me-hero-avatar">
+            <img v-if="auth.viewer.avatar_url" :src="auth.viewer.avatar_url" alt="">
+            <span v-else>{{ auth.viewer.display_name[0]?.toUpperCase() || 'M' }}</span>
+          </div>
+          <div class="me-hero-meta">
+            <strong>{{ auth.viewer.display_name }}</strong>
+            <small>{{ auth.viewer.author_id }}</small>
+            <div class="me-hero-actions">
+              <router-link class="btn btn-sm" :to="{ name: 'me-profile' }">个人空间设置</router-link>
+              <router-link class="btn btn-sm btn-ghost" :to="`/author/${encodeURIComponent(auth.viewer.author_id)}`">查看公开主页</router-link>
+            </div>
           </div>
         </div>
       </div>
-    </section>
+    </header>
 
-    <!-- Layout -->
-    <div class="control-layout">
-      <aside class="panel control-sidebar">
-        <div class="section-head compact-head">
-          <div><h2>插件列表</h2><p>选择一个插件查看版本与治理记录。</p></div>
+    <div class="me-layout" data-anim="enter-2">
+      <!-- Plugin list (left) -->
+      <aside class="me-plugin-list">
+        <div class="me-section-head">
+          <h2>我的插件</h2>
+          <small>{{ plugins.length }}</small>
         </div>
-        <div v-if="plugins.length" class="control-list">
+        <div v-if="plugins.length" class="me-plugin-rail">
           <button
             v-for="p in plugins"
             :key="p.plugin_id"
             type="button"
-            :class="['control-list-item', { 'is-active': p.plugin_id === selectedId }]"
+            :class="['me-plugin-item', { 'is-active': p.plugin_id === selectedId }]"
             @click="selectPlugin(p.plugin_id)"
           >
-            <div>
-              <strong>{{ p.display_name }}</strong>
-              <span>{{ p.plugin_id }}</span>
+            <div class="me-plugin-item-icon">
+              <img v-if="p.icon_url" :src="p.icon_url" :alt="p.display_name">
+              <template v-else>{{ p.display_name[0]?.toUpperCase() || '?' }}</template>
             </div>
-            <div>
-              <span :class="['badge', `status-${p.status}`]">{{ statusText(p.status) }}</span>
-              <small>{{ formatRelative(p.updated_at) }}</small>
+            <div class="me-plugin-item-info">
+              <strong>{{ p.display_name }}</strong>
+              <small>{{ p.plugin_id }}</small>
+              <div class="me-plugin-item-meta">
+                <span :class="['badge', `status-${p.status}`]">{{ statusText(p.status) }}</span>
+                <span class="muted">{{ formatRelative(p.updated_at) }}</span>
+              </div>
             </div>
           </button>
         </div>
         <EmptyState v-else title="还没有插件" message="使用 MPDT CLI 上传第一个插件后，这里会出现管理入口。" />
       </aside>
 
-      <div class="control-main">
+      <!-- Main detail -->
+      <main class="me-main">
+
         <template v-if="selectedPlugin">
-          <!-- Metrics -->
-          <section class="control-metrics-row">
-            <div class="control-metric"><span>当前状态</span><b>{{ statusText(selectedPlugin.status) }}</b><small>最近更新 {{ formatRelative(selectedPlugin.updated_at) }}</small></div>
-            <div class="control-metric"><span>版本总数</span><b>{{ snapshot?.versions?.length || 0 }}</b><small>{{ (snapshot?.versions || []).filter(v => v.is_yanked).length }} 个已下架</small></div>
-            <div class="control-metric"><span>社区反馈</span><b>{{ formatNumber(selectedPlugin.comments_count) }} / {{ formatNumber(selectedPlugin.rating_count) }}</b><small>评论 / 评分</small></div>
-            <div class="control-metric"><span>热度</span><b>{{ formatNumber(selectedPlugin.likes_count) }} ❤</b><small>{{ formatNumber(selectedPlugin.downloads_count) }} 下载</small></div>
+          <section class="me-metric-row">
+            <div class="me-metric">
+              <span>当前状态</span>
+              <strong>{{ statusText(selectedPlugin.status) }}</strong>
+              <small>{{ formatRelative(selectedPlugin.updated_at) }}</small>
+            </div>
+            <div class="me-metric">
+              <span>版本总数</span>
+              <strong>{{ snapshot?.versions?.length || 0 }}</strong>
+              <small>{{ (snapshot?.versions || []).filter(v => v.is_yanked).length }} 个已下架</small>
+            </div>
+            <div class="me-metric">
+              <span>社区</span>
+              <strong>{{ formatNumber(selectedPlugin.comments_count) }} / {{ formatNumber(selectedPlugin.rating_count) }}</strong>
+              <small>评论 / 评分</small>
+            </div>
+            <div class="me-metric">
+              <span>热度</span>
+              <strong>{{ formatNumber(selectedPlugin.likes_count) }} ❤</strong>
+              <small>{{ formatNumber(selectedPlugin.downloads_count) }} 下载</small>
+            </div>
           </section>
 
-          <section class="ops-grid single-column-layout">
-            <!-- Plugin info -->
-            <div class="panel plugin-sheet">
-              <div class="section-head compact-head">
-                <div><h2>{{ selectedPlugin.display_name }}</h2><p>{{ selectedPlugin.summary }}</p></div>
-                <div class="table-actions">
-                  <span :class="['badge', `status-${selectedPlugin.status}`]">{{ statusText(selectedPlugin.status) }}</span>
-                  <TrustBadge :level="selectedPlugin.trust_level" />
-                </div>
+          <section class="me-card">
+            <div class="me-section-head">
+              <div>
+                <h2>{{ selectedPlugin.display_name }}</h2>
+                <p class="me-section-summary">{{ selectedPlugin.summary }}</p>
               </div>
-              <div class="plugin-sheet-grid">
-                <div>
-                  <h4>基础信息</h4>
-                  <ul class="meta-list">
-                    <li><span>插件 ID</span><strong>{{ selectedPlugin.plugin_id }}</strong></li>
-                    <li><span>最新版本</span><strong>{{ selectedPlugin.latest_version || '-' }}</strong></li>
-                    <li><span>分类标签</span><strong>{{ [...(selectedPlugin.categories || []).map(categoryLabel), ...(selectedPlugin.tags || [])].join(' / ') || '未设置' }}</strong></li>
-                    <li><span>仓库</span><strong><a :href="selectedPlugin.repository_url" target="_blank" rel="noreferrer noopener">查看源码</a></strong></li>
-                  </ul>
-                </div>
-                <div>
-                  <h4>危险操作</h4>
-                  <p class="soft-note">删除会移除插件、版本、评论与审核记录。建议只在确认废弃整个项目时使用。</p>
-                  <div class="table-actions">
-                    <button class="btn btn-danger" @click="deletePlugin(selectedPlugin.plugin_id)">删除插件</button>
-                  </div>
-                </div>
+              <div class="me-section-actions">
+                <button class="btn btn-sm" @click="openMetadataEditor">编辑资料</button>
+                <span :class="['badge', `status-${selectedPlugin.status}`]">{{ statusText(selectedPlugin.status) }}</span>
+                <TrustBadge :level="selectedPlugin.trust_level" />
               </div>
             </div>
+            <div class="me-info-grid">
+              <div>
+                <h4>基础信息</h4>
+                <ul class="me-meta-list">
+                  <li><span>插件 ID</span><strong>{{ selectedPlugin.plugin_id }}</strong></li>
+                  <li><span>最新版本</span><strong>{{ selectedPlugin.latest_version || '-' }}</strong></li>
+                  <li>
+                    <span>分类标签</span>
+                    <strong>{{ [...(selectedPlugin.categories || []).map(categoryLabel), ...(selectedPlugin.tags || [])].join(' / ') || '未设置' }}</strong>
+                  </li>
+                  <li>
+                    <span>仓库</span>
+                    <strong><a :href="selectedPlugin.repository_url" target="_blank" rel="noreferrer noopener">查看源码 →</a></strong>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h4>危险操作</h4>
+                <p class="me-soft-note">删除会移除插件、版本、评论与审核记录。建议只在确认废弃整个项目时使用。</p>
+                <button class="btn btn-danger" @click="deletePlugin(selectedPlugin.plugin_id)">删除插件</button>
+              </div>
+            </div>
+          </section>
 
-            <!-- Version governance -->
-            <div class="panel version-governance">
-              <div class="section-head compact-head">
-                <div><h2>版本管理</h2><p>支持一键下架存在问题的版本，前台会立即停止推荐该版本。</p></div>
-              </div>
-              <div v-if="(snapshot?.versions || []).length" class="governance-version-list">
-                <div v-for="v in snapshot!.versions" :key="v.version" class="governance-version-row">
-                  <div class="governance-version-main">
-                    <div class="governance-version-head">
-                      <strong>v{{ v.version }}</strong>
-                      <span :class="['badge', `status-${v.status}`]">{{ statusText(v.status) }}</span>
-                      <span v-if="v.is_yanked" class="badge status-blocked">已 yank</span>
-                    </div>
-                    <p>{{ v.release_title || v.version }} · {{ formatDate(v.published_at) }} · {{ formatBytes(v.file_size) }} · {{ formatNumber(v.download_count) }} 下载</p>
-                    <small>API {{ v.plugin_api_version }} · Host >= {{ v.min_host_version }}{{ v.max_host_version ? ` <= ${v.max_host_version}` : '' }} · {{ (v.supported_platforms || []).join(', ') || 'all' }}</small>
+          <section class="me-card">
+            <div class="me-section-head">
+              <h2>版本管理</h2>
+              <small v-if="snapshot?.versions?.length">{{ snapshot.versions.length }} 个版本</small>
+            </div>
+            <div v-if="(snapshot?.versions || []).length" class="me-version-list">
+              <div v-for="v in snapshot!.versions" :key="v.version" class="me-version-row">
+                <div class="me-version-main">
+                  <div class="me-version-head">
+                    <strong>v{{ v.version }}</strong>
+                    <span :class="['badge', `status-${v.status}`]">{{ statusText(v.status) }}</span>
+                    <span v-if="v.is_yanked" class="badge status-blocked">已 yank</span>
                   </div>
-                  <div class="table-actions">
-                    <a class="btn btn-xs btn-ghost" :href="v.release_url" target="_blank" rel="noreferrer noopener">Release</a>
-                    <button v-if="!v.is_yanked" class="btn btn-xs" @click="yankVersion(selectedPlugin.plugin_id, v.version)">下架此版本</button>
-                  </div>
+                  <p>{{ v.release_title || v.version }}</p>
+                  <small>{{ formatDate(v.published_at) }} · {{ formatBytes(v.file_size) }} · {{ formatNumber(v.download_count) }} 下载 · API {{ v.plugin_api_version }} · Host >= {{ v.min_host_version }}{{ v.max_host_version ? ` <= ${v.max_host_version}` : '' }}</small>
+                </div>
+                <div class="me-version-actions">
+                  <a class="btn btn-xs btn-ghost" :href="v.release_url" target="_blank" rel="noreferrer noopener">Release</a>
+                  <button v-if="!v.is_yanked" class="btn btn-xs" @click="yankVersion(selectedPlugin.plugin_id, v.version)">下架</button>
                 </div>
               </div>
-              <EmptyState v-else title="暂无版本" message="当前插件还没有任何可管理的版本。" />
             </div>
+            <EmptyState v-else title="暂无版本" message="当前插件还没有任何可管理的版本。" />
+          </section>
 
-            <!-- Review history -->
-            <div class="panel review-stream-panel">
-              <div class="section-head compact-head">
-                <div><h2>最近治理记录</h2><p>这里会显示后台对该插件与版本的最近操作。</p></div>
-              </div>
-              <div v-if="(snapshot?.recent_reviews || []).length" class="review-feed">
-                <article v-for="item in snapshot!.recent_reviews" :key="item.id || item.created_at" class="review-feed-item">
-                  <div>
-                    <strong>{{ reviewActionText(item.action) }}</strong>
-                    <p>{{ item.target_id }} · {{ item.status_before || '-' }} → {{ item.status_after || '-' }}</p>
-                  </div>
-                  <div class="review-feed-meta">
-                    <span>{{ item.operator_id }}</span>
-                    <span>{{ formatRelative(item.created_at) }}</span>
-                  </div>
-                </article>
-              </div>
-              <EmptyState v-else title="暂无记录" message="这个插件还没有任何治理记录。" />
+          <section class="me-card">
+            <div class="me-section-head">
+              <h2>最近治理记录</h2>
             </div>
+            <div v-if="(snapshot?.recent_reviews || []).length" class="me-review-feed">
+              <article v-for="item in snapshot!.recent_reviews" :key="item.id || item.created_at" class="me-review-item">
+                <div>
+                  <strong>{{ reviewActionText(item.action) }}</strong>
+                  <p>{{ item.target_id }} · {{ item.status_before || '-' }} → {{ item.status_after || '-' }}</p>
+                </div>
+                <div class="me-review-meta">
+                  <span>{{ item.operator_id }}</span>
+                  <span>{{ formatRelative(item.created_at) }}</span>
+                </div>
+              </article>
+            </div>
+            <EmptyState v-else title="暂无记录" message="这个插件还没有任何治理记录。" />
           </section>
         </template>
-        <section v-else class="panel">
-          <EmptyState title="还没有可管理的插件" message="上传插件后，这里会展示版本和治理控制入口。" />
+        <section v-else class="me-card">
+          <EmptyState title="还没有可管理的插件" message="选中左侧任意插件后，这里会展示版本和治理控制入口。" />
         </section>
-      </div>
+      </main>
+    </div>
+
+    <!-- Metadata editor modal -->
+    <div v-if="metadataOpen" class="me-modal-backdrop" @click.self="closeMetadataEditor">
+      <section class="me-modal">
+        <header class="me-modal-head">
+          <div>
+            <span class="kicker">EDIT METADATA</span>
+            <h2>编辑插件资料</h2>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" @click="closeMetadataEditor">关闭</button>
+        </header>
+        <div class="me-modal-body">
+          <label class="me-form-field">
+            <span>显示名</span>
+            <input v-model="metadataDisplayName" type="text" maxlength="80">
+          </label>
+          <label class="me-form-field">
+            <span>图标</span>
+            <div class="me-form-icon-row">
+              <input v-model="metadataIconUrl" type="url" placeholder="https://... 或上传后自动填入">
+              <button type="button" class="btn btn-sm" :disabled="iconUploading" @click="pickIcon">{{ iconUploading ? '上传中…' : '上传图标' }}</button>
+              <input ref="iconFileInput" class="me-form-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="onIconFileChange">
+            </div>
+            <small class="me-form-hint">支持 PNG / JPEG / WEBP / GIF，最大 2 MiB，会归一化为 512×512 PNG。</small>
+          </label>
+          <label class="me-form-field">
+            <span>分类</span>
+            <select v-model="metadataCategory">
+              <option value="">未设置</option>
+              <option v-for="item in EDITABLE_PLUGIN_CATEGORIES" :key="item" :value="item">{{ categoryLabel(item) }}</option>
+            </select>
+            <small class="me-form-hint">当前仅支持选择一个分类：聊天互动、休闲娱乐、信息资讯、社区管理、实用工具。</small>
+          </label>
+          <label class="me-form-field">
+            <span>标签（用逗号分隔）</span>
+            <input v-model="metadataTags" type="text" placeholder="例如 chat, group, fun">
+          </label>
+        </div>
+        <footer class="me-modal-foot">
+          <button type="button" class="btn btn-ghost" :disabled="metadataSaving" @click="closeMetadataEditor">取消</button>
+          <button type="button" class="btn btn-primary" :disabled="metadataSaving" @click="saveMetadataPatch">{{ metadataSaving ? '保存中…' : '保存' }}</button>
+        </footer>
+      </section>
     </div>
   </div>
 </template>
+
+<style scoped>
+.me-page {
+  width: min(var(--shell-max), 100%);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-7) var(--space-16);
+  display: grid;
+  gap: var(--space-7);
+}
+@media (max-width: 768px) {
+  .me-page { padding: var(--space-4) var(--space-4) var(--space-12); }
+}
+
+.me-empty { display: grid; gap: var(--space-4); place-items: center; padding: var(--space-12) 0; }
+.me-empty-cta { text-align: center; }
+
+/* === HERO === */
+.me-hero {
+  position: relative; overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--blue-700) 0%, var(--blue-500) 60%, var(--coral) 130%);
+  color: #fff;
+  padding: var(--space-7);
+  box-shadow: var(--shadow-poster);
+}
+.me-hero-bg {
+  position: absolute; inset: 0;
+  background: var(--halftone);
+  opacity: 0.18;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+.me-hero-inner {
+  position: relative; z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-6);
+  align-items: center;
+}
+@media (max-width: 768px) {
+  .me-hero-inner { grid-template-columns: 1fr; }
+}
+
+.me-hero-left .kicker {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
+  font-size: 12px; color: rgba(255,255,255,0.85);
+}
+.me-hero-left .kicker::before { content: ""; width: 22px; height: 2px; background: var(--lemon); }
+.me-hero-left h1 {
+  margin: 6px 0 8px;
+  font-family: var(--font-display); font-weight: 900;
+  font-size: clamp(28px, 3.4vw, 40px);
+  line-height: 1.05;
+}
+.me-hero-left p { margin: 0; opacity: 0.92; max-width: 56ch; font-size: 14.5px; }
+
+.me-hero-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--space-4); }
+.me-hero-pills .pill {
+  display: inline-flex; align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  font-size: 12px; font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.me-hero-right {
+  display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); align-items: center;
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.18);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  min-width: 280px;
+  backdrop-filter: blur(6px);
+}
+.me-hero-avatar {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--lemon), var(--coral));
+  display: grid; place-items: center;
+  color: var(--ink-900);
+  font-family: var(--font-display); font-weight: 800; font-size: 22px;
+  border: 2px solid #fff;
+  overflow: hidden;
+}
+.me-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.me-hero-meta { display: grid; gap: 2px; min-width: 0; }
+.me-hero-meta strong {
+  font-family: var(--font-display); font-weight: 900;
+  font-size: 16px; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.me-hero-meta small {
+  font-family: var(--font-mono); font-size: 11px;
+  color: rgba(255,255,255,0.78);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.me-hero-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.me-hero-actions .btn { background: rgba(255,255,255,0.92); color: var(--blue-700); border-color: transparent; font-size: 12px; padding: 6px 12px; }
+.me-hero-actions .btn:hover { background: #fff; color: var(--ink-900); transform: translate(-1px, -1px); box-shadow: var(--shadow-poster-soft); }
+.me-hero-actions .btn-ghost { background: transparent; color: rgba(255,255,255,0.92); }
+.me-hero-actions .btn-ghost:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
+/* === LAYOUT === */
+.me-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+@media (max-width: 1023px) {
+  .me-layout { grid-template-columns: 1fr; }
+}
+
+/* Plugin sidebar */
+.me-plugin-list {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--space-4));
+  align-self: flex-start;
+  display: grid; gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  max-height: calc(100vh - var(--topbar-h) - var(--space-7));
+  overflow-y: auto;
+}
+@media (max-width: 1023px) {
+  .me-plugin-list { position: static; max-height: none; }
+}
+
+.me-section-head {
+  display: flex; justify-content: space-between; align-items: center; gap: var(--space-3);
+}
+.me-section-head h2 {
+  margin: 0;
+  font-family: var(--font-display); font-weight: 900;
+  font-size: 18px; line-height: 1.1;
+  color: var(--ink-900);
+}
+.me-section-head small {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--ink-500);
+  background: var(--surface-soft);
+  padding: 2px 8px; border-radius: var(--radius-pill);
+}
+.me-section-head .me-section-summary {
+  margin: 4px 0 0;
+  font-size: 13px; color: var(--ink-500);
+}
+.me-section-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.me-plugin-rail {
+  display: grid; gap: 6px;
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.me-plugin-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  background: transparent;
+  border: 1.5px solid transparent;
+  transition: background var(--dur-fast), border-color var(--dur-fast), transform var(--dur-fast);
+}
+.me-plugin-item:hover { background: var(--surface-hover); }
+.me-plugin-item.is-active {
+  background: var(--blue-50);
+  border-color: var(--blue-300);
+}
+.me-plugin-item-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--blue-500), var(--blue-700));
+  color: var(--ink-on-blue);
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 15px;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+.me-plugin-item-icon img { width: 100%; height: 100%; object-fit: cover; }
+.me-plugin-item-info { display: grid; gap: 2px; min-width: 0; }
+.me-plugin-item-info strong {
+  font-size: 13.5px; font-weight: 700; color: var(--ink-900);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.me-plugin-item-info small {
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.me-plugin-item-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
+.me-plugin-item-meta .muted { font-family: var(--font-mono); font-size: 11px; color: var(--ink-500); }
+
+/* Main column */
+.me-main {
+  display: grid; gap: var(--space-5);
+  min-width: 0;
+}
+
+.me-card {
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  display: grid; gap: var(--space-4);
+}
+
+.me-metric-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 768px) { .me-metric-row { grid-template-columns: repeat(2, 1fr); } }
+.me-metric {
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: grid; gap: 4px;
+}
+.me-metric span {
+  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
+  font-size: 11px; color: var(--ink-500); text-transform: uppercase;
+}
+.me-metric strong {
+  font-family: var(--font-brand); letter-spacing: var(--letter-bebas);
+  font-size: 28px; color: var(--ink-900); line-height: 1;
+}
+.me-metric small { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-500); }
+
+.me-info-grid {
+  display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-5);
+}
+@media (max-width: 768px) { .me-info-grid { grid-template-columns: 1fr; } }
+.me-info-grid h4 {
+  margin: 0 0 8px;
+  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
+  font-size: 11.5px; color: var(--ink-500); text-transform: uppercase;
+}
+.me-soft-note { margin: 0 0 var(--space-3); font-size: 12.5px; color: var(--ink-500); line-height: 1.55; }
+
+.me-meta-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.me-meta-list li {
+  display: grid; grid-template-columns: 80px 1fr; gap: 8px;
+  font-size: 13px;
+}
+.me-meta-list li span { color: var(--ink-500); font-size: 12px; }
+.me-meta-list li strong { color: var(--ink-900); font-weight: 600; word-break: break-all; }
+
+/* Versions */
+.me-version-list { display: grid; gap: 8px; }
+.me-version-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-3);
+  padding: 10px 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  align-items: center;
+}
+.me-version-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.me-version-head strong {
+  font-family: var(--font-mono); font-size: 13.5px; font-weight: 700; color: var(--ink-900);
+}
+.me-version-main p {
+  margin: 4px 0 2px;
+  font-size: 13px; color: var(--ink-700);
+}
+.me-version-main small {
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
+}
+.me-version-actions { display: flex; gap: 6px; }
+
+/* Reviews */
+.me-review-feed { display: grid; gap: 8px; }
+.me-review-item {
+  display: grid; grid-template-columns: 1fr auto; gap: var(--space-3);
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+}
+.me-review-item strong {
+  font-family: var(--font-display); font-weight: 700; font-size: 13.5px; color: var(--ink-900);
+}
+.me-review-item p { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-700); }
+.me-review-meta { display: grid; gap: 2px; text-align: right; font-family: var(--font-mono); font-size: 11px; color: var(--ink-500); }
+
+/* Modal */
+.me-modal-backdrop {
+  position: fixed; inset: 0; z-index: 95;
+  display: grid; place-items: center;
+  padding: var(--space-5);
+  background: var(--overlay-strong);
+  backdrop-filter: blur(8px);
+}
+.me-modal {
+  width: min(560px, 100%);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  padding: var(--space-6);
+  display: grid; gap: var(--space-4);
+  position: relative;
+}
+.me-modal::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: linear-gradient(90deg, var(--blue-500), var(--coral));
+}
+.me-modal-head {
+  display: flex; justify-content: space-between; align-items: center; gap: var(--space-3);
+}
+.me-modal-head .kicker {
+  display: block;
+  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
+  font-size: 11px; color: var(--blue-700); text-transform: uppercase;
+}
+.me-modal-head h2 {
+  margin: 4px 0 0;
+  font-family: var(--font-display); font-weight: 900;
+  font-size: 22px; line-height: 1.15;
+}
+.me-modal-body { display: grid; gap: var(--space-3); }
+.me-form-field { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-700); }
+.me-form-field span {
+  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
+  font-size: 11px; color: var(--ink-500); text-transform: uppercase;
+}
+.me-form-field input, .me-form-field select {
+  padding: 8px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 13px;
+}
+.me-form-field input:focus, .me-form-field select:focus { outline: none; border-color: var(--blue-500); box-shadow: var(--ring); }
+
+.me-form-icon-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.me-form-icon-row input { width: 100%; }
+.me-form-file { display: none; }
+.me-form-hint {
+  margin: 4px 0 0;
+  font-size: 11px; color: var(--ink-500);
+  line-height: 1.45;
+}
+.me-modal-foot { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* === entry animations === */
+[data-anim] { animation: fade-up var(--dur-slow) var(--ease-emphasized) both; }
+[data-anim="enter-1"] { animation-delay: 60ms; }
+[data-anim="enter-2"] { animation-delay: 160ms; }
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-anim] { animation: none; }
+}
+</style>

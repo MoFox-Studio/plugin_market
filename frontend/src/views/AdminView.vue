@@ -1,376 +1,492 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import api from '@/api'
-import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
-import { formatNumber, formatRelative, formatDate, formatBytes, formatUptime, statusText, trustLevelLabel, reviewActionText } from '@/utils/format'
-import type { Plugin, PluginSnapshot, SystemInfo, DashboardData, ReviewItem, ActivityDay } from '@/types'
-import TrustBadge from '@/components/TrustBadge.vue'
+import { formatNumber, formatRelative, formatDate, formatUptime, statusText } from '@/utils/format'
+import type { SystemInfo, DashboardData, ActivityDay, Plugin } from '@/types'
 import EmptyState from '@/components/EmptyState.vue'
-
-const auth = useAuthStore()
-const toast = useToastStore()
 
 const system = ref<SystemInfo | null>(null)
 const dashboard = ref<DashboardData | null>(null)
-const plugins = ref<Plugin[]>([])
-const reviews = ref<ReviewItem[]>([])
-const selectedId = ref<string | null>(null)
-const snapshot = ref<PluginSnapshot | null>(null)
-const selectedPlugin = ref<Plugin | null>(null)
+const pendingPlugins = ref<Plugin[]>([])
 const loading = ref(true)
 
 async function loadAll() {
   loading.value = true
-  const [sys, dash, pluginResult, reviewResult] = await Promise.all([
-    api.get('/api/v1/admin/system'),
-    api.get('/api/v1/admin/dashboard'),
-    api.get('/api/v1/admin/plugins'),
-    api.get('/api/v1/admin/reviews'),
-  ])
-  system.value = sys
-  dashboard.value = dash
-  plugins.value = pluginResult.items || []
-  reviews.value = reviewResult || []
-
-  // Auto-select first pending or first plugin
-  if (!selectedId.value && plugins.value.length) {
-    const pending = plugins.value.find(p => p.status === 'pending_review')
-    selectedId.value = pending ? pending.plugin_id : plugins.value[0].plugin_id
-  }
-  if (selectedId.value) await loadSnapshot()
-  loading.value = false
-}
-
-async function loadSnapshot() {
-  if (!selectedId.value) { snapshot.value = null; selectedPlugin.value = null; return }
-  const s = await api.get(`/api/v1/admin/plugins/${encodeURIComponent(selectedId.value)}`).catch(() => null)
-  snapshot.value = s
-  selectedPlugin.value = s?.plugin || null
-}
-
-async function selectPlugin(id: string) {
-  selectedId.value = id
-  await loadSnapshot()
-}
-
-async function pluginAction(action: string, pluginId: string) {
-  if (!confirm(`确认执行 ${action} 操作：${pluginId} ？`)) return
-  const reason = action === 'delete' ? '' : (prompt('可填写操作原因，留空也可以。', '') || '')
   try {
-    if (action === 'delete') {
-      await api.del(`/api/v1/admin/plugins/${encodeURIComponent(pluginId)}`)
-      if (selectedId.value === pluginId) { selectedId.value = null; snapshot.value = null; selectedPlugin.value = null }
-    } else {
-      await api.post(`/api/v1/admin/plugins/${encodeURIComponent(pluginId)}/${action}`, reason.trim() ? { reason: reason.trim() } : {})
-    }
-    toast.show(action === 'delete' ? '插件已删除' : '治理动作已执行', 'ok')
-    await loadAll()
-  } catch (e) {
-    toast.show((e as Error).message || '操作失败', 'error')
+    const [sys, dash, pluginResult] = await Promise.all([
+      api.get<SystemInfo>('/api/v1/admin/system'),
+      api.get<DashboardData>('/api/v1/admin/dashboard'),
+      api.get<{ items: Plugin[] }>('/api/v1/admin/plugins'),
+    ])
+    system.value = sys
+    dashboard.value = dash
+    pendingPlugins.value = (pluginResult.items || [])
+      .filter((p) => p.status === 'pending_review')
+      .slice(0, 8)
+  } finally {
+    loading.value = false
   }
 }
 
-async function setTrustLevel(pluginId: string, level: string) {
-  if (selectedPlugin.value?.trust_level === level) return
-  const reason = prompt(`可填写切换为"${trustLevelLabel(level)}"的原因，留空也可以。`, '') || ''
-  try {
-    await api.post(`/api/v1/admin/plugins/${encodeURIComponent(pluginId)}/trust-level/${encodeURIComponent(level)}`, reason.trim() ? { reason: reason.trim() } : {})
-    toast.show('社区标识已更新', 'ok')
-    await loadSnapshot()
-  } catch (e) {
-    toast.show((e as Error).message || '切换失败', 'error')
-  }
-}
-
-async function versionAction(action: string, pluginId: string, version: string) {
-  if (!confirm(`确认对 ${pluginId}@${version} 执行 ${action} 吗？`)) return
-  const reason = prompt('可填写操作原因，留空也可以。', '') || ''
-  try {
-    await api.post(`/api/v1/admin/plugins/${encodeURIComponent(pluginId)}/versions/${encodeURIComponent(version)}/${action}`, reason.trim() ? { reason: reason.trim() } : {})
-    toast.show('版本治理动作已执行', 'ok')
-    await loadSnapshot()
-  } catch (e) {
-    toast.show((e as Error).message || '操作失败', 'error')
-  }
-}
-
-// Activity chart helpers
-function activityBarHeight(value: number, max: number) {
-  return Math.max(8, Math.round((value || 0) / Math.max(1, max) * 88)) + 'px'
-}
-
-function activityMax(activity: ActivityDay[]) {
-  const peaks = (activity || []).flatMap(d => [d.plugins_created, d.comments_created, d.ratings_created])
+const activityMax = computed(() => {
+  const peaks = (dashboard.value?.activity || []).flatMap((d) => [d.plugins_created, d.comments_created, d.ratings_created])
   return Math.max(1, ...peaks)
+})
+
+function barHeight(value: number): string {
+  return Math.max(6, Math.round((value || 0) / activityMax.value * 88)) + 'px'
 }
+
+const pluginBreakdown = computed(() =>
+  Object.entries(dashboard.value?.plugin_status_breakdown || {})
+    .filter(([, v]) => Number(v) > 0)
+    .map(([key, value]) => ({ key, value: Number(value) }))
+    .sort((a, b) => b.value - a.value),
+)
+
+const versionBreakdown = computed(() =>
+  Object.entries(dashboard.value?.version_status_breakdown || {})
+    .filter(([, v]) => Number(v) > 0)
+    .map(([key, value]) => ({ key, value: Number(value) }))
+    .sort((a, b) => b.value - a.value),
+)
 
 onMounted(loadAll)
 </script>
 
 <template>
-  <!-- Not admin -->
-  <div v-if="!auth.isAdmin" style="padding-top:40px">
-    <EmptyState title="需要管理员权限" message="请使用具有管理员权限的 GitHub 账号登录。" />
-  </div>
+  <div v-if="loading" class="dashboard-loading">加载中…</div>
 
-  <!-- Loading -->
-  <div v-else-if="loading" class="loading-screen">加载中…</div>
-
-  <!-- Admin panel -->
-  <div v-else class="control-room">
-    <div class="admin-shell">
-      <!-- Sidebar nav -->
-      <aside class="panel admin-page-sidebar">
-        <div class="admin-page-sidebar-head">
-          <span class="control-kicker">Admin Nav</span>
-          <h2>快速切换</h2>
-          <p>直接跳到你现在要处理的那一块，不用整页下滑。</p>
+  <div v-else class="dashboard-view">
+    <!-- HERO -->
+    <section v-if="system" class="dash-hero" data-anim="enter-1">
+      <div class="dash-hero-bg" aria-hidden="true"></div>
+      <div class="dash-hero-inner">
+        <div class="dash-hero-left">
+          <span class="kicker">CONTROL ROOM</span>
+          <h1>仪表盘</h1>
+          <p>市场概况一眼可见。需要做事请直接进入插件治理 / 版本治理 / 公告管理等左侧入口。</p>
         </div>
-        <nav class="admin-nav" aria-label="管理后台分区导航">
-          <a class="admin-nav-link" href="#admin-overview">总览</a>
-          <a class="admin-nav-link" href="#admin-queue">治理队列</a>
-          <a class="admin-nav-link" href="#admin-plugin-governance">插件治理</a>
-          <a class="admin-nav-link" href="#admin-version-governance">版本治理</a>
-          <a class="admin-nav-link" href="#admin-trends">趋势观察</a>
-          <a class="admin-nav-link" href="#admin-review-feed">审核流</a>
-          <a class="admin-nav-link" href="#admin-plugin-history">治理历史</a>
-        </nav>
-      </aside>
-
-      <!-- Main content -->
-      <div class="admin-page-content">
-        <!-- Overview hero -->
-        <section v-if="system" class="control-hero admin-hero" id="admin-overview">
-          <div class="control-hero-copy">
-            <span class="control-kicker">Moderation Room</span>
-            <h1>插件市场后端管理台</h1>
-            <p>在这里进行状态治理、服务监控和社区节奏追踪，方便你判断市场的实时动态。</p>
-            <div class="control-pills">
-              <span class="control-pill">{{ system.environment }}</span>
-              <span class="control-pill">运行 {{ formatUptime(system.uptime_seconds) }}</span>
-              <span class="control-pill">OAuth {{ system.github_oauth_configured ? '已接通' : '未配置' }}</span>
-              <span class="control-pill">Webhook {{ system.github_webhook_configured ? '在线' : '未配置' }}</span>
-            </div>
-          </div>
-          <div class="server-stack">
-            <div class="server-tile"><span>服务状态</span><strong>{{ system.status }}</strong><small>数据库 {{ system.database }}</small></div>
-            <div class="server-tile"><span>审核模式</span><strong>{{ system.review_required ? '人工审核' : '快速发布' }}</strong><small>最近审核 {{ formatRelative(system.stats.latest_review_at) }}</small></div>
-            <div class="server-tile"><span>数据库路径</span><strong>{{ system.database_path || '内存数据库' }}</strong><small>启动于 {{ formatDate(system.started_at) }}</small></div>
-          </div>
-        </section>
-
-        <!-- Metrics -->
-        <section v-if="dashboard" class="control-metrics-row admin-metrics">
-          <div class="control-metric"><span>插件总数</span><b>{{ dashboard.stats.plugins_total }}</b><small>{{ dashboard.stats.pending_plugins }} 待审核</small></div>
-          <div class="control-metric"><span>版本总数</span><b>{{ dashboard.stats.versions_total }}</b><small>{{ dashboard.stats.pending_versions }} 待审核</small></div>
-          <div class="control-metric"><span>评论 / 评分</span><b>{{ formatNumber(dashboard.stats.comments_total) }} / {{ formatNumber(dashboard.stats.ratings_total) }}</b><small>社区互动</small></div>
-          <div class="control-metric"><span>点赞 / 下载</span><b>{{ formatNumber(dashboard.stats.likes_total) }} / {{ formatNumber(dashboard.stats.downloads_total) }}</b><small>热度追踪</small></div>
-          <div class="control-metric"><span>作者 / Webhook</span><b>{{ dashboard.stats.authors_total }} / {{ dashboard.stats.webhooks_total }}</b><small>生态节点</small></div>
-        </section>
-
-        <!-- Activity + Queue -->
-        <section v-if="dashboard" class="admin-board">
-          <div class="panel activity-panel">
-            <div class="section-head compact-head"><div><h2>最近 7 天市场动态</h2><p>重点观察新增插件、评论和评分的波动。</p></div></div>
-            <!-- Activity chart -->
-            <div class="activity-legend">
-              <span><i class="dot dot-plugin"></i>新增插件</span>
-              <span><i class="dot dot-comment"></i>评论</span>
-              <span><i class="dot dot-rating"></i>评分</span>
-            </div>
-            <div class="activity-chart">
-              <div v-for="day in (dashboard.activity || [])" :key="day.date" class="activity-day">
-                <div class="activity-bars">
-                  <span class="activity-bar plugin" :style="{ height: activityBarHeight(day.plugins_created, activityMax(dashboard.activity || [])) }" :title="`新增插件 ${day.plugins_created || 0}`"></span>
-                  <span class="activity-bar comment" :style="{ height: activityBarHeight(day.comments_created, activityMax(dashboard.activity || [])) }" :title="`评论 ${day.comments_created || 0}`"></span>
-                  <span class="activity-bar rating" :style="{ height: activityBarHeight(day.ratings_created, activityMax(dashboard.activity || [])) }" :title="`评分 ${day.ratings_created || 0}`"></span>
-                </div>
-                <strong>{{ day.date ? day.date.slice(5) : '--' }}</strong>
-                <small>{{ (day.plugins_created || 0) + (day.comments_created || 0) + (day.ratings_created || 0) }} 动态</small>
-              </div>
-            </div>
-            <!-- Breakdowns -->
-            <div class="breakdown-row">
-              <div class="mini-breakdown">
-                <h4>插件状态分布</h4>
-                <div class="mini-breakdown-grid">
-                  <div v-for="[key, value] in Object.entries(dashboard.plugin_status_breakdown || {}).filter(([,v]) => v > 0)" :key="key" class="mini-breakdown-item">
-                    <span>{{ statusText(key) }}</span>
-                    <b>{{ value }}</b>
-                  </div>
-                </div>
-              </div>
-              <div class="mini-breakdown">
-                <h4>版本状态分布</h4>
-                <div class="mini-breakdown-grid">
-                  <div v-for="[key, value] in Object.entries(dashboard.version_status_breakdown || {}).filter(([,v]) => v > 0)" :key="key" class="mini-breakdown-item">
-                    <span>{{ statusText(key) }}</span>
-                    <b>{{ value }}</b>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Queue -->
-          <div class="panel queue-panel" id="admin-queue">
-            <div class="section-head compact-head"><div><h2>治理队列</h2><p>优先处理待审核与异常插件。点击条目切换右侧详情。</p></div></div>
-            <div v-if="plugins.length" class="control-list">
-              <button
-                v-for="p in plugins"
-                :key="p.plugin_id"
-                type="button"
-                :class="['control-list-item', { 'is-active': p.plugin_id === selectedId }]"
-                @click="selectPlugin(p.plugin_id)"
-              >
-                <div>
-                  <strong>{{ p.display_name }}</strong>
-                  <span>{{ p.plugin_id }}</span>
-                </div>
-                <div>
-                  <span :class="['badge', `status-${p.status}`]">{{ statusText(p.status) }}</span>
-                  <small>{{ formatRelative(p.updated_at) }}</small>
-                </div>
-              </button>
-            </div>
-            <EmptyState v-else title="暂无插件" message="当前市场没有插件记录。" />
-          </div>
-        </section>
-
-        <!-- Plugin governance -->
-        <section class="ops-grid">
-          <div class="panel plugin-sheet" id="admin-plugin-governance">
-            <template v-if="selectedPlugin">
-              <div class="section-head compact-head">
-                <div><h2>{{ selectedPlugin.display_name }}</h2><p>{{ selectedPlugin.summary }}</p></div>
-                <div class="table-actions">
-                  <TrustBadge :level="selectedPlugin.trust_level" />
-                  <span :class="['badge', `status-${selectedPlugin.status}`]">{{ statusText(selectedPlugin.status) }}</span>
-                </div>
-              </div>
-              <div class="plugin-sheet-grid">
-                <div>
-                  <h4>治理动作</h4>
-                  <p class="soft-note">支持退回、封禁、下架、删除，以及在修复后重新上架。</p>
-                  <div class="table-actions admin-action-cluster">
-                    <button v-if="selectedPlugin.status !== 'published'" class="btn btn-sm" @click="pluginAction('publish', selectedPlugin.plugin_id)">重新上架</button>
-                    <button v-if="selectedPlugin.status !== 'draft'" class="btn btn-sm" @click="pluginAction('reject', selectedPlugin.plugin_id)">退回</button>
-                    <button v-if="selectedPlugin.status !== 'deprecated'" class="btn btn-sm" @click="pluginAction('deprecate', selectedPlugin.plugin_id)">下架</button>
-                    <button v-if="selectedPlugin.status !== 'blocked'" class="btn btn-sm btn-danger" @click="pluginAction('block', selectedPlugin.plugin_id)">封禁</button>
-                    <button class="btn btn-sm btn-danger" @click="pluginAction('delete', selectedPlugin.plugin_id)">删除</button>
-                  </div>
-                  <h4 style="margin-top:18px">社区标识</h4>
-                  <p class="soft-note">直接切换插件在市场中显示的身份标签，用于区分官方、认证和普通社区作品。</p>
-                  <div class="table-actions trust-switch-row">
-                    <button
-                      v-for="level in ['official', 'verified', 'community']"
-                      :key="level"
-                      :class="['btn', 'btn-sm', { 'is-active': selectedPlugin.trust_level === level }]"
-                      @click="setTrustLevel(selectedPlugin.plugin_id, level)"
-                    >{{ trustLevelLabel(level) }}</button>
-                  </div>
-                </div>
-                <div>
-                  <h4>社区状态</h4>
-                  <ul class="meta-list">
-                    <li><span>作者</span><strong>{{ selectedPlugin.owner_display_name || selectedPlugin.owner_login || selectedPlugin.owner_id }}</strong></li>
-                    <li><span>当前标识</span><strong>{{ trustLevelLabel(selectedPlugin.trust_level) }}</strong></li>
-                    <li><span>评分</span><strong>{{ selectedPlugin.rating_avg.toFixed(1) }} / {{ selectedPlugin.rating_count }}</strong></li>
-                    <li><span>互动</span><strong>{{ formatNumber(selectedPlugin.comments_count) }} 评论 · {{ formatNumber(selectedPlugin.likes_count) }} 点赞</strong></li>
-                    <li><span>流量</span><strong>{{ formatNumber(selectedPlugin.downloads_count) }} 下载</strong></li>
-                  </ul>
-                </div>
-              </div>
-            </template>
-            <EmptyState v-else title="未选择插件" message="从左侧队列里点一个插件，即可查看完整治理面板。" />
-          </div>
-
-          <!-- Version governance -->
-          <div class="panel version-governance" id="admin-version-governance">
-            <div class="section-head compact-head"><div><h2>版本治理</h2><p>支持恢复、退回、下架与封禁版本。</p></div></div>
-            <template v-if="selectedPlugin">
-              <div v-if="(snapshot?.versions || []).length" class="governance-version-list">
-                <div v-for="v in snapshot!.versions" :key="v.version" class="governance-version-row">
-                  <div class="governance-version-main">
-                    <div class="governance-version-head">
-                      <strong>v{{ v.version }}</strong>
-                      <span :class="['badge', `status-${v.status}`]">{{ statusText(v.status) }}</span>
-                      <span v-if="v.is_yanked" class="badge status-blocked">已 yank</span>
-                    </div>
-                    <p>{{ v.release_title || v.version }} · {{ formatDate(v.published_at) }} · {{ formatBytes(v.file_size) }} · {{ formatNumber(v.download_count) }} 下载</p>
-                    <small>API {{ v.plugin_api_version }} · Host >= {{ v.min_host_version }}{{ v.max_host_version ? ` <= ${v.max_host_version}` : '' }} · {{ (v.supported_platforms || []).join(', ') || 'all' }}</small>
-                  </div>
-                  <div class="table-actions">
-                    <a class="btn btn-xs btn-ghost" :href="v.release_url" target="_blank" rel="noreferrer noopener">Release</a>
-                    <button v-if="v.status !== 'published' || v.is_yanked" class="btn btn-xs" @click="versionAction('publish', selectedPlugin.plugin_id, v.version)">恢复</button>
-                    <button v-if="v.status !== 'submitted'" class="btn btn-xs" @click="versionAction('reject', selectedPlugin.plugin_id, v.version)">退回</button>
-                    <button v-if="!v.is_yanked" class="btn btn-xs" @click="versionAction('yank', selectedPlugin.plugin_id, v.version)">下架</button>
-                    <button v-if="v.status !== 'blocked'" class="btn btn-xs btn-danger" @click="versionAction('block', selectedPlugin.plugin_id, v.version)">封禁</button>
-                  </div>
-                </div>
-              </div>
-              <EmptyState v-else title="暂无版本" message="当前插件还没有任何版本记录。" />
-            </template>
-            <EmptyState v-else title="未选择插件" message="先从队列中选择插件。" />
-          </div>
-        </section>
-
-        <!-- Trends + Review feed -->
-        <section class="ops-grid">
-          <div class="panel trend-panel" id="admin-trends">
-            <div class="section-head compact-head"><div><h2>热门插件观察</h2><p>按趋势热度排序，方便观察社区讨论中心。</p></div></div>
-            <div class="trend-list">
-              <router-link
-                v-for="p in (dashboard?.popular_plugins || [])"
-                :key="p.plugin_id"
-                class="trend-item"
-                :to="`/plugin/${encodeURIComponent(p.plugin_id)}`"
-              >
-                <div class="trend-item-main"><strong>{{ p.display_name }}</strong><span>{{ p.plugin_id }}</span></div>
-                <div class="trend-item-meta"><span>{{ formatNumber(p.comments_count) }} 评</span><span>{{ formatNumber(p.downloads_count) }} 下载</span></div>
-              </router-link>
-            </div>
-          </div>
-          <div class="panel review-stream-panel" id="admin-review-feed">
-            <div class="section-head compact-head"><div><h2>最近审核流</h2><p>展示最新的插件与版本治理动作。</p></div></div>
-            <div v-if="reviews.length" class="review-feed">
-              <article v-for="item in [...reviews].reverse().slice(0, 18)" :key="item.id || item.created_at" class="review-feed-item">
-                <div>
-                  <strong>{{ reviewActionText(item.action) }}</strong>
-                  <p>{{ item.target_id }} · {{ item.status_before || '-' }} → {{ item.status_after || '-' }}</p>
-                </div>
-                <div class="review-feed-meta">
-                  <span>{{ item.operator_id }}</span>
-                  <span>{{ formatRelative(item.created_at) }}</span>
-                </div>
-              </article>
-            </div>
-            <EmptyState v-else title="暂无审核记录" message="" />
-          </div>
-        </section>
-
-        <!-- Plugin history -->
-        <section class="panel review-stream-panel" id="admin-plugin-history">
-          <div class="section-head compact-head"><div><h2>当前选中插件的治理历史</h2><p>帮助判断这次要不要恢复上架，还是继续封禁。</p></div></div>
-          <template v-if="selectedPlugin">
-            <div v-if="(snapshot?.recent_reviews || []).length" class="review-feed">
-              <article v-for="item in snapshot!.recent_reviews" :key="item.id || item.created_at" class="review-feed-item">
-                <div>
-                  <strong>{{ reviewActionText(item.action) }}</strong>
-                  <p>{{ item.target_id }} · {{ item.status_before || '-' }} → {{ item.status_after || '-' }}</p>
-                </div>
-                <div class="review-feed-meta">
-                  <span>{{ item.operator_id }}</span>
-                  <span>{{ formatRelative(item.created_at) }}</span>
-                </div>
-              </article>
-            </div>
-            <EmptyState v-else title="暂无治理历史" message="当前插件暂无治理历史。" />
-          </template>
-          <EmptyState v-else title="未选择插件" message="先在治理队列中选择插件。" />
-        </section>
+        <div class="dash-hero-pills">
+          <span class="pill">{{ system.environment }}</span>
+          <span class="pill">运行 {{ formatUptime(system.uptime_seconds) }}</span>
+          <span class="pill">OAuth {{ system.github_oauth_configured ? '已接通' : '未配置' }}</span>
+          <span class="pill">Webhook {{ system.github_webhook_configured ? '在线' : '未配置' }}</span>
+        </div>
       </div>
-    </div>
+    </section>
+
+    <!-- 5 大数据 -->
+    <section v-if="dashboard" class="dash-metrics" data-anim="enter-2">
+      <article class="dash-metric">
+        <span class="kicker-mini">PLUGINS</span>
+        <strong>{{ formatNumber(dashboard.stats.plugins_total) }}</strong>
+        <small>{{ dashboard.stats.pending_plugins }} 待审核</small>
+      </article>
+      <article class="dash-metric">
+        <span class="kicker-mini">VERSIONS</span>
+        <strong>{{ formatNumber(dashboard.stats.versions_total) }}</strong>
+        <small>{{ dashboard.stats.pending_versions }} 待审核</small>
+      </article>
+      <article class="dash-metric">
+        <span class="kicker-mini">ENGAGEMENT</span>
+        <strong>{{ formatNumber(dashboard.stats.comments_total) }} / {{ formatNumber(dashboard.stats.ratings_total) }}</strong>
+        <small>评论 / 评分</small>
+      </article>
+      <article class="dash-metric">
+        <span class="kicker-mini">REACH</span>
+        <strong>{{ formatNumber(dashboard.stats.likes_total) }} / {{ formatNumber(dashboard.stats.downloads_total) }}</strong>
+        <small>点赞 / 下载</small>
+      </article>
+      <article class="dash-metric">
+        <span class="kicker-mini">ECOSYSTEM</span>
+        <strong>{{ formatNumber(dashboard.stats.authors_total) }} / {{ formatNumber(dashboard.stats.webhooks_total) }}</strong>
+        <small>作者 / Webhook</small>
+      </article>
+    </section>
+
+    <!-- 主区：活动 + pending -->
+    <section v-if="dashboard" class="dash-main" data-anim="enter-3">
+      <article class="dash-card dash-activity">
+        <header class="dash-card-head">
+          <div>
+            <span class="kicker-mini">7 DAYS · 市场动态</span>
+            <h2>最近 7 天活动</h2>
+          </div>
+          <div class="dash-activity-legend">
+            <span><i class="dot dot-plugin" aria-hidden="true"></i>新增插件</span>
+            <span><i class="dot dot-comment" aria-hidden="true"></i>评论</span>
+            <span><i class="dot dot-rating" aria-hidden="true"></i>评分</span>
+          </div>
+        </header>
+
+        <div class="dash-activity-chart">
+          <div v-for="day in (dashboard.activity || [])" :key="day.date" class="dash-activity-day">
+            <div class="bars">
+              <span class="bar plugin" :style="{ height: barHeight(day.plugins_created) }" :title="`新增插件 ${day.plugins_created || 0}`"></span>
+              <span class="bar comment" :style="{ height: barHeight(day.comments_created) }" :title="`评论 ${day.comments_created || 0}`"></span>
+              <span class="bar rating" :style="{ height: barHeight(day.ratings_created) }" :title="`评分 ${day.ratings_created || 0}`"></span>
+            </div>
+            <strong>{{ day.date ? day.date.slice(5) : '--' }}</strong>
+            <small>{{ (day.plugins_created || 0) + (day.comments_created || 0) + (day.ratings_created || 0) }} 动态</small>
+          </div>
+        </div>
+
+        <div class="dash-breakdown-row">
+          <div>
+            <span class="kicker-mini">PLUGIN STATUS</span>
+            <ul>
+              <li v-for="item in pluginBreakdown" :key="item.key">
+                <span :class="['badge', `status-${item.key}`]">{{ statusText(item.key) }}</span>
+                <b>{{ item.value }}</b>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <span class="kicker-mini">VERSION STATUS</span>
+            <ul>
+              <li v-for="item in versionBreakdown" :key="item.key">
+                <span :class="['badge', `status-${item.key}`]">{{ statusText(item.key) }}</span>
+                <b>{{ item.value }}</b>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="dash-card dash-pending">
+        <header class="dash-card-head">
+          <div>
+            <span class="kicker-mini">PENDING REVIEW</span>
+            <h2>待审核插件</h2>
+          </div>
+          <router-link class="btn btn-sm" :to="{ name: 'admin-plugins' }">前往插件治理 →</router-link>
+        </header>
+
+        <div v-if="pendingPlugins.length" class="dash-pending-list">
+          <article v-for="p in pendingPlugins" :key="p.plugin_id" class="dash-pending-item">
+            <div class="dash-pending-icon" aria-hidden="true">
+              <img v-if="p.icon_url" :src="p.icon_url" :alt="p.display_name">
+              <template v-else>{{ p.display_name[0]?.toUpperCase() || '?' }}</template>
+            </div>
+            <div class="dash-pending-info">
+              <strong>{{ p.display_name }}</strong>
+              <small>{{ p.plugin_id }} · @{{ p.owner_login || p.owner_id }}</small>
+              <p>{{ p.summary }}</p>
+            </div>
+            <div class="dash-pending-meta">
+              <span class="badge status-pending_review">待审核</span>
+              <small>{{ formatRelative(p.updated_at) }}</small>
+            </div>
+          </article>
+        </div>
+        <EmptyState v-else title="队列为空" message="当前没有插件等待审核。" />
+      </article>
+    </section>
+
+    <!-- 底部服务条 -->
+    <section v-if="system" class="dash-system" data-anim="enter-4">
+      <div>
+        <span class="kicker-mini">STATUS</span>
+        <strong>{{ system.status === 'ok' ? '✓ Healthy' : '⚠ ' + system.status }}</strong>
+      </div>
+      <div>
+        <span class="kicker-mini">DATABASE</span>
+        <strong>{{ system.database }}</strong>
+        <small>{{ system.database_path || '内存数据库' }}</small>
+      </div>
+      <div>
+        <span class="kicker-mini">REVIEW MODE</span>
+        <strong>{{ system.review_required ? '人工审核' : '快速发布' }}</strong>
+        <small>最近审核 {{ formatRelative(system.stats.latest_review_at) }}</small>
+      </div>
+      <div>
+        <span class="kicker-mini">STARTED AT</span>
+        <strong>{{ formatDate(system.started_at) }}</strong>
+        <small>已运行 {{ formatUptime(system.uptime_seconds) }}</small>
+      </div>
+    </section>
   </div>
 </template>
+
+<style scoped>
+.dashboard-view {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.dashboard-loading {
+  text-align: center;
+  padding: var(--space-12);
+  color: var(--ink-500);
+  font-family: var(--font-mono);
+}
+
+/* === HERO === */
+.dash-hero {
+  position: relative; overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--blue-700) 0%, var(--blue-500) 60%, #5fb8ff 100%);
+  color: #fff;
+  padding: var(--space-6) var(--space-7);
+  box-shadow: var(--shadow-poster);
+}
+.dash-hero-bg {
+  position: absolute; inset: 0;
+  background: var(--halftone);
+  opacity: 0.18;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+.dash-hero-inner {
+  position: relative; z-index: 1;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: var(--space-5); flex-wrap: wrap;
+}
+.dash-hero-left .kicker {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
+  font-size: 12px; color: rgba(255,255,255,0.92);
+}
+.dash-hero-left .kicker::before { content: ""; width: 22px; height: 2px; background: var(--lemon); }
+.dash-hero-left h1 {
+  margin: 6px 0 6px;
+  font-family: var(--font-display); font-weight: 900;
+  font-size: clamp(28px, 3.4vw, 36px);
+  line-height: 1.05;
+}
+.dash-hero-left p {
+  margin: 0;
+  opacity: 0.92;
+  max-width: 56ch;
+  font-size: 14px;
+}
+.dash-hero-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.dash-hero-pills .pill {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+  font-size: 12px; font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+/* === Metrics === */
+.dash-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 1024px) {
+  .dash-metrics { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .dash-metrics { grid-template-columns: 1fr; }
+}
+
+.dash-metric {
+  display: grid; gap: 2px;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.dash-metric strong {
+  font-family: var(--font-brand); letter-spacing: var(--letter-bebas);
+  font-size: 28px; color: var(--ink-900); line-height: 1;
+  margin-top: 4px;
+}
+.dash-metric small {
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-500);
+}
+
+.kicker-mini {
+  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
+  font-size: 11px; color: var(--ink-500); text-transform: uppercase;
+}
+
+/* === Main grid === */
+.dash-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 1280px) {
+  .dash-main { grid-template-columns: 1fr; }
+}
+
+.dash-card {
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  display: grid; gap: var(--space-4);
+}
+.dash-card-head {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  gap: var(--space-3); flex-wrap: wrap;
+}
+.dash-card-head h2 {
+  margin: 4px 0 0;
+  font-family: var(--font-display); font-weight: 900;
+  font-size: 20px; line-height: 1.15;
+  color: var(--ink-900);
+}
+
+/* === Activity chart === */
+.dash-activity-legend {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--ink-500);
+}
+.dash-activity-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.dash-activity-legend .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  display: inline-block;
+}
+.dash-activity-legend .dot-plugin  { background: var(--blue-500); }
+.dash-activity-legend .dot-comment { background: var(--coral); }
+.dash-activity-legend .dot-rating  { background: var(--lemon); }
+
+.dash-activity-chart {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+  align-items: end;
+  padding: var(--space-3) 0;
+  border-top: 1px dashed var(--line);
+  border-bottom: 1px dashed var(--line);
+}
+.dash-activity-day {
+  display: grid;
+  grid-template-rows: 88px auto auto;
+  align-items: end; justify-items: center;
+  gap: 4px;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-500);
+}
+.dash-activity-day strong {
+  font-size: 11px; color: var(--ink-700); font-weight: 700;
+  margin-top: 4px;
+}
+.dash-activity-day .bars {
+  display: flex; gap: 2px;
+  align-items: flex-end;
+  height: 88px;
+}
+.dash-activity-day .bar {
+  width: 7px;
+  border-radius: 2px 2px 0 0;
+  transition: opacity var(--dur-fast);
+}
+.dash-activity-day .bar:hover { opacity: 0.85; }
+.dash-activity-day .bar.plugin  { background: var(--blue-500); }
+.dash-activity-day .bar.comment { background: var(--coral); }
+.dash-activity-day .bar.rating  { background: var(--lemon); }
+
+.dash-breakdown-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+@media (max-width: 600px) { .dash-breakdown-row { grid-template-columns: 1fr; } }
+.dash-breakdown-row > div { display: grid; gap: 6px; }
+.dash-breakdown-row ul {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 4px;
+}
+.dash-breakdown-row li {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 13px;
+}
+.dash-breakdown-row li:last-child { border-bottom: none; }
+.dash-breakdown-row li b {
+  font-family: var(--font-brand); letter-spacing: var(--letter-bebas);
+  color: var(--ink-900);
+  font-size: 16px;
+}
+
+/* === Pending list === */
+.dash-pending-list { display: grid; gap: 8px; }
+.dash-pending-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-3);
+  padding: 10px 12px;
+  background: var(--surface-soft);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  align-items: center;
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+}
+.dash-pending-item:hover {
+  border-color: var(--lemon);
+  background: var(--surface);
+}
+.dash-pending-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--blue-500), var(--blue-700));
+  color: var(--ink-on-blue);
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 14px;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+.dash-pending-icon img { width: 100%; height: 100%; object-fit: cover; }
+.dash-pending-info { display: grid; gap: 2px; min-width: 0; }
+.dash-pending-info strong {
+  font-size: 13.5px; font-weight: 700; color: var(--ink-900);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dash-pending-info small {
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dash-pending-info p {
+  margin: 4px 0 0;
+  font-size: 12px; color: var(--ink-700);
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+}
+.dash-pending-meta { display: grid; gap: 4px; text-align: right; }
+.dash-pending-meta small { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-500); }
+
+/* === System bottom strip === */
+.dash-system {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  padding: var(--space-4) 0;
+  border-top: 2px solid var(--ink-900);
+  border-bottom: 2px solid var(--ink-900);
+}
+@media (max-width: 768px) { .dash-system { grid-template-columns: repeat(2, 1fr); gap: var(--space-3); padding: var(--space-3) var(--space-3); } }
+.dash-system > div {
+  padding: 0 var(--space-5);
+  border-right: 1px dashed var(--line);
+  display: grid; gap: 2px;
+}
+.dash-system > div:last-child { border-right: none; }
+.dash-system strong {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: 14px; color: var(--ink-900);
+  margin-top: 4px;
+}
+.dash-system small {
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
+}
+
+[data-anim] { animation: fade-up var(--dur-slow) var(--ease-emphasized) both; }
+[data-anim="enter-1"] { animation-delay: 60ms; }
+[data-anim="enter-2"] { animation-delay: 140ms; }
+[data-anim="enter-3"] { animation-delay: 200ms; }
+[data-anim="enter-4"] { animation-delay: 260ms; }
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-anim] { animation: none; }
+}
+</style>
