@@ -59,6 +59,8 @@ docker compose up -d --build
 docker compose logs -f api
 ```
 
+容器启动时会先执行 `alembic upgrade head`，再启动 API。这样 PostgreSQL 上的旧库会自动补齐最新 schema；如果你是从旧版本升级，首次重启时出现迁移日志属于正常现象。
+
 如果你要通过域名访问服务，至少需要：
 
 - 将 `market.mofox-sama.com` 的 DNS A 记录指向部署服务器公网 IP。

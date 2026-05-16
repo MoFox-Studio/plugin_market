@@ -60,11 +60,18 @@ async def init_database() -> None:
 
     async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        columns = await conn.run_sync(lambda sync_conn: {item["name"] for item in inspect(sync_conn).get_columns("plugins")})
-        if "readme_markdown" not in columns:
+        plugin_columns = await conn.run_sync(
+            lambda sync_conn: {item["name"] for item in inspect(sync_conn).get_columns("plugins")}
+        )
+        if "readme_markdown" not in plugin_columns:
             await conn.execute(text("ALTER TABLE plugins ADD COLUMN readme_markdown TEXT"))
-        if "plugin_dependencies" not in columns:
+        if "plugin_dependencies" not in plugin_columns:
             await conn.execute(text("ALTER TABLE plugins ADD COLUMN plugin_dependencies JSON"))
+        comment_columns = await conn.run_sync(
+            lambda sync_conn: {item["name"] for item in inspect(sync_conn).get_columns("plugin_comments")}
+        )
+        if "mention_payload" not in comment_columns:
+            await conn.execute(text("ALTER TABLE plugin_comments ADD COLUMN mention_payload JSON"))
 
 
 async def drop_database() -> None:
