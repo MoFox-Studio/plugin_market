@@ -17,7 +17,10 @@ const searchQuery = ref('')
 
 function onSearch() {
   const q = searchQuery.value.trim()
-  router.push(q ? `/?q=${encodeURIComponent(q)}` : '/')
+  void router.push({
+    name: 'market',
+    query: q ? { q } : {},
+  })
 }
 
 async function onLogout() {

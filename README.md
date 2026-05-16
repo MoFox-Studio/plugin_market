@@ -22,11 +22,6 @@ uv sync
 uv run uvicorn plugin_market_backend.app:app --host 127.0.0.1 --port 8787
 ```
 
-兼容旧入口仍可用：
-
-```bash
-uv run uvicorn plugin_market_mock.app:app --host 127.0.0.1 --port 8787
-```
 
 默认开发配置会使用 `./data/plugin_market.db`，启动时自动建表并写入 demo 数据。
 

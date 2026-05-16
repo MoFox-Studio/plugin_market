@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import api from '@/api'
+import { useAnnouncementsStore } from '@/stores/announcements'
 import { useToastStore } from '@/stores/toast'
 import { formatDate, formatRelative } from '@/utils/format'
 import type { Announcement, Audience, DisplayMode, Severity } from '@/types'
@@ -19,6 +20,7 @@ interface AnnouncementDraft {
 }
 
 const toast = useToastStore()
+const announcements = useAnnouncementsStore()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -104,6 +106,7 @@ async function saveDraft(): Promise<void> {
       toast.show('公告已更新', 'ok')
     }
     startCreate()
+    await announcements.loadActive(true)
     await loadAnnouncements()
   } catch (error) {
     toast.show((error as Error).message || '保存公告失败', 'error')
@@ -116,6 +119,7 @@ async function disableAnnouncement(id: number): Promise<void> {
   try {
     await api.admin.announcements.disable(id)
     toast.show('公告已停用', 'ok')
+    await announcements.loadActive(true)
     await loadAnnouncements()
   } catch (error) {
     toast.show((error as Error).message || '停用失败', 'error')
@@ -126,6 +130,7 @@ async function resurfaceAnnouncement(id: number): Promise<void> {
   try {
     await api.admin.announcements.resurface(id)
     toast.show('公告已重新上线', 'ok')
+    await announcements.loadActive(true)
     await loadAnnouncements()
   } catch (error) {
     toast.show((error as Error).message || '重新上线失败', 'error')

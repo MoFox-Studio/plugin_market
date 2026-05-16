@@ -12,6 +12,7 @@ const auth = useAuthStore()
 const inbox = useInboxStore()
 
 let motionMedia: MediaQueryList | null = null
+let announcementsRefreshTimer: number | null = null
 
 function syncReducedMotion() {
   if (typeof document === 'undefined') {
@@ -23,6 +24,25 @@ function syncReducedMotion() {
 
 function handleReducedMotionChange() {
   syncReducedMotion()
+}
+
+function startAnnouncementsPolling() {
+  if (typeof window === 'undefined' || announcementsRefreshTimer !== null) {
+    return
+  }
+
+  announcementsRefreshTimer = window.setInterval(() => {
+    void announcements.loadActive(true)
+  }, 30000)
+}
+
+function stopAnnouncementsPolling() {
+  if (announcementsRefreshTimer === null || typeof window === 'undefined') {
+    return
+  }
+
+  window.clearInterval(announcementsRefreshTimer)
+  announcementsRefreshTimer = null
 }
 
 watch(
@@ -41,6 +61,7 @@ watch(
 onMounted(() => {
   auth.loadViewer()
   void announcements.loadActive()
+  startAnnouncementsPolling()
 
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     syncReducedMotion()
@@ -60,6 +81,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   inbox.stopPolling()
+  stopAnnouncementsPolling()
 
   if (motionMedia === null) {
     return
