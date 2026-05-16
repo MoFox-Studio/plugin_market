@@ -6,13 +6,19 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from plugin_market_backend.config import get_settings
 
 
 HEAD_REVISION = "0004_overhaul_phase1"
+REVISION_ORDER = {
+    "0001_initial": 1,
+    "0002_github_sessions": 2,
+    "0003_community": 3,
+    HEAD_REVISION: 4,
+}
 
 
 def _repo_root() -> Path:
@@ -25,12 +31,9 @@ def _alembic_config() -> Config:
     return config
 
 
-def _bootstrap_revision(sync_conn) -> str | None:
+def _physical_revision(sync_conn) -> str | None:
     inspector = inspect(sync_conn)
     tables = set(inspector.get_table_names())
-
-    if "alembic_version" in tables:
-        return None
 
     if not {"authors", "plugins", "plugin_versions"}.issubset(tables):
         return None
@@ -65,6 +68,29 @@ def _bootstrap_revision(sync_conn) -> str | None:
         revision = HEAD_REVISION
 
     return revision
+
+
+def _bootstrap_revision(sync_conn) -> str | None:
+    inspector = inspect(sync_conn)
+    tables = set(inspector.get_table_names())
+    physical_revision = _physical_revision(sync_conn)
+
+    if "alembic_version" not in tables:
+        return physical_revision
+
+    current_revision = sync_conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).scalar_one_or_none()
+    if current_revision is None:
+        return physical_revision
+
+    if physical_revision is None:
+        return None
+
+    current_rank = REVISION_ORDER.get(str(current_revision), 0)
+    physical_rank = REVISION_ORDER.get(physical_revision, 0)
+    if physical_rank > current_rank:
+        return physical_revision
+
+    return None
 
 
 async def _detect_bootstrap_revision() -> str | None:
