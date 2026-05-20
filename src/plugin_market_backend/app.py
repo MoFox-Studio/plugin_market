@@ -284,6 +284,13 @@ async def me_page() -> FileResponse:
     return frontend_file("index.html")
 
 
+@app.get("/status", include_in_schema=False)
+async def status_page() -> FileResponse:
+    """Serve the SPA service-status dashboard."""
+
+    return frontend_file("index.html")
+
+
 @app.get("/plugin/{plugin_id}", include_in_schema=False)
 async def plugin_page(plugin_id: str) -> FileResponse:  # noqa: ARG001
     """Serve the SPA for direct plugin detail URLs."""

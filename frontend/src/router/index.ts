@@ -41,6 +41,12 @@ const routes: RouteRecordRaw[] = [
     meta: { shellGroup: 'me' },
   },
   {
+    path: '/status',
+    name: 'status',
+    component: () => import('@/views/StatusView.vue'),
+    meta: { shellGroup: 'market' },
+  },
+  {
     path: '/admin',
     name: 'admin',
     component: () => import('@/views/AdminLayout.vue'),
