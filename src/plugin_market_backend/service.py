@@ -511,6 +511,7 @@ class MarketService:
         existing = await self._get_version_orm_or_none(plugin_id, payload.version)
         if existing is not None:
             raise ApiError(409, "VERSION_ALREADY_EXISTS", "Plugin version already exists.", {"plugin_id": plugin_id, "version": payload.version})
+        now = utc_now()
         version = PluginVersionORM(
             plugin_id=plugin_id,
             version=payload.version,
@@ -521,7 +522,7 @@ class MarketService:
             asset_download_url=str(payload.asset_download_url),
             checksum_sha256=payload.checksum_sha256,
             file_size=payload.file_size,
-            published_at=utc_now(),
+            published_at=now,
             is_prerelease=payload.is_prerelease,
             is_yanked=False,
             status=VersionStatus.PUBLISHED,
@@ -531,6 +532,9 @@ class MarketService:
             supported_platforms=payload.supported_platforms,
         )
         self.session.add(version)
+        if "readme_markdown" in payload.model_fields_set:
+            plugin.readme_markdown = normalize_readme_markdown(payload.readme_markdown)
+        plugin.updated_at = now
         await self._record("version", f"{plugin_id}@{payload.version}", ReviewAction.SUBMIT_VERSION, None, version.status, operator_id)
         await self.session.flush()
         return self._version_schema(version)

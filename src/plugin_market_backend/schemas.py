@@ -137,6 +137,7 @@ class PluginVersionCreate(BaseModel):
     min_host_version: str = Field(min_length=1)
     max_host_version: str | None = None
     supported_platforms: list[str] = Field(default_factory=lambda: ["all"])
+    readme_markdown: str | None = None
 
     @field_validator("checksum_sha256")
     @classmethod

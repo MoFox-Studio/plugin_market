@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from httpx import AsyncClient
 from plugin_market_backend.database import session_scope
 from plugin_market_backend.session_auth import create_browser_session
@@ -46,6 +48,13 @@ def version_payload(version: str = "1.0.0") -> dict[str, object]:
         "max_host_version": None,
         "supported_platforms": ["all"],
     }
+
+
+def parse_api_datetime(value: str) -> datetime:
+    """Parse FastAPI ISO datetime payloads into aware datetimes."""
+
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 async def test_register_plugin_requires_author_token(client: AsyncClient) -> None:
@@ -103,6 +112,31 @@ async def test_sync_version_updates_metadata(client: AsyncClient) -> None:
     assert response.json()["file_size"] == 9999
     assert response.json()["checksum_sha256"] == "c" * 64
     assert response.json()["last_sync_status"] == "success"
+
+
+async def test_submit_version_updates_plugin_timestamp_and_readme(client: AsyncClient) -> None:
+    """Version submission should refresh plugin freshness metadata and README content."""
+
+    payload = plugin_payload()
+    payload["readme_markdown"] = "# Sample Plugin\n\nOld README."
+    created = await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
+    original_updated_at = parse_api_datetime(created.json()["updated_at"])
+
+    release_payload = version_payload()
+    release_payload["readme_markdown"] = "# Sample Plugin\n\nNew README."
+    submitted = await client.post(
+        "/api/v1/plugins/sample_plugin/versions",
+        json=release_payload,
+        headers=AUTHOR_HEADERS,
+    )
+    detail = await client.get("/api/v1/plugins/sample_plugin")
+    readme = await client.get("/api/v1/plugins/sample_plugin/readme")
+
+    assert submitted.status_code == 200
+    assert parse_api_datetime(detail.json()["updated_at"]) >= original_updated_at
+    assert readme.status_code == 200
+    assert readme.json()["exists"] is True
+    assert "New README." in readme.json()["html"]
 
 
 async def test_update_plugin_metadata_returns_pending_review(client: AsyncClient) -> None:
