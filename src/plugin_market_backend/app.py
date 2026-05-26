@@ -59,6 +59,10 @@ from plugin_market_backend.schemas import (
     MarketHome,
     MarketStats,
     MachineSubscriptionListResponse,
+    MyFollowItem,
+    MyFollowListResponse,
+    MySubscriptionItem,
+    MySubscriptionListResponse,
     MentionCandidate,
     PinCreate,
     PinUpdate,
@@ -759,6 +763,22 @@ async def revoke_my_access_token(
     ensure_same_origin_browser_write(request)
     async with session_scope() as session:
         return await MarketService(session).revoke_access_token(author_id)
+
+
+@app.get("/api/v1/me/subscriptions", response_model=MySubscriptionListResponse)
+async def my_subscriptions(author_id: str = Depends(require_browser_author)) -> MySubscriptionListResponse:
+    """Return plugins the current browser author has subscribed to."""
+
+    async with session_scope() as session:
+        return await MarketService(session).my_subscriptions(author_id)
+
+
+@app.get("/api/v1/me/follows", response_model=MyFollowListResponse)
+async def my_follows(author_id: str = Depends(require_browser_author)) -> MyFollowListResponse:
+    """Return authors the current browser author follows."""
+
+    async with session_scope() as session:
+        return await MarketService(session).my_follows(author_id)
 
 
 @app.post("/api/v1/me/profile/background", response_model=AuthorProfile)

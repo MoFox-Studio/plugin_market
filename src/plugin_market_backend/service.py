@@ -33,6 +33,10 @@ from plugin_market_backend.schemas import (
     MarketStats,
     MachineSubscriptionItem,
     MachineSubscriptionListResponse,
+    MyFollowItem,
+    MyFollowListResponse,
+    MySubscriptionItem,
+    MySubscriptionListResponse,
     MentionCandidate,
     Plugin,
     PluginCreate,
@@ -1493,6 +1497,83 @@ class MarketService:
                 )
             )
         return MachineSubscriptionListResponse(
+            author_id=author_id,
+            items=items,
+            total=len(items),
+        )
+
+    async def my_subscriptions(
+        self,
+        author_id: str,
+    ) -> MySubscriptionListResponse:
+        """Return plugins the viewer has subscribed to."""
+
+        subq = (
+            select(PluginSubscriptionORM)
+            .where(PluginSubscriptionORM.author_id == author_id)
+            .subquery()
+        )
+        stmt = (
+            select(PluginORM, subq.c.created_at.label("subscribed_at"))
+            .options(selectinload(PluginORM.owner), selectinload(PluginORM.versions))
+            .join(subq, PluginORM.plugin_id == subq.c.plugin_id)
+            .order_by(subq.c.created_at.desc())
+        )
+        rows = list((await self.session.execute(stmt)).all())
+        items: list[MySubscriptionItem] = []
+        for plugin, subscribed_at in rows:
+            latest = self._latest_public_version(plugin)
+            items.append(
+                MySubscriptionItem(
+                    plugin_id=plugin.plugin_id,
+                    display_name=plugin.display_name,
+                    summary=plugin.summary or "",
+                    icon_url=plugin.icon_url,
+                    status=plugin.status,
+                    owner_id=plugin.owner_id,
+                    owner_login=plugin.owner.github_login if plugin.owner else None,
+                    owner_display_name=plugin.owner.display_name if plugin.owner else None,
+                    latest_version=latest.version if latest else None,
+                    updated_at=plugin.updated_at,
+                    subscribed_at=subscribed_at,
+                )
+            )
+        return MySubscriptionListResponse(
+            author_id=author_id,
+            items=items,
+            total=len(items),
+        )
+
+    async def my_follows(
+        self,
+        author_id: str,
+    ) -> MyFollowListResponse:
+        """Return authors the viewer follows."""
+
+        subq = (
+            select(AuthorFollowORM)
+            .where(AuthorFollowORM.follower_id == author_id)
+            .subquery()
+        )
+        stmt = (
+            select(AuthorORM, subq.c.created_at.label("followed_at"))
+            .join(subq, AuthorORM.author_id == subq.c.author_id)
+            .order_by(subq.c.created_at.desc())
+        )
+        rows = list((await self.session.execute(stmt)).all())
+        items: list[MyFollowItem] = []
+        for author, followed_at in rows:
+            items.append(
+                MyFollowItem(
+                    author_id=author.author_id,
+                    github_login=author.github_login,
+                    display_name=author.display_name,
+                    avatar_url=author.avatar_url,
+                    author_type=author.author_type,
+                    followed_at=followed_at,
+                )
+            )
+        return MyFollowListResponse(
             author_id=author_id,
             items=items,
             total=len(items),

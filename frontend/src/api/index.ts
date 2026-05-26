@@ -23,6 +23,8 @@ import type {
   InboxUnreadCount,
   MarketHome,
   MentionCandidate,
+  MyFollowListResponse,
+  MySubscriptionListResponse,
   PinCreate,
   PinnedPlugin,
   PinUpdate,
@@ -192,6 +194,12 @@ export const api = {
       revoke(): Promise<AccessTokenStatus> {
         return del<AccessTokenStatus>('/api/v1/me/access-token')
       },
+    },
+    subscriptions(): Promise<MySubscriptionListResponse> {
+      return get<MySubscriptionListResponse>('/api/v1/me/subscriptions')
+    },
+    follows(): Promise<MyFollowListResponse> {
+      return get<MyFollowListResponse>('/api/v1/me/follows')
     },
   },
 

@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useTaxonomyStore } from '@/stores/taxonomy'
 import { formatNumber, formatRelative, formatDate, formatBytes, statusText, categoryLabel, reviewActionText, EDITABLE_PLUGIN_CATEGORIES } from '@/utils/format'
-import type { AccessTokenStatus, Plugin, PluginMetadataPatch, PluginSnapshot } from '@/types'
+import type { AccessTokenStatus, MyFollowItem, MyFollowListResponse, MySubscriptionItem, MySubscriptionListResponse, Plugin, PluginMetadataPatch, PluginSnapshot } from '@/types'
 import TrustBadge from '@/components/TrustBadge.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -29,6 +29,11 @@ const iconUploading = ref(false)
 const accessToken = ref<AccessTokenStatus | null>(null)
 const accessTokenValue = ref('')
 const accessTokenBusy = ref(false)
+
+const subscriptions = ref<MySubscriptionItem[]>([])
+const subscriptionsBusy = ref(false)
+const follows = ref<MyFollowItem[]>([])
+const followsBusy = ref(false)
 
 async function copyText(value: string, successMessage: string) {
   try {
@@ -182,9 +187,45 @@ async function revokeAccessToken() {
   }
 }
 
+async function loadSubscriptions() {
+  const result = await api.me.subscriptions().catch(() => ({ author_id: '', items: [], total: 0 } as MySubscriptionListResponse))
+  subscriptions.value = result.items || []
+}
+
+async function loadFollows() {
+  const result = await api.me.follows().catch(() => ({ author_id: '', items: [], total: 0 } as MyFollowListResponse))
+  follows.value = result.items || []
+}
+
+async function unsubscribe(pluginId: string) {
+  subscriptionsBusy.value = true
+  try {
+    await api.plugins.toggleSubscription(pluginId)
+    subscriptions.value = subscriptions.value.filter(item => item.plugin_id !== pluginId)
+    toast.show('已取消订阅', 'ok')
+  } catch (e) {
+    toast.show((e as Error).message || '操作失败', 'error')
+  } finally {
+    subscriptionsBusy.value = false
+  }
+}
+
+async function unfollow(authorId: string) {
+  followsBusy.value = true
+  try {
+    await api.authors.toggleFollow(authorId)
+    follows.value = follows.value.filter(item => item.author_id !== authorId)
+    toast.show('已取消关注', 'ok')
+  } catch (e) {
+    toast.show((e as Error).message || '操作失败', 'error')
+  } finally {
+    followsBusy.value = false
+  }
+}
+
 onMounted(async () => {
   loading.value = true
-  await Promise.all([loadPlugins(), loadAccessToken(), taxonomy.load()])
+  await Promise.all([loadPlugins(), loadAccessToken(), loadSubscriptions(), loadFollows(), taxonomy.load()])
   loading.value = false
 })
 </script>
@@ -260,7 +301,56 @@ onMounted(async () => {
       </div>
     </section>
 
-    <div class="me-layout" data-anim="enter-3">
+    <div class="me-sub-follow-grid" data-anim="enter-3">
+      <section class="me-sub-card">
+        <div class="me-section-head">
+          <h2>我的订阅</h2>
+          <small>{{ subscriptions.length }}</small>
+        </div>
+        <div v-if="subscriptions.length" class="me-sub-list">
+          <div v-for="item in subscriptions" :key="item.plugin_id" class="me-sub-row">
+            <div class="me-sub-row-icon">
+              <img v-if="item.icon_url" :src="item.icon_url" :alt="item.display_name">
+              <template v-else>{{ item.display_name[0]?.toUpperCase() || '?' }}</template>
+            </div>
+            <div class="me-sub-row-info">
+              <div class="me-sub-row-head">
+                <router-link :to="`/plugin/${encodeURIComponent(item.plugin_id)}`" class="me-sub-row-name">{{ item.display_name }}</router-link>
+                <span :class="['badge', `status-${item.status}`]">{{ statusText(item.status) }}</span>
+              </div>
+              <small class="me-sub-row-meta">{{ item.plugin_id }} · {{ item.owner_display_name || item.owner_login || item.owner_id }} · 订阅于 {{ formatRelative(item.subscribed_at) }}</small>
+            </div>
+            <button type="button" class="btn btn-sm btn-ghost" :disabled="subscriptionsBusy" @click="unsubscribe(item.plugin_id)">取消订阅</button>
+          </div>
+        </div>
+        <EmptyState v-else title="暂无订阅" message="浏览插件市场，订阅感兴趣的项目后，这里会集中展示。" />
+      </section>
+
+      <section class="me-sub-card">
+        <div class="me-section-head">
+          <h2>我的关注</h2>
+          <small>{{ follows.length }}</small>
+        </div>
+        <div v-if="follows.length" class="me-sub-list">
+          <div v-for="item in follows" :key="item.author_id" class="me-sub-row">
+            <div class="me-sub-row-icon">
+              <img v-if="item.avatar_url" :src="item.avatar_url" :alt="item.display_name">
+              <template v-else>{{ item.display_name[0]?.toUpperCase() || '?' }}</template>
+            </div>
+            <div class="me-sub-row-info">
+              <div class="me-sub-row-head">
+                <router-link :to="`/author/${encodeURIComponent(item.author_id)}`" class="me-sub-row-name">{{ item.display_name }}</router-link>
+              </div>
+              <small class="me-sub-row-meta">@{{ item.github_login }} · {{ item.author_id }} · 关注于 {{ formatRelative(item.followed_at) }}</small>
+            </div>
+            <button type="button" class="btn btn-sm btn-ghost" :disabled="followsBusy" @click="unfollow(item.author_id)">取消关注</button>
+          </div>
+        </div>
+        <EmptyState v-else title="暂无关注" message="关注作者后，这里会集中展示你关注的创作者。" />
+      </section>
+    </div>
+
+    <div class="me-layout" data-anim="enter-4">
       <!-- Plugin list (left) -->
       <aside class="me-plugin-list">
         <div class="me-section-head">
@@ -630,6 +720,75 @@ onMounted(async () => {
   white-space: nowrap;
   background: transparent;
   color: #fff;
+}
+
+/* === SUBSCRIPTIONS & FOLLOWS === */
+.me-sub-follow-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+@media (max-width: 900px) {
+  .me-sub-follow-grid { grid-template-columns: 1fr; }
+}
+
+.me-sub-card {
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  display: grid; gap: var(--space-4);
+}
+
+.me-sub-list {
+  display: grid; gap: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.me-sub-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+}
+
+.me-sub-row-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--blue-500), var(--blue-700));
+  color: var(--ink-on-blue);
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 15px;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+.me-sub-row-icon img { width: 100%; height: 100%; object-fit: cover; }
+
+.me-sub-row-info {
+  display: grid; gap: 2px;
+  min-width: 0;
+}
+
+.me-sub-row-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
+.me-sub-row-name {
+  font-size: 13.5px; font-weight: 700; color: var(--ink-900);
+  text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.me-sub-row-name:hover { color: var(--blue-700); text-decoration: underline; }
+
+.me-sub-row-meta {
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* === LAYOUT === */

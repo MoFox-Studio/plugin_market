@@ -100,6 +100,41 @@ export interface PluginSubscriptionState {
   subscriptions_count: number
 }
 
+export interface MySubscriptionItem {
+  plugin_id: string
+  display_name: string
+  summary: string
+  icon_url?: string | null
+  status: string
+  owner_id: string
+  owner_login?: string | null
+  owner_display_name?: string | null
+  latest_version?: string | null
+  updated_at?: string | null
+  subscribed_at: string
+}
+
+export interface MySubscriptionListResponse {
+  author_id: string
+  items: MySubscriptionItem[]
+  total: number
+}
+
+export interface MyFollowItem {
+  author_id: string
+  github_login: string
+  display_name: string
+  avatar_url?: string | null
+  author_type: string
+  followed_at: string
+}
+
+export interface MyFollowListResponse {
+  author_id: string
+  items: MyFollowItem[]
+  total: number
+}
+
 export interface PluginVersion {
   version: string
   status: string

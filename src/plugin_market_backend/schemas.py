@@ -92,6 +92,49 @@ class MachineSubscriptionListResponse(BaseModel):
     total: int = Field(ge=0)
 
 
+class MySubscriptionItem(BaseModel):
+    """One subscribed plugin in the viewer's subscription list."""
+
+    plugin_id: str
+    display_name: str
+    summary: str
+    icon_url: str | None = None
+    status: PluginStatus
+    owner_id: str
+    owner_login: str | None = None
+    owner_display_name: str | None = None
+    latest_version: str | None = None
+    updated_at: datetime | None = None
+    subscribed_at: datetime
+
+
+class MySubscriptionListResponse(BaseModel):
+    """Viewer's subscribed plugin list."""
+
+    author_id: str
+    items: list[MySubscriptionItem] = Field(default_factory=list)
+    total: int = Field(ge=0)
+
+
+class MyFollowItem(BaseModel):
+    """One followed author in the viewer's follow list."""
+
+    author_id: str
+    github_login: str
+    display_name: str
+    avatar_url: str | None = None
+    author_type: AuthorType
+    followed_at: datetime
+
+
+class MyFollowListResponse(BaseModel):
+    """Viewer's followed author list."""
+
+    author_id: str
+    items: list[MyFollowItem] = Field(default_factory=list)
+    total: int = Field(ge=0)
+
+
 class PluginCreate(BaseModel):
     """Request body for registering a plugin."""
 
