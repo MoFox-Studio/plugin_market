@@ -10,7 +10,7 @@ import hashlib
 from typing import Any
 
 from packaging.version import InvalidVersion, Version
-from sqlalchemy import case, delete, func, or_, select
+from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -19,7 +19,7 @@ from plugin_market_backend.config import get_settings
 from plugin_market_backend.content import delete_plugin_icon, normalize_readme_markdown, render_readme_html, store_plugin_icon
 from plugin_market_backend.enums import AuthorType, PluginStatus, ReviewAction, SyncStatus, TrustLevel, VersionStatus
 from plugin_market_backend.errors import ApiError
-from plugin_market_backend.orm import AuthorAccessTokenORM, AuthorFollowORM, AuthorORM, AuthorProfileORM, CommentMentionORM, CurationEntryORM, PluginCommentORM, PluginLikeORM, PluginMaintainerORM, PluginORM, PluginRatingORM, PluginSubscriptionORM, PluginVersionORM, ReviewRecordORM, WebhookEventORM, utc_now
+from plugin_market_backend.orm import AuthorAccessTokenORM, AuthorFollowORM, AuthorORM, AuthorProfileORM, CommentMentionORM, CurationEntryORM, InboxMessageORM, PluginCommentORM, PluginLikeORM, PluginMaintainerORM, PluginORM, PluginRatingORM, PluginSubscriptionORM, PluginVersionORM, ReviewRecordORM, WebhookEventORM, utc_now
 from plugin_market_backend.schemas import (
     AccessTokenRotateResponse,
     AccessTokenStatus,
@@ -703,7 +703,10 @@ class MarketService:
         await self.session.execute(delete(PluginRatingORM).where(PluginRatingORM.plugin_id == plugin_id))
         comment_ids = (await self.session.execute(select(PluginCommentORM.id).where(PluginCommentORM.plugin_id == plugin_id))).scalars().all()
         if comment_ids:
+            await self.session.execute(update(PluginCommentORM).where(PluginCommentORM.parent_id.in_(comment_ids)).values(parent_id=None))
+            await self.session.execute(update(InboxMessageORM).where(InboxMessageORM.related_comment_id.in_(comment_ids)).values(related_comment_id=None))
             await self.session.execute(delete(CommentMentionORM).where(CommentMentionORM.comment_id.in_(comment_ids)))
+        await self.session.execute(update(InboxMessageORM).where(InboxMessageORM.related_plugin_id == plugin_id).values(related_plugin_id=None))
         await self.session.execute(delete(PluginCommentORM).where(PluginCommentORM.plugin_id == plugin_id))
         await self.session.execute(
             delete(ReviewRecordORM).where(
