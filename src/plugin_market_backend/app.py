@@ -1463,3 +1463,16 @@ async def github_webhook(
     async with session_scope() as session:
         await MarketService(session).record_webhook(event_id, x_github_event, payload.get("action"), payload)
     return WebhookResponse(accepted=True, event_id=event_id)
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str) -> FileResponse:
+    """SPA HTML5 history fallback — serve index.html for all unmatched frontend routes."""
+
+    if full_path.startswith("api/"):
+        raise ApiError(404, "NOT_FOUND", "API endpoint not found.")
+
+    file_path = STATIC_DIR / full_path
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+    return frontend_file("index.html")
