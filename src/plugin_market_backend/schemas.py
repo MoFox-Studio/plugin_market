@@ -38,6 +38,60 @@ class AuthStatus(BaseModel):
     user: Author | None = None
 
 
+class AuthorFollowState(BaseModel):
+    """Follow toggle state for an author."""
+
+    author_id: str
+    following: bool
+    followers_count: int
+
+
+class PluginSubscriptionState(BaseModel):
+    """Subscription toggle state for a plugin."""
+
+    plugin_id: str
+    subscribed: bool
+    subscriptions_count: int
+
+
+class AccessTokenStatus(BaseModel):
+    """Metadata describing the single active access token for an author."""
+
+    author_id: str
+    has_token: bool
+    token_preview: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    last_used_at: datetime | None = None
+
+
+class AccessTokenRotateResponse(BaseModel):
+    """Plaintext token returned only at creation / rotation time."""
+
+    author_id: str
+    token: str
+    token_preview: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class MachineSubscriptionItem(BaseModel):
+    """One subscribed plugin returned to machine clients."""
+
+    plugin_id: str
+    display_name: str | None = None
+    latest_version: str | None = None
+    updated_at: datetime | None = None
+
+
+class MachineSubscriptionListResponse(BaseModel):
+    """Subscribed plugin list returned to machine clients."""
+
+    author_id: str
+    items: list[MachineSubscriptionItem] = Field(default_factory=list)
+    total: int = Field(ge=0)
+
+
 class PluginCreate(BaseModel):
     """Request body for registering a plugin."""
 
@@ -361,14 +415,6 @@ class RatingSummary(BaseModel):
     viewer_rating: int | None = None
 
 
-class LikeResponse(BaseModel):
-    """Like toggle result."""
-
-    plugin_id: str
-    liked: bool
-    likes_count: int
-
-
 class ActivityPoint(BaseModel):
     """Daily market activity bucket for the admin dashboard."""
 
@@ -466,7 +512,15 @@ SlotTypeLiteral = Literal[
 TargetTypeLiteral = Literal["plugin", "author"]
 """Resource a curation entry references."""
 
-InboxMessageType = Literal["mention", "reply", "governance", "announcement", "system"]
+InboxMessageType = Literal[
+    "mention",
+    "reply",
+    "governance",
+    "announcement",
+    "author_activity",
+    "plugin_activity",
+    "system",
+]
 """Inbox message categories."""
 
 InboxMessageStatus = Literal["unread", "read", "revoked"]

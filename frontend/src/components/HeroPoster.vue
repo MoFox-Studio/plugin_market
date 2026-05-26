@@ -153,7 +153,7 @@ const tiltStyle = computed(() => ({
         <div v-if="current.plugin" class="hero-poster-stats">
           <span><b>{{ current.plugin.rating_avg.toFixed(1) }}</b><small>评分</small></span>
           <span><b>{{ formatNumber(current.plugin.downloads_count) }}</b><small>下载</small></span>
-          <span><b>{{ formatNumber(current.plugin.likes_count) }}</b><small>❤</small></span>
+          <span><b>{{ formatNumber(current.plugin.likes_count) }}</b><small>订阅</small></span>
           <span v-if="current.plugin.latest_version"><b>v{{ current.plugin.latest_version }}</b><small>最新</small></span>
         </div>
 

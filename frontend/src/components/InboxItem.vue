@@ -18,6 +18,8 @@ const typeLabel = computed(() => {
     reply: '回复',
     governance: '治理',
     announcement: '公告',
+    author_activity: '作者动态',
+    plugin_activity: '插件动态',
     system: '系统',
   }
   return labels[props.message.type] || props.message.type

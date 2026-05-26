@@ -26,7 +26,7 @@ const columns = [
   { key: 'display_name', label: '作者', sortable: true, cell: (row: Record<string, unknown>) => `${String(row.display_name || '-')} · @${String(row.github_login || '-')}` },
   { key: 'author_id', label: 'Author ID', sortable: true },
   { key: 'plugins_count', label: '插件数', sortable: true, align: 'right' as const },
-  { key: 'likes_received', label: '获赞', sortable: true, align: 'right' as const, cell: (row: Record<string, unknown>) => formatNumber(Number(row.likes_received || 0)) },
+  { key: 'likes_received', label: '获订阅', sortable: true, align: 'right' as const, cell: (row: Record<string, unknown>) => formatNumber(Number(row.likes_received || 0)) },
   { key: 'downloads_total', label: '下载', sortable: true, align: 'right' as const, cell: (row: Record<string, unknown>) => formatNumber(Number(row.downloads_total || 0)) },
   { key: 'admin_flag', label: 'Admin 标志', sortable: true },
 ]

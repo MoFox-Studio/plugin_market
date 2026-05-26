@@ -58,12 +58,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from plugin_market_backend.orm import (
     AnnouncementORM,
+    AuthorFollowORM,
     AuthorORM,
     CommentMentionORM,
     InboxMessageORM,
     PluginCommentORM,
     PluginMaintainerORM,
     PluginORM,
+    PluginSubscriptionORM,
     utc_now,
 )
 from plugin_market_backend.schemas import (
@@ -99,7 +101,7 @@ PREVIEW_MAX_LENGTH = 200
 
 
 _VALID_TYPES: frozenset[str] = frozenset(
-    {"mention", "reply", "governance", "announcement", "system"}
+    {"mention", "reply", "governance", "announcement", "author_activity", "plugin_activity", "system"}
 )
 
 
@@ -439,6 +441,79 @@ class InboxService:
             )
             count += 1
         await self.session.flush()
+        return count
+
+    async def fan_out_for_author_activity(
+        self,
+        *,
+        author_id: str,
+        source_author_id: str,
+        dedup_key: str,
+        payload: dict[str, Any],
+        related_plugin_id: str | None = None,
+    ) -> int:
+        """Derive author activity messages for followers of one author."""
+
+        follower_ids = list(
+            (
+                await self.session.scalars(
+                    select(AuthorFollowORM.follower_id).where(
+                        AuthorFollowORM.author_id == author_id
+                    )
+                )
+            ).all()
+        )
+        count = 0
+        for follower_id in dict.fromkeys(follower_ids):
+            if not follower_id or follower_id == source_author_id:
+                continue
+            await self._upsert_message(
+                recipient_id=follower_id,
+                type="author_activity",
+                dedup_key=f"{dedup_key}:{follower_id}",
+                payload=payload,
+                related_plugin_id=related_plugin_id,
+                source_author_id=source_author_id,
+            )
+            count += 1
+        if count:
+            await self.session.flush()
+        return count
+
+    async def fan_out_for_plugin_activity(
+        self,
+        *,
+        plugin_id: str,
+        source_author_id: str,
+        dedup_key: str,
+        payload: dict[str, Any],
+    ) -> int:
+        """Derive plugin activity messages for plugin subscribers."""
+
+        subscriber_ids = list(
+            (
+                await self.session.scalars(
+                    select(PluginSubscriptionORM.author_id).where(
+                        PluginSubscriptionORM.plugin_id == plugin_id
+                    )
+                )
+            ).all()
+        )
+        count = 0
+        for subscriber_id in dict.fromkeys(subscriber_ids):
+            if not subscriber_id or subscriber_id == source_author_id:
+                continue
+            await self._upsert_message(
+                recipient_id=subscriber_id,
+                type="plugin_activity",
+                dedup_key=f"{dedup_key}:{subscriber_id}",
+                payload=payload,
+                related_plugin_id=plugin_id,
+                source_author_id=source_author_id,
+            )
+            count += 1
+        if count:
+            await self.session.flush()
         return count
 
     # ------------------------------------------------------------------

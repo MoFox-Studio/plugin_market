@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useTaxonomyStore } from '@/stores/taxonomy'
 import { formatNumber, formatRelative, formatDate, formatBytes, statusText, categoryLabel, reviewActionText, EDITABLE_PLUGIN_CATEGORIES } from '@/utils/format'
-import type { Plugin, PluginMetadataPatch, PluginSnapshot } from '@/types'
+import type { AccessTokenStatus, Plugin, PluginMetadataPatch, PluginSnapshot } from '@/types'
 import TrustBadge from '@/components/TrustBadge.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -26,6 +26,18 @@ const metadataCategory = ref('')
 const metadataTags = ref('')
 const iconFileInput = ref<HTMLInputElement | null>(null)
 const iconUploading = ref(false)
+const accessToken = ref<AccessTokenStatus | null>(null)
+const accessTokenValue = ref('')
+const accessTokenBusy = ref(false)
+
+async function copyText(value: string, successMessage: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    toast.show(successMessage, 'ok')
+  } catch {
+    toast.show('复制失败，请检查浏览器权限', 'error')
+  }
+}
 
 async function loadPlugins() {
   const result = await api.get('/api/v1/me/plugins').catch(() => ({ items: [] }))
@@ -36,6 +48,10 @@ async function loadPlugins() {
   if (selectedId.value) {
     await loadSnapshot()
   }
+}
+
+async function loadAccessToken() {
+  accessToken.value = await api.me.accessToken.get().catch(() => null)
 }
 
 async function loadSnapshot() {
@@ -138,9 +154,37 @@ async function deletePlugin(pluginId: string) {
   }
 }
 
+async function rotateAccessToken() {
+  accessTokenBusy.value = true
+  try {
+    const rotated = await api.me.accessToken.rotate()
+    accessTokenValue.value = rotated.token
+    await loadAccessToken()
+    toast.show('已生成新访问令牌，旧令牌已失效', 'ok')
+  } catch (e) {
+    toast.show((e as Error).message || '生成失败', 'error')
+  } finally {
+    accessTokenBusy.value = false
+  }
+}
+
+async function revokeAccessToken() {
+  if (!confirm('确认撤销当前访问令牌吗？Neo-MoFox 将无法继续从市场同步订阅。')) return
+  accessTokenBusy.value = true
+  try {
+    accessToken.value = await api.me.accessToken.revoke()
+    accessTokenValue.value = ''
+    toast.show('访问令牌已撤销', 'ok')
+  } catch (e) {
+    toast.show((e as Error).message || '撤销失败', 'error')
+  } finally {
+    accessTokenBusy.value = false
+  }
+}
+
 onMounted(async () => {
   loading.value = true
-  await Promise.all([loadPlugins(), taxonomy.load()])
+  await Promise.all([loadPlugins(), loadAccessToken(), taxonomy.load()])
   loading.value = false
 })
 </script>
@@ -179,6 +223,7 @@ onMounted(async () => {
             <strong>{{ auth.viewer.display_name }}</strong>
             <small>{{ auth.viewer.author_id }}</small>
             <div class="me-hero-actions">
+              <button type="button" class="btn btn-sm" @click="copyText(auth.viewer.author_id, '用户 ID 已复制')">复制用户 ID</button>
               <router-link class="btn btn-sm" :to="{ name: 'me-profile' }">个人空间设置</router-link>
               <router-link class="btn btn-sm btn-ghost" :to="`/author/${encodeURIComponent(auth.viewer.author_id)}`">查看公开主页</router-link>
             </div>
@@ -187,7 +232,35 @@ onMounted(async () => {
       </div>
     </header>
 
-    <div class="me-layout" data-anim="enter-2">
+    <section class="me-token-card" v-if="auth.viewer" data-anim="enter-2">
+      <div>
+        <span class="kicker">MARKET TOKEN</span>
+        <h2>插件市场访问令牌</h2>
+        <p>Neo-MoFox 接入插件市场时使用这个单实例令牌。重新生成后，旧令牌会立即失效。</p>
+      </div>
+      <div class="me-token-meta">
+        <div class="me-token-summary">
+          <span class="badge" :class="accessToken?.has_token ? 'status-published' : 'status-archived'">
+            {{ accessToken?.has_token ? '已启用' : '未生成' }}
+          </span>
+          <span v-if="accessToken?.token_preview" class="me-token-preview">{{ accessToken.token_preview }}</span>
+          <span v-if="accessToken?.last_used_at" class="me-token-used">最近使用 {{ formatRelative(accessToken.last_used_at) }}</span>
+        </div>
+        <div class="me-token-actions">
+          <button type="button" class="btn btn-sm" :disabled="accessTokenBusy" @click="rotateAccessToken">
+            {{ accessToken?.has_token ? '重新生成令牌' : '生成令牌' }}
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost" :disabled="!accessToken?.has_token || accessTokenBusy" @click="revokeAccessToken">撤销</button>
+        </div>
+      </div>
+      <div v-if="accessTokenValue" class="me-token-secret">
+        <span>新令牌</span>
+        <code>{{ accessTokenValue }}</code>
+        <button type="button" class="btn btn-sm" @click="copyText(accessTokenValue, '访问令牌已复制')">复制令牌</button>
+      </div>
+    </section>
+
+    <div class="me-layout" data-anim="enter-3">
       <!-- Plugin list (left) -->
       <aside class="me-plugin-list">
         <div class="me-section-head">
@@ -241,7 +314,7 @@ onMounted(async () => {
             </div>
             <div class="me-metric">
               <span>热度</span>
-              <strong>{{ formatNumber(selectedPlugin.likes_count) }} ❤</strong>
+              <strong>{{ formatNumber(selectedPlugin.likes_count) }} 订阅</strong>
               <small>{{ formatNumber(selectedPlugin.downloads_count) }} 下载</small>
             </div>
           </section>
@@ -481,6 +554,83 @@ onMounted(async () => {
 .me-hero-actions .btn:hover { background: #fff; color: var(--ink-900); transform: translate(-1px, -1px); box-shadow: var(--shadow-poster-soft); }
 .me-hero-actions .btn-ghost { background: transparent; color: rgba(255,255,255,0.92); }
 .me-hero-actions .btn-ghost:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
+.me-token-card {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(240,247,255,0.94));
+  border: 1.5px solid var(--blue-200);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.me-token-card h2 {
+  margin: 6px 0 8px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.me-token-card p {
+  margin: 0;
+  color: var(--ink-500);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.me-token-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.me-token-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.me-token-preview,
+.me-token-used {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-500);
+}
+
+.me-token-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.me-token-secret {
+  display: grid;
+  gap: 10px;
+  padding: var(--space-4);
+  background: var(--ink-900);
+  color: #fff;
+  border-radius: var(--radius-sm);
+}
+
+.me-token-secret span {
+  font-family: var(--font-brand);
+  letter-spacing: var(--letter-kicker);
+  font-size: 11px;
+  color: rgba(255,255,255,0.72);
+}
+
+.me-token-secret code {
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  background: transparent;
+  color: #fff;
+}
 
 /* === LAYOUT === */
 .me-layout {

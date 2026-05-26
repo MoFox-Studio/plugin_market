@@ -162,7 +162,7 @@ const counters = computed(() => {
     { label: '版本总数', value: s.versions_total ?? 0 },
     { label: '作者数量', value: s.authors_total ?? 0 },
     { label: '评分总数', value: s.ratings_total ?? 0 },
-    { label: '点赞总数', value: s.likes_total ?? 0 },
+    { label: '订阅总数', value: s.likes_total ?? 0 },
     { label: '评论总数', value: s.comments_total ?? 0 },
     { label: '安装记录', value: s.downloads_total ?? 0 },
   ]

@@ -31,6 +31,8 @@ const typeOptions: Array<{ label: string; value: '' | InboxMessageType }> = [
   { label: '回复', value: 'reply' },
   { label: '治理', value: 'governance' },
   { label: '公告', value: 'announcement' },
+  { label: '作者动态', value: 'author_activity' },
+  { label: '插件动态', value: 'plugin_activity' },
   { label: '系统', value: 'system' },
 ]
 
@@ -137,7 +139,7 @@ onMounted(() => {
       />
     </div>
     <div v-else class="inbox-list-empty">
-      <EmptyState title="暂无消息" message="新的提及、回复、治理通知和公告会出现在这里。" />
+      <EmptyState title="暂无消息" message="新的提及、回复、治理通知、作者动态和插件动态会出现在这里。" />
     </div>
 
     <div class="inbox-list-pagination">

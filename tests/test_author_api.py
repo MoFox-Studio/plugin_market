@@ -360,3 +360,80 @@ async def test_author_search_and_comment_mentions_round_trip(client: AsyncClient
     assert created.json()["mentions"][0]["author_id"] == "alpha"
     assert listed.status_code == 200
     assert listed.json()["items"][0]["mentions"][0]["github_login"] == "alpha"
+
+
+async def test_author_follow_toggle_via_browser_session(client: AsyncClient) -> None:
+    """Browser users should be able to follow and unfollow another author."""
+
+    async with session_scope() as session:
+        await MarketService(session).ensure_author(
+            "alpha",
+            github_user_id="id-alpha",
+            github_login="alpha",
+            display_name="Alpha",
+        )
+    session_id = await create_browser_session("mock-author", "browser-test-token")
+    client.cookies.set("plugin_market_session", session_id, path="/")
+
+    initial = await client.get("/api/v1/authors/alpha/follow")
+    followed = await client.post("/api/v1/authors/alpha/follow")
+    current = await client.get("/api/v1/authors/alpha/follow")
+    unfollowed = await client.post("/api/v1/authors/alpha/follow")
+
+    assert initial.status_code == 200
+    assert initial.json()["following"] is False
+    assert initial.json()["followers_count"] == 0
+    assert followed.status_code == 200
+    assert followed.json()["following"] is True
+    assert followed.json()["followers_count"] == 1
+    assert current.status_code == 200
+    assert current.json()["following"] is True
+    assert current.json()["followers_count"] == 1
+    assert unfollowed.status_code == 200
+    assert unfollowed.json()["following"] is False
+    assert unfollowed.json()["followers_count"] == 0
+
+
+async def test_subscription_and_rotated_access_token_machine_api(client: AsyncClient) -> None:
+    """Subscription state should drive machine reads and old tokens must be revoked on rotation."""
+
+    await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
+    session_id = await create_browser_session("mock-author", "browser-test-token")
+    client.cookies.set("plugin_market_session", session_id, path="/")
+
+    subscribed = await client.post("/api/v1/plugins/sample_plugin/subscribe")
+    detail = await client.get("/api/v1/plugins/sample_plugin")
+    first_token = await client.post("/api/v1/me/access-token")
+    token_status = await client.get("/api/v1/me/access-token")
+    second_token = await client.post("/api/v1/me/access-token")
+    second_status = await client.get("/api/v1/me/access-token")
+    old_machine = await client.get(
+        "/api/v1/machine/authors/mock-author/subscriptions",
+        headers={"Authorization": f"Bearer {first_token.json()['token']}"},
+    )
+    new_machine = await client.get(
+        "/api/v1/machine/authors/mock-author/subscriptions",
+        headers={"Authorization": f"Bearer {second_token.json()['token']}"},
+    )
+
+    assert subscribed.status_code == 200
+    assert subscribed.json()["subscribed"] is True
+    assert subscribed.json()["subscriptions_count"] == 1
+    assert detail.status_code == 200
+    assert detail.json()["viewer_has_liked"] is True
+    assert detail.json()["likes_count"] == 1
+    assert first_token.status_code == 200
+    assert first_token.json()["token"].startswith("mfox_")
+    assert token_status.status_code == 200
+    assert token_status.json()["has_token"] is True
+    assert token_status.json()["token_preview"] == first_token.json()["token_preview"]
+    assert second_token.status_code == 200
+    assert second_token.json()["token"] != first_token.json()["token"]
+    assert second_status.status_code == 200
+    assert second_status.json()["token_preview"] == second_token.json()["token_preview"]
+    assert old_machine.status_code == 403
+    assert old_machine.json()["error"]["code"] == "FORBIDDEN"
+    assert new_machine.status_code == 200
+    assert new_machine.json()["author_id"] == "mock-author"
+    assert new_machine.json()["total"] == 1
+    assert new_machine.json()["items"][0]["plugin_id"] == "sample_plugin"

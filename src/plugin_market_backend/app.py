@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 
-from plugin_market_backend.auth import require_author_token
+from plugin_market_backend.auth import require_author_token, require_market_access_token
 from plugin_market_backend.caching import aget_or_set, cache_bus
 from plugin_market_backend.config import get_settings
 from plugin_market_backend.content import PLUGIN_MEDIA_DIR, ensure_plugin_media_dirs
@@ -35,8 +35,11 @@ from plugin_market_backend.schemas import (
     AnnouncementDTO,
     AnnouncementListResponse,
     AnnouncementUpdate,
+    AccessTokenRotateResponse,
+    AccessTokenStatus,
     AuthStatus,
     Author,
+    AuthorFollowState,
     AuthorProfile,
     AuthorProfileUpdate,
     BulkActionRequest,
@@ -53,9 +56,9 @@ from plugin_market_backend.schemas import (
     InstallInfo,
     InboxMessageListResponse,
     InboxUnreadCount,
-    LikeResponse,
     MarketHome,
     MarketStats,
+    MachineSubscriptionListResponse,
     MentionCandidate,
     PinCreate,
     PinUpdate,
@@ -66,6 +69,7 @@ from plugin_market_backend.schemas import (
     PluginListResponse,
     PluginMetadataPatch,
     PluginReadmeResponse,
+    PluginSubscriptionState,
     PluginUpdate,
     PluginVersion,
     PluginVersionCreate,
@@ -499,13 +503,13 @@ async def clear_plugin_rating(plugin_id: str, request: Request, viewer_id: str =
         return await MarketService(session).clear_rating(plugin_id, viewer_id)
 
 
-@app.post("/api/v1/plugins/{plugin_id}/like", response_model=LikeResponse)
-async def toggle_plugin_like(plugin_id: str, request: Request, viewer_id: str = Depends(require_browser_author)) -> LikeResponse:
-    """Toggle the viewer's like on a plugin."""
+@app.post("/api/v1/plugins/{plugin_id}/subscribe", response_model=PluginSubscriptionState)
+async def toggle_plugin_subscription(plugin_id: str, request: Request, viewer_id: str = Depends(require_browser_author)) -> PluginSubscriptionState:
+    """Toggle the viewer's subscription on a plugin."""
 
     ensure_same_origin_browser_write(request)
     async with session_scope() as session:
-        return await MarketService(session).toggle_like(plugin_id, viewer_id)
+        return await MarketService(session).toggle_subscription(plugin_id, viewer_id)
 
 
 @app.get("/api/v1/plugins/{plugin_id}/comments", response_model=CommentListResponse)
@@ -605,6 +609,22 @@ async def get_install_info(
         plugin = await service.get_plugin(plugin_id)
         version = await service.get_recommended_version(plugin_id, host_version=host_version, plugin_api_version=plugin_api_version, platform=platform)
         return InstallInfo(plugin=plugin, version=version)
+
+
+@app.get(
+    "/api/v1/machine/authors/{author_id}/subscriptions",
+    response_model=MachineSubscriptionListResponse,
+)
+async def machine_author_subscriptions(
+    author_id: str,
+    machine_author_id: str = Depends(require_market_access_token),
+) -> MachineSubscriptionListResponse:
+    """Return one author's subscribed plugin list to Neo-MoFox."""
+
+    if machine_author_id != author_id:
+        raise ApiError(403, "TOKEN_AUTHOR_MISMATCH", "Access token does not belong to the requested author.")
+    async with session_scope() as session:
+        return await MarketService(session).machine_subscriptions(author_id)
 
 
 @app.get("/api/v1/categories", response_model=TaxonomyResponse)
@@ -709,6 +729,38 @@ async def update_my_profile(
         )
 
 
+@app.get("/api/v1/me/access-token", response_model=AccessTokenStatus)
+async def my_access_token(author_id: str = Depends(require_browser_author)) -> AccessTokenStatus:
+    """Return metadata for the current browser author's market token."""
+
+    async with session_scope() as session:
+        return await MarketService(session).access_token_status(author_id)
+
+
+@app.post("/api/v1/me/access-token", response_model=AccessTokenRotateResponse)
+async def rotate_my_access_token(
+    request: Request,
+    author_id: str = Depends(require_browser_author),
+) -> AccessTokenRotateResponse:
+    """Create or replace the current browser author's market token."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        return await MarketService(session).rotate_access_token(author_id)
+
+
+@app.delete("/api/v1/me/access-token", response_model=AccessTokenStatus)
+async def revoke_my_access_token(
+    request: Request,
+    author_id: str = Depends(require_browser_author),
+) -> AccessTokenStatus:
+    """Revoke the current browser author's market token."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        return await MarketService(session).revoke_access_token(author_id)
+
+
 @app.post("/api/v1/me/profile/background", response_model=AuthorProfile)
 async def upload_my_background(
     request: Request,
@@ -753,6 +805,27 @@ async def author_profile(author_id: str) -> AuthorProfile:
 
     async with session_scope() as session:
         return await ProfileService(session).get_profile(author_id)
+
+
+@app.get("/api/v1/authors/{author_id}/follow", response_model=AuthorFollowState)
+async def get_author_follow_state(author_id: str, request: Request) -> AuthorFollowState:
+    """Return current viewer follow state for an author."""
+
+    viewer = await current_author_from_request(request)
+    async with session_scope() as session:
+        return await MarketService(session).author_follow_state(
+            author_id,
+            viewer.author_id if viewer else None,
+        )
+
+
+@app.post("/api/v1/authors/{author_id}/follow", response_model=AuthorFollowState)
+async def toggle_author_follow(author_id: str, request: Request, viewer_id: str = Depends(require_browser_author)) -> AuthorFollowState:
+    """Toggle the viewer's follow state for an author."""
+
+    ensure_same_origin_browser_write(request)
+    async with session_scope() as session:
+        return await MarketService(session).toggle_author_follow(author_id, viewer_id)
 
 
 @app.get("/api/v1/authors/{author_id}/pins", response_model=list[PinnedPluginItem])

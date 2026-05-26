@@ -29,7 +29,7 @@ const tableColumns = [
   { key: 'status', label: '状态', sortable: true, cell: (row: Record<string, unknown>) => statusText(String(row.status || '')) },
   { key: 'trust_level', label: 'Trust', sortable: true, cell: (row: Record<string, unknown>) => trustLevelLabel(String(row.trust_level || '')) },
   { key: 'latest_version', label: '最新版本', sortable: true, cell: (row: Record<string, unknown>) => String(row.latest_version || '-') },
-  { key: 'likes_count', label: '点赞', sortable: true, align: 'right' as const, cell: (row: Record<string, unknown>) => formatNumber(Number(row.likes_count || 0)) },
+  { key: 'likes_count', label: '订阅', sortable: true, align: 'right' as const, cell: (row: Record<string, unknown>) => formatNumber(Number(row.likes_count || 0)) },
   { key: 'downloads_count', label: '下载', sortable: true, align: 'right' as const, cell: (row: Record<string, unknown>) => formatNumber(Number(row.downloads_count || 0)) },
   { key: 'comments_count', label: '评论', sortable: true, align: 'right' as const, cell: (row: Record<string, unknown>) => formatNumber(Number(row.comments_count || 0)) },
   { key: 'updated_at', label: '最近治理时间', sortable: true, cell: (row: Record<string, unknown>) => formatRelative(String(row.updated_at || '')) },
@@ -302,7 +302,7 @@ onMounted(() => {
             <li><span>最新版本</span><strong>{{ selectedPlugin.latest_version || '-' }}</strong></li>
             <li><span>分类</span><strong>{{ (selectedPlugin.categories || []).map(categoryLabel).join(' / ') || '未设置' }}</strong></li>
             <li><span>标签</span><strong>{{ (selectedPlugin.tags || []).join(' / ') || '未设置' }}</strong></li>
-            <li><span>热度</span><strong>{{ formatNumber(selectedPlugin.likes_count) }} ❤ · {{ formatNumber(selectedPlugin.downloads_count) }} 下载</strong></li>
+            <li><span>热度</span><strong>{{ formatNumber(selectedPlugin.likes_count) }} 订阅 · {{ formatNumber(selectedPlugin.downloads_count) }} 下载</strong></li>
             <li><span>最近治理</span><strong>{{ formatRelative(selectedPlugin.updated_at) }}</strong></li>
           </ul>
         </div>

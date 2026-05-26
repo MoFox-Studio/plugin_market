@@ -8,6 +8,9 @@ import type {
   AnnouncementDismissResponse,
   AnnouncementListResponse,
   AnnouncementUpdate,
+  AccessTokenRotateResponse,
+  AccessTokenStatus,
+  AuthorFollowState,
   AuthorProfile,
   AuthorProfileUpdate,
   BulkActionRequest,
@@ -24,6 +27,7 @@ import type {
   PinnedPlugin,
   PinUpdate,
   Plugin,
+  PluginSubscriptionState,
   PluginMetadataPatch,
 } from '@/types'
 
@@ -178,11 +182,34 @@ export const api = {
         return upload<Plugin>(`/api/v1/me/plugins/${encodeURIComponent(pluginId)}/icon`, file)
       },
     },
+    accessToken: {
+      get(): Promise<AccessTokenStatus> {
+        return get<AccessTokenStatus>('/api/v1/me/access-token')
+      },
+      rotate(): Promise<AccessTokenRotateResponse> {
+        return post<AccessTokenRotateResponse>('/api/v1/me/access-token')
+      },
+      revoke(): Promise<AccessTokenStatus> {
+        return del<AccessTokenStatus>('/api/v1/me/access-token')
+      },
+    },
   },
 
   authors: {
     search(prefix: string, limit = 8): Promise<MentionCandidate[]> {
       return get<MentionCandidate[]>(withQuery('/api/v1/authors/search', { prefix, limit }))
+    },
+    followState(authorId: string): Promise<AuthorFollowState> {
+      return get<AuthorFollowState>(`/api/v1/authors/${encodeURIComponent(authorId)}/follow`)
+    },
+    toggleFollow(authorId: string): Promise<AuthorFollowState> {
+      return post<AuthorFollowState>(`/api/v1/authors/${encodeURIComponent(authorId)}/follow`)
+    },
+  },
+
+  plugins: {
+    toggleSubscription(pluginId: string): Promise<PluginSubscriptionState> {
+      return post<PluginSubscriptionState>(`/api/v1/plugins/${encodeURIComponent(pluginId)}/subscribe`)
     },
   },
 

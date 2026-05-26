@@ -12,12 +12,13 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from plugin_market_backend.config import get_settings
 
 
-HEAD_REVISION = "0004_overhaul_phase1"
+HEAD_REVISION = "0005_subscriptions_and_tokens"
 REVISION_ORDER = {
     "0001_initial": 1,
     "0002_github_sessions": 2,
     "0003_community": 3,
-    HEAD_REVISION: 4,
+    "0004_overhaul_phase1": 4,
+    HEAD_REVISION: 5,
 }
 
 
@@ -65,6 +66,15 @@ def _physical_revision(sync_conn) -> str | None:
     }
     existing_overhaul_tables = overhaul_tables.intersection(tables)
     if existing_overhaul_tables:
+        revision = "0004_overhaul_phase1"
+
+    subscriptions_tables = {
+        "author_follows",
+        "plugin_subscriptions",
+        "author_access_tokens",
+    }
+    existing_subscriptions_tables = subscriptions_tables.intersection(tables)
+    if existing_subscriptions_tables:
         revision = HEAD_REVISION
 
     return revision

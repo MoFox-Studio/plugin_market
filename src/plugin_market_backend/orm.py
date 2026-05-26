@@ -155,6 +155,52 @@ class PluginLikeORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class AuthorFollowORM(Base):
+    """Follow relationship between a viewer and a plugin author."""
+
+    __tablename__ = "author_follows"
+    __table_args__ = (
+        UniqueConstraint("follower_id", "author_id", name="uq_author_follow"),
+        Index("idx_author_follows_author_created", "author_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    follower_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), index=True)
+    author_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class PluginSubscriptionORM(Base):
+    """Subscription relationship between an author and a plugin."""
+
+    __tablename__ = "plugin_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("plugin_id", "author_id", name="uq_plugin_subscription"),
+        Index("idx_plugin_subscriptions_plugin_created", "plugin_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugins.plugin_id"), index=True)
+    author_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class AuthorAccessTokenORM(Base):
+    """Single active machine token owned by a market author."""
+
+    __tablename__ = "author_access_tokens"
+
+    author_id: Mapped[str] = mapped_column(
+        ForeignKey("authors.author_id"),
+        primary_key=True,
+    )
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True)
+    token_preview: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class PluginRatingORM(Base):
     """User rating (1-5) for a plugin."""
 

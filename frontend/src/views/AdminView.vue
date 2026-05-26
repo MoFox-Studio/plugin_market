@@ -96,7 +96,7 @@ onMounted(loadAll)
       <article class="dash-metric">
         <span class="kicker-mini">REACH</span>
         <strong>{{ formatNumber(dashboard.stats.likes_total) }} / {{ formatNumber(dashboard.stats.downloads_total) }}</strong>
-        <small>点赞 / 下载</small>
+        <small>订阅 / 下载</small>
       </article>
       <article class="dash-metric">
         <span class="kicker-mini">ECOSYSTEM</span>

@@ -1,17 +1,23 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import api from '@/api'
+import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 import { formatNumber, formatRelative } from '@/utils/format'
-import type { AuthorProfile, PinnedPlugin, Plugin } from '@/types'
+import type { AuthorFollowState, AuthorProfile, PinnedPlugin, Plugin } from '@/types'
 import PluginCard from '@/components/PluginCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
+const auth = useAuthStore()
+const toast = useToastStore()
 
 const plugins = ref<Plugin[]>([])
 const author = ref<Plugin | null>(null)
 const profile = ref<AuthorProfile | null>(null)
 const pins = ref<PinnedPlugin[]>([])
+const followState = ref<AuthorFollowState | null>(null)
+const followPending = ref(false)
 const loading = ref(true)
 
 const heroStyle = computed(() => {
@@ -35,6 +41,7 @@ const totals = computed(() => {
 })
 
 const pinnedPlugins = computed(() => pins.value.filter((item) => item.plugin))
+const isOwnPage = computed(() => auth.viewer?.author_id === props.id)
 
 const displayName = computed(() =>
   author.value?.owner_display_name ||
@@ -44,13 +51,14 @@ const displayName = computed(() =>
 )
 const githubLogin = computed(() => author.value?.owner_login || props.id)
 
-onMounted(async () => {
+async function loadPage() {
   loading.value = true
   try {
-    const [result, profileResult, pinResult] = await Promise.all([
+    const [result, profileResult, pinResult, followResult] = await Promise.all([
       api.get('/api/v1/plugins?limit=100&sort=popular'),
       api.get(`/api/v1/authors/${encodeURIComponent(props.id)}/profile`).catch(() => null),
       api.get(`/api/v1/authors/${encodeURIComponent(props.id)}/pins`).catch(() => []),
+      api.authors.followState(props.id).catch(() => null),
     ])
     const items = (result.items || []).filter(
       (p: Plugin) => p.owner_id === props.id || (p.maintainers || []).includes(props.id)
@@ -59,12 +67,32 @@ onMounted(async () => {
     author.value = items.find((p: Plugin) => p.owner_id === props.id) || items[0] || null
     profile.value = profileResult
     pins.value = pinResult
+    followState.value = followResult
   } catch {
     plugins.value = []
   } finally {
     loading.value = false
   }
-})
+}
+
+async function toggleFollow() {
+  if (!auth.isAuthenticated) {
+    toast.show('请先登录', '')
+    setTimeout(() => { location.href = auth.getLoginUrl(`/author/${encodeURIComponent(props.id)}`) }, 600)
+    return
+  }
+  followPending.value = true
+  try {
+    followState.value = await api.authors.toggleFollow(props.id)
+    toast.show(followState.value.following ? '已关注作者' : '已取消关注', 'ok')
+  } catch (e) {
+    toast.show((e as Error).message || '操作失败', 'error')
+  } finally {
+    followPending.value = false
+  }
+}
+
+onMounted(loadPage)
 </script>
 
 <template>
@@ -87,9 +115,16 @@ onMounted(async () => {
             <p class="author-hero-bio" v-if="profile?.bio">{{ profile.bio }}</p>
             <p class="author-hero-bio is-empty" v-else>这位作者还没有填写公开 Bio，先看看 ta 公开发布的作品吧。</p>
 
+            <div class="author-hero-actions" v-if="!isOwnPage">
+              <button type="button" class="btn btn-sm" :disabled="followPending" @click="toggleFollow">
+                {{ followState?.following ? '已关注' : '关注作者' }}
+              </button>
+              <span class="author-followers">{{ formatNumber(followState?.followers_count || 0) }} 位关注者</span>
+            </div>
+
             <div class="author-hero-stats">
               <div><b>{{ formatNumber(totals.plugins) }}</b><span>插件</span></div>
-              <div><b>{{ formatNumber(totals.likes) }}</b><span>❤ 收到</span></div>
+              <div><b>{{ formatNumber(totals.likes) }}</b><span>累计订阅</span></div>
               <div><b>{{ formatNumber(totals.downloads) }}</b><span>累计下载</span></div>
             </div>
           </div>
@@ -214,6 +249,20 @@ onMounted(async () => {
   color: rgba(255,255,255,0.94);
 }
 .author-hero-bio.is-empty { color: rgba(255,255,255,0.7); font-style: italic; }
+
+.author-hero-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 var(--space-4);
+  flex-wrap: wrap;
+}
+
+.author-followers {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: rgba(255,255,255,0.84);
+}
 
 .author-hero-stats {
   display: flex; gap: var(--space-6);

@@ -7,7 +7,7 @@ export type DisplayMode = 'banner' | 'modal'
 export type Severity = 'info' | 'warning' | 'critical'
 export type SlotType = 'featured_plugin' | 'featured_author' | 'signature_plugin' | 'hero' | 'sidebar'
 export type TargetType = 'plugin' | 'author'
-export type InboxMessageType = 'mention' | 'reply' | 'governance' | 'announcement' | 'system'
+export type InboxMessageType = 'mention' | 'reply' | 'governance' | 'announcement' | 'author_activity' | 'plugin_activity' | 'system'
 export type InboxMessageStatus = 'unread' | 'read' | 'revoked'
 export type InboxLinkKind = 'comment' | 'plugin' | 'announcement' | 'system'
 export type BulkAction = 'publish' | 'reject' | 'block' | 'deprecate' | 'set_trust_level' | 'delete'
@@ -41,6 +41,29 @@ export interface AuthorProfileUpdate {
   background_image_url?: string | null
 }
 
+export interface AuthorFollowState {
+  author_id: string
+  following: boolean
+  followers_count: number
+}
+
+export interface AccessTokenStatus {
+  author_id: string
+  has_token: boolean
+  token_preview?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+  last_used_at?: string | null
+}
+
+export interface AccessTokenRotateResponse {
+  author_id: string
+  token: string
+  token_preview: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Plugin {
   plugin_id: string
   display_name: string
@@ -69,6 +92,12 @@ export interface Plugin {
   viewer_has_liked?: boolean
   updated_at: string
   created_at?: string
+}
+
+export interface PluginSubscriptionState {
+  plugin_id: string
+  subscribed: boolean
+  subscriptions_count: number
 }
 
 export interface PluginVersion {

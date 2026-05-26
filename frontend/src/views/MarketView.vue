@@ -180,7 +180,7 @@ onMounted(async () => {
             <option value="popular">综合热度</option>
             <option value="rating">评分优先</option>
             <option value="downloads">下载最多</option>
-            <option value="likes">点赞最多</option>
+            <option value="likes">订阅最多</option>
             <option value="trending">趋势上升</option>
           </select>
           <div class="chip-group">

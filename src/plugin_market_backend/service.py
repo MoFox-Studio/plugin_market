@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime, timedelta
 import re
+import secrets
+import hashlib
 from typing import Any
 
 from packaging.version import InvalidVersion, Version
@@ -17,16 +19,20 @@ from plugin_market_backend.config import get_settings
 from plugin_market_backend.content import delete_plugin_icon, normalize_readme_markdown, render_readme_html, store_plugin_icon
 from plugin_market_backend.enums import AuthorType, PluginStatus, ReviewAction, SyncStatus, TrustLevel, VersionStatus
 from plugin_market_backend.errors import ApiError
-from plugin_market_backend.orm import AuthorORM, AuthorProfileORM, CommentMentionORM, CurationEntryORM, PluginCommentORM, PluginLikeORM, PluginMaintainerORM, PluginORM, PluginRatingORM, PluginVersionORM, ReviewRecordORM, WebhookEventORM, utc_now
+from plugin_market_backend.orm import AuthorAccessTokenORM, AuthorFollowORM, AuthorORM, AuthorProfileORM, CommentMentionORM, CurationEntryORM, PluginCommentORM, PluginLikeORM, PluginMaintainerORM, PluginORM, PluginRatingORM, PluginSubscriptionORM, PluginVersionORM, ReviewRecordORM, WebhookEventORM, utc_now
 from plugin_market_backend.schemas import (
+    AccessTokenRotateResponse,
+    AccessTokenStatus,
     ActivityPoint,
     AdminDashboard,
     Author,
+    AuthorFollowState,
     Comment,
     CommentAuthor,
     CurationEntryDTO,
-    LikeResponse,
     MarketStats,
+    MachineSubscriptionItem,
+    MachineSubscriptionListResponse,
     MentionCandidate,
     Plugin,
     PluginCreate,
@@ -35,6 +41,7 @@ from plugin_market_backend.schemas import (
     PluginGovernanceSnapshot,
     PluginReadmeResponse,
     PluginStatusResponse,
+    PluginSubscriptionState,
     PluginUpdate,
     PluginVersion,
     PluginVersionCreate,
@@ -65,6 +72,12 @@ def _version_key(value: str) -> tuple[int, Version | str]:
         return (1, Version(value))
     except InvalidVersion:
         return (0, value)
+
+
+def _hash_access_token(token: str) -> str:
+    """Hash a market access token for storage."""
+
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 _PLUGIN_DEPENDENCY_PATTERN = re.compile(
@@ -537,6 +550,13 @@ class MarketService:
         plugin.updated_at = now
         await self._record("version", f"{plugin_id}@{payload.version}", ReviewAction.SUBMIT_VERSION, None, version.status, operator_id)
         await self.session.flush()
+        await self._fan_out_plugin_event(
+            plugin,
+            event="version_published",
+            preview=f"{plugin.display_name} published {payload.version}",
+            source_author_id=plugin.owner_id,
+            version=payload.version,
+        )
         return self._version_schema(version)
 
     def _is_public_version(self, version: PluginVersionORM) -> bool:
@@ -675,6 +695,7 @@ class MarketService:
 
         plugin = await self._get_plugin_orm(plugin_id)
         await self.session.execute(delete(PluginLikeORM).where(PluginLikeORM.plugin_id == plugin_id))
+        await self.session.execute(delete(PluginSubscriptionORM).where(PluginSubscriptionORM.plugin_id == plugin_id))
         await self.session.execute(delete(PluginRatingORM).where(PluginRatingORM.plugin_id == plugin_id))
         await self.session.execute(delete(PluginCommentORM).where(PluginCommentORM.plugin_id == plugin_id))
         await self.session.execute(
@@ -701,6 +722,12 @@ class MarketService:
 
             await InboxService(self.session).fan_out_for_governance(plugin, action.value, operator_id, reason)
         await self.session.flush()
+        await self._fan_out_plugin_event(
+            plugin,
+            event=f"plugin_{status.value}",
+            preview=f"{plugin.display_name} status changed to {status.value}",
+            source_author_id=plugin.owner_id,
+        )
         return await self.get_plugin(plugin_id)
 
     async def set_plugin_trust_level(
@@ -749,6 +776,14 @@ class MarketService:
             plugin = await self._get_plugin_orm(plugin_id)
             await InboxService(self.session).fan_out_for_governance(plugin, action.value, operator_id, reason)
         await self.session.flush()
+        plugin = await self._get_plugin_orm(plugin_id)
+        await self._fan_out_plugin_event(
+            plugin,
+            event=f"version_{status.value}",
+            preview=f"{plugin.display_name} version {version} status changed to {status.value}",
+            source_author_id=plugin.owner_id,
+            version=version,
+        )
         return self._version_schema(record)
 
     async def list_reviews(self) -> list[ReviewRecord]:
@@ -766,7 +801,7 @@ class MarketService:
             select(func.count()).select_from(PluginCommentORM).where(PluginCommentORM.is_deleted.is_(False))
         )
         ratings_total = await self.session.scalar(select(func.count()).select_from(PluginRatingORM))
-        likes_total = await self.session.scalar(select(func.count()).select_from(PluginLikeORM))
+        likes_total = await self.session.scalar(select(func.count()).select_from(PluginSubscriptionORM))
         downloads_total = await self.session.scalar(select(func.coalesce(func.sum(PluginVersionORM.download_count), 0)))
         pending_plugins = await self.session.scalar(select(func.count()).select_from(PluginORM).where(PluginORM.status == PluginStatus.PENDING_REVIEW))
         pending_versions = await self.session.scalar(select(func.count()).select_from(PluginVersionORM).where(PluginVersionORM.status == VersionStatus.PENDING_REVIEW))
@@ -969,14 +1004,61 @@ class MarketService:
         html = render_readme_html(plugin.readme_markdown)
         return PluginReadmeResponse(plugin_id=plugin.plugin_id, exists=html is not None, html=html)
 
+    async def _fan_out_plugin_event(
+        self,
+        plugin: PluginORM,
+        *,
+        event: str,
+        preview: str,
+        source_author_id: str,
+        version: str | None = None,
+    ) -> None:
+        """Fan out plugin and author activity events to subscribers / followers."""
+
+        from plugin_market_backend.services.inbox_service import InboxService
+
+        inbox_service = InboxService(self.session)
+        payload = {
+            "event": event,
+            "plugin_id": plugin.plugin_id,
+            "plugin_display_name": plugin.display_name,
+            "version": version,
+            "preview": preview,
+        }
+        if plugin.owner_id:
+            await inbox_service.fan_out_for_author_activity(
+                author_id=plugin.owner_id,
+                source_author_id=source_author_id,
+                dedup_key=f"author-activity:{event}:{plugin.plugin_id}:{version or 'none'}",
+                payload=payload,
+                related_plugin_id=plugin.plugin_id,
+            )
+        await inbox_service.fan_out_for_plugin_activity(
+            plugin_id=plugin.plugin_id,
+            source_author_id=source_author_id,
+            dedup_key=f"plugin-activity:{event}:{plugin.plugin_id}:{version or 'none'}",
+            payload=payload,
+        )
+
+    def _latest_public_version(self, plugin: PluginORM) -> PluginVersionORM | None:
+        """Return the latest published non-yanked version for a plugin."""
+
+        published = [
+            item
+            for item in (plugin.versions or [])
+            if item.status == VersionStatus.PUBLISHED and not item.is_yanked
+        ]
+        if not published:
+            return None
+        return max(published, key=lambda item: (_version_key(item.version), item.published_at))
+
     def _plugin_schema(self, plugin: PluginORM, stats: dict[str, Any] | None = None) -> Plugin:
         """Convert a plugin ORM object to API schema."""
 
         stats = stats or {}
         owner = plugin.owner if getattr(plugin, "owner", None) is not None else None
         versions = list(plugin.versions or [])
-        published = [item for item in versions if item.status == VersionStatus.PUBLISHED and not item.is_yanked]
-        latest = max(published, key=lambda item: item.published_at) if published else None
+        latest = self._latest_public_version(plugin)
         downloads_count = stats.get("downloads_count", sum(int(item.download_count or 0) for item in versions))
         return Plugin(
             plugin_id=plugin.plugin_id,
@@ -1155,9 +1237,9 @@ class MarketService:
             for plugin_id in plugin_ids
         }
         likes_rows = await self.session.execute(
-            select(PluginLikeORM.plugin_id, func.count(PluginLikeORM.id))
-            .where(PluginLikeORM.plugin_id.in_(plugin_ids))
-            .group_by(PluginLikeORM.plugin_id)
+            select(PluginSubscriptionORM.plugin_id, func.count(PluginSubscriptionORM.id))
+            .where(PluginSubscriptionORM.plugin_id.in_(plugin_ids))
+            .group_by(PluginSubscriptionORM.plugin_id)
         )
         for plugin_id, count in likes_rows.all():
             stats[plugin_id]["likes_count"] = int(count or 0)
@@ -1189,8 +1271,8 @@ class MarketService:
             stats[plugin_id]["downloads_count"] = int(total or 0)
         if viewer_id:
             viewer_likes = await self.session.execute(
-                select(PluginLikeORM.plugin_id)
-                .where(PluginLikeORM.plugin_id.in_(plugin_ids), PluginLikeORM.author_id == viewer_id)
+                select(PluginSubscriptionORM.plugin_id)
+                .where(PluginSubscriptionORM.plugin_id.in_(plugin_ids), PluginSubscriptionORM.author_id == viewer_id)
             )
             for (plugin_id,) in viewer_likes.all():
                 stats[plugin_id]["viewer_has_liked"] = True
@@ -1235,28 +1317,186 @@ class MarketService:
         reverse = sort != "name"
         return sorted(rows, key=score, reverse=reverse)
 
-    async def toggle_like(self, plugin_id: str, viewer_id: str) -> LikeResponse:
-        """Toggle a like for the given user and return current state."""
+    async def toggle_subscription(self, plugin_id: str, viewer_id: str) -> PluginSubscriptionState:
+        """Toggle a subscription for the given user and return current state."""
 
         plugin = await self._get_plugin_orm(plugin_id)
         await self.ensure_author(viewer_id)
         existing = await self.session.scalar(
-            select(PluginLikeORM).where(
-                PluginLikeORM.plugin_id == plugin_id,
-                PluginLikeORM.author_id == viewer_id,
+            select(PluginSubscriptionORM).where(
+                PluginSubscriptionORM.plugin_id == plugin_id,
+                PluginSubscriptionORM.author_id == viewer_id,
             )
         )
         if existing is None:
-            self.session.add(PluginLikeORM(plugin_id=plugin_id, author_id=viewer_id))
-            liked = True
+            self.session.add(PluginSubscriptionORM(plugin_id=plugin_id, author_id=viewer_id))
+            subscribed = True
         else:
             await self.session.delete(existing)
-            liked = False
+            subscribed = False
         await self.session.flush()
         total = await self.session.scalar(
-            select(func.count()).select_from(PluginLikeORM).where(PluginLikeORM.plugin_id == plugin_id)
+            select(func.count()).select_from(PluginSubscriptionORM).where(PluginSubscriptionORM.plugin_id == plugin_id)
         )
-        return LikeResponse(plugin_id=plugin.plugin_id, liked=liked, likes_count=int(total or 0))
+        return PluginSubscriptionState(
+            plugin_id=plugin.plugin_id,
+            subscribed=subscribed,
+            subscriptions_count=int(total or 0),
+        )
+
+    async def author_follow_state(
+        self,
+        author_id: str,
+        viewer_id: str | None,
+    ) -> AuthorFollowState:
+        """Return the current follow state for one author."""
+
+        author = await self.session.get(AuthorORM, author_id)
+        if author is None:
+            raise ApiError(404, "AUTHOR_NOT_FOUND", "Author was not found.", {"author_id": author_id})
+        followers_count = await self.session.scalar(
+            select(func.count()).select_from(AuthorFollowORM).where(AuthorFollowORM.author_id == author_id)
+        )
+        following = False
+        if viewer_id:
+            following = (
+                await self.session.scalar(
+                    select(AuthorFollowORM.id).where(
+                        AuthorFollowORM.follower_id == viewer_id,
+                        AuthorFollowORM.author_id == author_id,
+                    )
+                )
+            ) is not None
+        return AuthorFollowState(
+            author_id=author_id,
+            following=following,
+            followers_count=int(followers_count or 0),
+        )
+
+    async def toggle_author_follow(
+        self,
+        author_id: str,
+        viewer_id: str,
+    ) -> AuthorFollowState:
+        """Toggle a follow relationship between viewer and author."""
+
+        if author_id == viewer_id:
+            raise ApiError(400, "CANNOT_FOLLOW_SELF", "You cannot follow yourself.")
+        await self.ensure_author(viewer_id)
+        author = await self.session.get(AuthorORM, author_id)
+        if author is None:
+            raise ApiError(404, "AUTHOR_NOT_FOUND", "Author was not found.", {"author_id": author_id})
+        existing = await self.session.scalar(
+            select(AuthorFollowORM).where(
+                AuthorFollowORM.follower_id == viewer_id,
+                AuthorFollowORM.author_id == author_id,
+            )
+        )
+        if existing is None:
+            self.session.add(AuthorFollowORM(follower_id=viewer_id, author_id=author_id))
+        else:
+            await self.session.delete(existing)
+        await self.session.flush()
+        return await self.author_follow_state(author_id, viewer_id)
+
+    async def access_token_status(self, author_id: str) -> AccessTokenStatus:
+        """Return metadata for the author's current market token."""
+
+        record = await self.session.get(AuthorAccessTokenORM, author_id)
+        if record is None:
+            return AccessTokenStatus(author_id=author_id, has_token=False)
+        return AccessTokenStatus(
+            author_id=author_id,
+            has_token=True,
+            token_preview=record.token_preview,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+            last_used_at=record.last_used_at,
+        )
+
+    async def rotate_access_token(self, author_id: str) -> AccessTokenRotateResponse:
+        """Create or replace the author's single active market token."""
+
+        await self.ensure_author(author_id)
+        plain_token = f"mfox_{secrets.token_urlsafe(32)}"
+        token_hash = _hash_access_token(plain_token)
+        token_preview = f"{plain_token[:8]}...{plain_token[-4:]}"
+        now = utc_now()
+        record = await self.session.get(AuthorAccessTokenORM, author_id)
+        if record is None:
+            record = AuthorAccessTokenORM(
+                author_id=author_id,
+                token_hash=token_hash,
+                token_preview=token_preview,
+                created_at=now,
+                updated_at=now,
+                last_used_at=None,
+            )
+            self.session.add(record)
+        else:
+            record.token_hash = token_hash
+            record.token_preview = token_preview
+            record.created_at = now
+            record.updated_at = now
+            record.last_used_at = None
+        await self.session.flush()
+        return AccessTokenRotateResponse(
+            author_id=author_id,
+            token=plain_token,
+            token_preview=token_preview,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    async def revoke_access_token(self, author_id: str) -> AccessTokenStatus:
+        """Delete the author's current market token."""
+
+        record = await self.session.get(AuthorAccessTokenORM, author_id)
+        if record is not None:
+            await self.session.delete(record)
+            await self.session.flush()
+        return AccessTokenStatus(author_id=author_id, has_token=False)
+
+    async def machine_subscriptions(
+        self,
+        author_id: str,
+    ) -> MachineSubscriptionListResponse:
+        """Return published plugin subscriptions for one machine author."""
+
+        stmt = (
+            select(PluginORM)
+            .options(
+                selectinload(PluginORM.versions),
+                selectinload(PluginORM.owner),
+                selectinload(PluginORM.maintainers),
+            )
+            .join(
+                PluginSubscriptionORM,
+                PluginSubscriptionORM.plugin_id == PluginORM.plugin_id,
+            )
+            .where(
+                PluginSubscriptionORM.author_id == author_id,
+                PluginORM.status == PluginStatus.PUBLISHED,
+            )
+            .order_by(PluginORM.updated_at.desc())
+        )
+        plugins = list((await self.session.scalars(stmt)).all())
+        items: list[MachineSubscriptionItem] = []
+        for plugin in plugins:
+            latest = self._latest_public_version(plugin)
+            items.append(
+                MachineSubscriptionItem(
+                    plugin_id=plugin.plugin_id,
+                    display_name=plugin.display_name,
+                    latest_version=latest.version if latest is not None else None,
+                    updated_at=plugin.updated_at,
+                )
+            )
+        return MachineSubscriptionListResponse(
+            author_id=author_id,
+            items=items,
+            total=len(items),
+        )
 
     async def rate_plugin(self, plugin_id: str, viewer_id: str, score: int) -> RatingSummary:
         """Upsert the viewer's rating and return aggregate stats."""

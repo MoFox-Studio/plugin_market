@@ -151,15 +151,15 @@ async function handleInstall() {
   }
 }
 
-async function handleLike() {
+async function handleSubscribe() {
   if (!auth.isAuthenticated) {
     toast.show('请先登录', '')
     setTimeout(() => { location.href = auth.getLoginUrl() }, 600)
     return
   }
   try {
-    const r = await api.post(`/api/v1/plugins/${encodeURIComponent(pluginId.value)}/like`)
-    toast.show(r.liked ? '已点赞' : '已取消点赞', 'ok')
+    const r = await api.plugins.toggleSubscription(pluginId.value)
+    toast.show(r.subscribed ? '已订阅' : '已取消订阅', 'ok')
     await loadData()
   } catch (e) {
     toast.show((e as Error).message || '操作失败', 'error')
@@ -483,7 +483,7 @@ onMounted(loadData)
             </div>
             <div class="install-stat-card">
               <b>{{ formatNumber(plugin.likes_count) }}</b>
-              <span>收到点赞</span>
+              <span>订阅人数</span>
             </div>
             <div class="install-stat-card">
               <b>{{ plugin.rating_avg.toFixed(2) }}</b>
@@ -493,7 +493,7 @@ onMounted(loadData)
 
           <div class="install-actions">
             <button type="button" class="btn btn-primary" :disabled="!plugin.latest_version" @click="handleInstall">下载插件</button>
-            <button type="button" class="btn" @click="handleLike">{{ plugin.viewer_has_liked ? '❤ 已赞' : '♡ 点赞' }}</button>
+            <button type="button" class="btn" @click="handleSubscribe">{{ plugin.viewer_has_liked ? '已订阅' : '订阅更新' }}</button>
           </div>
 
           <code v-if="plugin.latest_version" class="install-code">mofox plugin install {{ plugin.plugin_id }}@{{ plugin.latest_version }}</code>
