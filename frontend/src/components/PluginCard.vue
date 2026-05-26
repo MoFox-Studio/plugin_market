@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { formatNumber, formatRelative, categoryLabel, starPercent } from '@/utils/format'
+import { useSubscriptionStore } from '@/stores/subscriptions'
 import type { Plugin } from '@/types'
 
 const props = defineProps<{
@@ -8,6 +9,13 @@ const props = defineProps<{
   /** featured = 显示一条蓝色 FEATURED 飘带（用于 admin 推荐位） */
   featured?: boolean
 }>()
+
+const subStore = useSubscriptionStore()
+
+const isLiked = computed(() => {
+  const override = subStore.get(props.plugin.plugin_id)
+  return override !== undefined ? override : props.plugin.viewer_has_liked
+})
 
 const tags = computed(() => [
   ...(props.plugin.categories || []).slice(0, 2).map((c: string) => ({ label: categoryLabel(c), raw: c, isCat: true })),
@@ -79,7 +87,7 @@ const palette = computed(() => {
           </span>
           <span>{{ plugin.rating_avg.toFixed(1) }}</span>
         </span>
-        <span :class="['stat-item', { liked: plugin.viewer_has_liked }]">
+        <span :class="['stat-item', { liked: isLiked }]">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
           <span>{{ formatNumber(plugin.likes_count) }}</span>
         </span>

@@ -9,9 +9,12 @@ import type { AccessTokenStatus, MyFollowItem, MyFollowListResponse, MySubscript
 import TrustBadge from '@/components/TrustBadge.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
+import { useSubscriptionStore } from '@/stores/subscriptions'
+
 const auth = useAuthStore()
 const toast = useToastStore()
 const taxonomy = useTaxonomyStore()
+const subStore = useSubscriptionStore()
 
 const plugins = ref<Plugin[]>([])
 const selectedId = ref<string | null>(null)
@@ -200,7 +203,8 @@ async function loadFollows() {
 async function unsubscribe(pluginId: string) {
   subscriptionsBusy.value = true
   try {
-    await api.plugins.toggleSubscription(pluginId)
+    const result = await api.plugins.toggleSubscription(pluginId)
+    subStore.set(pluginId, result.subscribed)
     subscriptions.value = subscriptions.value.filter(item => item.plugin_id !== pluginId)
     toast.show('已取消订阅', 'ok')
   } catch (e) {

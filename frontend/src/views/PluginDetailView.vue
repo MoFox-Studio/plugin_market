@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useSubscriptionStore } from '@/stores/subscriptions'
 import { useToastStore } from '@/stores/toast'
 import { formatNumber, formatRelative, formatDate, formatBytes, categoryLabel, starPercent } from '@/utils/format'
 import type { Plugin, RatingInfo, PluginVersion, Dependency, Comment } from '@/types'
@@ -14,6 +15,7 @@ import { parseMentionsRoundTrip } from '@/utils/mentions'
 
 const route = useRoute()
 const auth = useAuthStore()
+const subStore = useSubscriptionStore()
 const toast = useToastStore()
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -159,6 +161,7 @@ async function handleSubscribe() {
   }
   try {
     const r = await api.plugins.toggleSubscription(pluginId.value)
+    subStore.set(pluginId.value, r.subscribed)
     toast.show(r.subscribed ? '已订阅' : '已取消订阅', 'ok')
     await loadData()
   } catch (e) {
