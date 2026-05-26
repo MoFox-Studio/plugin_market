@@ -11,7 +11,7 @@
       <div class="footer-links">
         <a href="https://github.com/MoFox-Studio" target="_blank" rel="noreferrer noopener">GitHub</a>
         <router-link to="/admin">管理后台</router-link>
-        <a href="/health" target="_blank" rel="noreferrer noopener">服务状态</a>
+        <router-link to="/status">服务状态</router-link>
       </div>
     </div>
   </footer>
