@@ -701,6 +701,9 @@ class MarketService:
         await self.session.execute(delete(PluginLikeORM).where(PluginLikeORM.plugin_id == plugin_id))
         await self.session.execute(delete(PluginSubscriptionORM).where(PluginSubscriptionORM.plugin_id == plugin_id))
         await self.session.execute(delete(PluginRatingORM).where(PluginRatingORM.plugin_id == plugin_id))
+        comment_ids = (await self.session.execute(select(PluginCommentORM.id).where(PluginCommentORM.plugin_id == plugin_id))).scalars().all()
+        if comment_ids:
+            await self.session.execute(delete(CommentMentionORM).where(CommentMentionORM.comment_id.in_(comment_ids)))
         await self.session.execute(delete(PluginCommentORM).where(PluginCommentORM.plugin_id == plugin_id))
         await self.session.execute(
             delete(ReviewRecordORM).where(
