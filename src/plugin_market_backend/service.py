@@ -145,14 +145,14 @@ class MarketService:
             verified_at=utc_now(),
             is_admin=is_admin,
         )
-        self.session.add(record)
         try:
-            await self.session.flush()
+            async with self.session.begin_nested():
+                self.session.add(record)
+                await self.session.flush()
         except IntegrityError:
-            await self.session.rollback()
+            # Savepoint was rolled back; author already exists with different id
             stmt = select(AuthorORM).where(AuthorORM.github_login == login)
-            record = (await self.session.execute(stmt)).scalar_one()
-            return record
+            return (await self.session.execute(stmt)).scalar_one()
         return record
 
     async def search_authors(self, prefix: str, *, limit: int = 8) -> list[MentionCandidate]:
