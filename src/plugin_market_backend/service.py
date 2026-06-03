@@ -193,7 +193,7 @@ class MarketService:
     async def register_plugin(self, payload: PluginCreate, owner_id: str) -> Plugin:
         """Register a plugin and publish it immediately."""
 
-        await self.ensure_author(owner_id)
+        owner_id = await self._canonical_author_id(owner_id)
         if await self.session.get(PluginORM, payload.plugin_id) is not None:
             raise ApiError(409, "PLUGIN_ALREADY_EXISTS", "Plugin already exists.", {"plugin_id": payload.plugin_id})
         now = utc_now()
@@ -219,8 +219,7 @@ class MarketService:
         )
         self.session.add(plugin)
         await self.session.flush()
-        for maintainer_id in self._maintainer_ids(payload.maintainers, owner_id):
-            await self.ensure_author(maintainer_id)
+        for maintainer_id in await self._canonical_author_ids(self._maintainer_ids(payload.maintainers, owner_id)):
             self.session.add(PluginMaintainerORM(plugin_id=plugin.plugin_id, author_id=maintainer_id))
         await self._record("plugin", plugin.plugin_id, ReviewAction.REGISTER_PLUGIN, None, plugin.status, owner_id)
         await self.session.flush()
@@ -978,8 +977,7 @@ class MarketService:
         """Replace plugin maintainer records."""
 
         await self.session.execute(delete(PluginMaintainerORM).where(PluginMaintainerORM.plugin_id == plugin_id))
-        for maintainer_id in maintainer_ids:
-            await self.ensure_author(maintainer_id)
+        for maintainer_id in await self._canonical_author_ids(maintainer_ids):
             self.session.add(PluginMaintainerORM(plugin_id=plugin_id, author_id=maintainer_id))
         try:
             await self.session.flush()
@@ -1210,6 +1208,24 @@ class MarketService:
             values.append(owner_id)
         return list(dict.fromkeys(values))
 
+    async def _canonical_author_id(self, author_id: str) -> str:
+        """Resolve one author identifier to the persisted canonical author id."""
+
+        return (await self.ensure_author(author_id)).author_id
+
+    async def _canonical_author_ids(self, author_ids: Iterable[str]) -> list[str]:
+        """Resolve author identifiers and de-duplicate by canonical id."""
+
+        resolved: list[str] = []
+        seen: set[str] = set()
+        for author_id in author_ids:
+            canonical_id = await self._canonical_author_id(author_id)
+            if canonical_id in seen:
+                continue
+            seen.add(canonical_id)
+            resolved.append(canonical_id)
+        return resolved
+
     async def _is_admin_operator(self, operator_id: str) -> bool:
         """Return whether ``operator_id`` currently belongs to an admin."""
 
@@ -1350,7 +1366,7 @@ class MarketService:
         """Toggle a subscription for the given user and return current state."""
 
         plugin = await self._get_plugin_orm(plugin_id)
-        await self.ensure_author(viewer_id)
+        viewer_id = await self._canonical_author_id(viewer_id)
         existing = await self.session.scalar(
             select(PluginSubscriptionORM).where(
                 PluginSubscriptionORM.plugin_id == plugin_id,
@@ -1409,9 +1425,9 @@ class MarketService:
     ) -> AuthorFollowState:
         """Toggle a follow relationship between viewer and author."""
 
+        viewer_id = await self._canonical_author_id(viewer_id)
         if author_id == viewer_id:
             raise ApiError(400, "CANNOT_FOLLOW_SELF", "You cannot follow yourself.")
-        await self.ensure_author(viewer_id)
         author = await self.session.get(AuthorORM, author_id)
         if author is None:
             raise ApiError(404, "AUTHOR_NOT_FOUND", "Author was not found.", {"author_id": author_id})
@@ -1446,7 +1462,7 @@ class MarketService:
     async def rotate_access_token(self, author_id: str) -> AccessTokenRotateResponse:
         """Create or replace the author's single active market token."""
 
-        await self.ensure_author(author_id)
+        author_id = await self._canonical_author_id(author_id)
         plain_token = f"mfox_{secrets.token_urlsafe(32)}"
         token_hash = _hash_access_token(plain_token)
         token_preview = f"{plain_token[:8]}...{plain_token[-4:]}"
@@ -1608,7 +1624,7 @@ class MarketService:
         """Upsert the viewer's rating and return aggregate stats."""
 
         plugin = await self._get_plugin_orm(plugin_id)
-        await self.ensure_author(viewer_id)
+        viewer_id = await self._canonical_author_id(viewer_id)
         existing = await self.session.scalar(
             select(PluginRatingORM).where(
                 PluginRatingORM.plugin_id == plugin_id,
@@ -1700,7 +1716,7 @@ class MarketService:
         """Create a new comment on a plugin."""
 
         plugin = await self._get_plugin_orm(plugin_id)
-        await self.ensure_author(viewer_id)
+        viewer_id = await self._canonical_author_id(viewer_id)
         normalized_content = content.strip()
         if parent_id is not None:
             parent = await self.session.get(PluginCommentORM, parent_id)

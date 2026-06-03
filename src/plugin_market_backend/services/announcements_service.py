@@ -39,7 +39,6 @@ from plugin_market_backend.schemas import (
     AnnouncementDTO,
     AnnouncementUpdate,
 )
-from plugin_market_backend.service import MarketService
 from plugin_market_backend.services._audience import audience_matches
 
 if TYPE_CHECKING:
@@ -239,6 +238,8 @@ class AnnouncementsService:
 
         # Legacy admin-token flows use a synthetic operator id. Ensure the
         # author row exists before writing an announcement that references it.
+        from plugin_market_backend.service import MarketService
+
         await MarketService(self.session).ensure_author(operator_id, is_admin=True)
 
         now = utc_now()

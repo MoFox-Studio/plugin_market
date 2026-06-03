@@ -92,6 +92,26 @@ async def test_register_plugin_creates_missing_late_maintainer_without_autoflush
     assert response.json()["maintainers"] == ["mock-author", "KKKKKaoriiiii"]
 
 
+async def test_register_plugin_reuses_canonical_author_id_for_existing_github_login(client: AsyncClient) -> None:
+    """Registration should store maintainer rows against the existing canonical author id."""
+
+    async with session_scope() as session:
+        await MarketService(session).ensure_author(
+            "github:kkkkkaoriiiii",
+            github_login="KKKKKaoriiiii",
+            display_name="Kaoriiiii",
+        )
+
+    payload = plugin_payload("canonical_group_news", display_name="Canonical Group News")
+    payload["maintainers"] = ["KKKKKaoriiiii"]
+
+    response = await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json()["plugin_id"] == "canonical_group_news"
+    assert response.json()["maintainers"] == ["github:kkkkkaoriiiii", "mock-author"]
+
+
 async def test_submit_version_status_and_duplicate_conflict(client: AsyncClient) -> None:
     """Version submission should publish immediately and reject duplicates."""
 
