@@ -130,9 +130,12 @@ class MarketService:
             record.updated_at = utc_now()
             return record
         login = github_login or author_id
-        # Check by github_login to avoid unique-constraint violation
-        stmt = select(AuthorORM).where(AuthorORM.github_login == login)
-        existing = (await self.session.execute(stmt)).scalar_one_or_none()
+        # Check by github_login to avoid unique-constraint violation.
+        # Use no_autoflush so pending PluginMaintainerORM rows (whose
+        # author_id may not be in the DB yet) don't get flushed here.
+        with self.session.no_autoflush:
+            stmt = select(AuthorORM).where(AuthorORM.github_login == login)
+            existing = (await self.session.execute(stmt)).scalar_one_or_none()
         if existing is not None:
             return existing
         record = AuthorORM(
@@ -151,8 +154,9 @@ class MarketService:
                 await self.session.flush()
         except IntegrityError:
             # Savepoint was rolled back; author already exists with different id
-            stmt = select(AuthorORM).where(AuthorORM.github_login == login)
-            return (await self.session.execute(stmt)).scalar_one()
+            with self.session.no_autoflush:
+                stmt = select(AuthorORM).where(AuthorORM.github_login == login)
+                return (await self.session.execute(stmt)).scalar_one()
         return record
 
     async def search_authors(self, prefix: str, *, limit: int = 8) -> list[MentionCandidate]:
