@@ -23,6 +23,22 @@ const query = ref('')
 const plugins = ref<Plugin[]>([])
 const total = ref(0)
 const loading = ref(true)
+const page = ref(1)
+const pageSize = 36
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
+const pageRange = computed(() => {
+  const tp = totalPages.value
+  const cur = page.value
+  if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1)
+  const pages: number[] = [1]
+  const start = Math.max(2, cur - 1)
+  const end = Math.min(tp - 1, cur + 1)
+  if (start > 2) pages.push(-1)
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (end < tp - 1) pages.push(-1)
+  pages.push(tp)
+  return pages
+})
 
 const hasFilters = computed(() => !!(query.value || category.value || tag.value || trust.value))
 
@@ -41,7 +57,8 @@ const filterSummary = computed(() => {
 async function loadPlugins() {
   loading.value = true
   const p = new URLSearchParams()
-  p.set('limit', '36')
+  p.set('limit', String(pageSize))
+  p.set('offset', String((page.value - 1) * pageSize))
   p.set('sort', sort.value)
   if (query.value) p.set('q', query.value)
   if (category.value) p.set('category', category.value)
@@ -72,6 +89,7 @@ function pushFilters(partial: Record<string, string>): void {
     trust_level: trust.value,
     sort: sort.value,
     view: view.value,
+    page: String(page.value),
     ...partial,
   }
   const nextQuery: Record<string, string> = {}
@@ -79,14 +97,15 @@ function pushFilters(partial: Record<string, string>): void {
   void router.push({ name: 'market', query: nextQuery })
 }
 
-function setCategory(cat: string) { pushFilters({ category: cat }) }
-function setTag(t: string) { pushFilters({ tag: t }) }
-function setTrust(t: string) { pushFilters({ trust_level: t }) }
-function setSort(s: string) { pushFilters({ sort: s }) }
-function resetFilters() { pushFilters({ q: '', category: '', tag: '', trust_level: '', sort: 'updated', view: view.value }) }
+function setCategory(cat: string) { pushFilters({ category: cat, page: '1' }) }
+function setTag(t: string) { pushFilters({ tag: t, page: '1' }) }
+function setTrust(t: string) { pushFilters({ trust_level: t, page: '1' }) }
+function setSort(s: string) { pushFilters({ sort: s, page: '1' }) }
+function resetFilters() { pushFilters({ q: '', category: '', tag: '', trust_level: '', sort: 'updated', view: view.value, page: '1' }) }
+function setPage(p: number) { pushFilters({ page: String(p) }) }
 
 watch(
-  () => [route.query.q, route.query.category, route.query.tag, route.query.trust_level, route.query.sort, route.query.view],
+  () => [route.query.q, route.query.category, route.query.tag, route.query.trust_level, route.query.sort, route.query.view, route.query.page],
   () => {
     query.value = routeValue('q')
     category.value = routeValue('category')
@@ -94,6 +113,7 @@ watch(
     trust.value = routeValue('trust_level')
     sort.value = routeValue('sort', 'updated')
     view.value = (routeValue('view', 'grid') as 'grid' | 'list')
+    page.value = Math.max(1, parseInt(routeValue('page', '1'), 10) || 1)
     void loadPlugins()
   },
   { immediate: true },
@@ -206,6 +226,15 @@ onMounted(async () => {
         <PluginCard v-for="p in plugins" :key="p.plugin_id" :plugin="p" />
       </div>
       <EmptyState v-else title="暂无匹配插件" message="试试更换筛选条件、关键字或者回到推荐页找找。" />
+
+      <nav v-if="!loading && totalPages > 1" class="pagination">
+        <button type="button" class="page-btn" :disabled="page <= 1" @click="setPage(page - 1)">上一页</button>
+        <template v-for="pn in pageRange" :key="pn">
+          <span v-if="pn === -1" class="page-ellipsis">…</span>
+          <button v-else type="button" :class="['page-btn', { active: pn === page }]" @click="setPage(pn)">{{ pn }}</button>
+        </template>
+        <button type="button" class="page-btn" :disabled="page >= totalPages" @click="setPage(page + 1)">下一页</button>
+      </nav>
     </main>
   </div>
 </template>
@@ -347,5 +376,46 @@ onMounted(async () => {
 }
 @media (prefers-reduced-motion: reduce) {
   .browse-side, .browse-main { animation: none; }
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-6) 0 var(--space-4);
+}
+.page-btn {
+  min-width: 36px;
+  padding: 6px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-700);
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
+}
+.page-btn:hover:not(:disabled):not(.active) {
+  background: var(--surface-hover);
+  border-color: var(--ink-300);
+  color: var(--ink-900);
+}
+.page-btn.active {
+  background: var(--blue-600, #2563eb);
+  border-color: var(--blue-600, #2563eb);
+  color: #fff;
+  cursor: default;
+}
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.page-ellipsis {
+  padding: 0 4px;
+  font-size: 14px;
+  color: var(--ink-400);
+  user-select: none;
 }
 </style>
