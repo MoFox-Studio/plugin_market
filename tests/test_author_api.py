@@ -79,6 +79,19 @@ async def test_register_plugin_and_duplicate_conflict(client: AsyncClient) -> No
     assert duplicate.json()["error"]["code"] == "PLUGIN_ALREADY_EXISTS"
 
 
+async def test_register_plugin_creates_missing_late_maintainer_without_autoflush_fk_error(client: AsyncClient) -> None:
+    """Registration should create later missing maintainers before maintainer rows flush."""
+
+    payload = plugin_payload("group_news", display_name="Group News")
+    payload["maintainers"] = ["mock-author", "KKKKKaoriiiii"]
+
+    response = await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json()["plugin_id"] == "group_news"
+    assert response.json()["maintainers"] == ["mock-author", "KKKKKaoriiiii"]
+
+
 async def test_submit_version_status_and_duplicate_conflict(client: AsyncClient) -> None:
     """Version submission should publish immediately and reject duplicates."""
 

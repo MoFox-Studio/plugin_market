@@ -114,7 +114,10 @@ class MarketService:
     ) -> AuthorORM:
         """Return an author, creating a verified local record when missing."""
 
-        record = await self.session.get(AuthorORM, author_id)
+        # Avoid query-triggered autoflush while the caller may still have
+        # pending relationship rows that point at this author.
+        with self.session.no_autoflush:
+            record = await self.session.get(AuthorORM, author_id)
         if record is not None:
             if github_user_id is not None:
                 record.github_user_id = github_user_id
