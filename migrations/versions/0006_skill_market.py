@@ -48,12 +48,8 @@ def upgrade() -> None:
 
     if _is_postgres():
         with op.get_context().autocommit_block():
-            op.execute("""
-                DO $$ BEGIN
-                    CREATE TYPE skillstatus AS ENUM ('published', 'blocked');
-                EXCEPTION WHEN duplicate_object THEN NULL;
-                END $$;
-            """)
+            # Clean up leftover type from previous failed migration attempts
+            op.execute("DROP TYPE IF EXISTS skillstatus")
             for value in NEW_REVIEW_ACTIONS:
                 op.execute(
                     f"ALTER TYPE reviewaction ADD VALUE IF NOT EXISTS '{value}'"
@@ -76,7 +72,7 @@ def upgrade() -> None:
         sa.Column("tags", sa.JSON(), nullable=False),
         sa.Column(
             "status",
-            sa.Enum("published", "blocked", name="skillstatus", create_type=False),
+            sa.String(length=20),
             nullable=False,
             server_default="published",
         ),
