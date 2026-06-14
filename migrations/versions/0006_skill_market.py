@@ -196,7 +196,7 @@ def upgrade() -> None:
         ),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("mention_payload", sa.JSON(), nullable=True),
-        sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
