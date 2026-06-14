@@ -46,8 +46,9 @@ const skillPublishSaving = ref(false)
 const skillPublishSkillId = ref('')
 const skillPublishVersion = ref('0.1.0')
 const skillPublishNotes = ref('')
-const skillPublishCategories = ref('')
+const skillPublishCategory = ref('')
 const skillPublishTags = ref('')
+const skillAvailableCategories = ref<string[]>([])
 const skillZipInput = ref<HTMLInputElement | null>(null)
 const skillZipFile = ref<File | null>(null)
 
@@ -256,10 +257,11 @@ function openSkillPublish() {
   skillPublishSkillId.value = ''
   skillPublishVersion.value = '0.1.0'
   skillPublishNotes.value = ''
-  skillPublishCategories.value = ''
+  skillPublishCategory.value = ''
   skillPublishTags.value = ''
   skillZipFile.value = null
   skillPublishOpen.value = true
+  api.skills.categories().then(c => skillAvailableCategories.value = c).catch(() => {})
 }
 
 function closeSkillPublish() { skillPublishOpen.value = false }
@@ -283,13 +285,11 @@ async function publishSkill() {
     fd.append('skill_id', skillPublishSkillId.value.trim())
     fd.append('version', skillPublishVersion.value.trim() || '0.1.0')
     if (skillPublishNotes.value.trim()) fd.append('release_notes', skillPublishNotes.value.trim())
-    if (skillPublishCategories.value.trim()) {
-      const cats = skillPublishCategories.value.split(',').map(s => s.trim()).filter(Boolean)
-      cats.forEach(c => fd.append('categories', c))
+    if (skillPublishCategory.value) {
+      fd.append('categories', skillPublishCategory.value)
     }
     if (skillPublishTags.value.trim()) {
-      const tgs = skillPublishTags.value.split(',').map(s => s.trim()).filter(Boolean)
-      tgs.forEach(t => fd.append('tags', t))
+      fd.append('tags', skillPublishTags.value.trim())
     }
     await api.skills.create(fd)
     skillPublishOpen.value = false
@@ -681,8 +681,12 @@ onMounted(async () => {
             <input v-model="skillPublishNotes" type="text" placeholder="初始版本">
           </label>
           <label class="me-form-field">
-            <span>分类（用逗号分隔）</span>
-            <input v-model="skillPublishCategories" type="text" placeholder="工具, 开发">
+            <span>分类</span>
+            <select v-model="skillPublishCategory">
+              <option value="">未选择</option>
+              <option v-for="cat in skillAvailableCategories" :key="cat" :value="cat">{{ cat }}</option>
+            </select>
+            <small v-if="!skillAvailableCategories.length" class="me-form-hint">暂无可用分类</small>
           </label>
           <label class="me-form-field">
             <span>标签（用逗号分隔）</span>

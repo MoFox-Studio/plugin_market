@@ -70,7 +70,7 @@ def upgrade() -> None:
         sa.Column("tags", sa.JSON(), nullable=False),
         sa.Column(
             "status",
-            sa.String(length=20),
+            sa.Enum("published", "blocked", name="skillstatus"),
             nullable=False,
             server_default="published",
         ),

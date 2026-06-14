@@ -1694,11 +1694,26 @@ async def publish_skill(
     """Publish a new skill from a zip package upload."""
 
     ensure_same_origin_browser_write(request)
-    import json as _json
 
     zip_bytes = await file.read()
-    parsed_categories = _json.loads(categories) if categories else None
-    parsed_tags = _json.loads(tags) if tags else None
+
+    def _parse_form_list(raw: str | None) -> list[str] | None:
+        """Parse categories/tags from form field: JSON array or comma-separated."""
+        if not raw or not raw.strip():
+            return None
+        stripped = raw.strip()
+        if stripped.startswith("["):
+            import json as _json
+            try:
+                parsed = _json.loads(stripped)
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+            except Exception:
+                pass
+        return [item.strip() for item in stripped.split(",") if item.strip()]
+
+    parsed_categories = _parse_form_list(categories)
+    parsed_tags = _parse_form_list(tags)
 
     async with session_scope() as session:
         return await SkillService(session).create_skill(
