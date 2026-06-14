@@ -48,6 +48,7 @@ def upgrade() -> None:
 
     if _is_postgres():
         with op.get_context().autocommit_block():
+            op.execute("CREATE TYPE IF NOT EXISTS skillstatus AS ENUM ('published', 'blocked')")
             for value in NEW_REVIEW_ACTIONS:
                 op.execute(
                     f"ALTER TYPE reviewaction ADD VALUE IF NOT EXISTS '{value}'"
@@ -70,7 +71,7 @@ def upgrade() -> None:
         sa.Column("tags", sa.JSON(), nullable=False),
         sa.Column(
             "status",
-            sa.Enum("published", "blocked", name="skillstatus"),
+            sa.Enum("published", "blocked", name="skillstatus", create_type=False),
             nullable=False,
             server_default="published",
         ),
@@ -299,3 +300,6 @@ def downgrade() -> None:
     # NOTE: PostgreSQL does not support removing values from an enum type.
     # The new ``reviewaction`` values added in upgrade() are intentionally
     # left in place during downgrade; they are unused but harmless.
+    if _is_postgres():
+        with op.get_context().autocommit_block():
+            op.execute("DROP TYPE IF EXISTS skillstatus")
