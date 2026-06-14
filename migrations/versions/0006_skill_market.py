@@ -48,12 +48,19 @@ def upgrade() -> None:
 
     if _is_postgres():
         with op.get_context().autocommit_block():
-            # Clean up leftover type from previous failed migration attempts
+            # Clean up leftover types from previous failed migration attempts
             op.execute("DROP TYPE IF EXISTS skillstatus")
             for value in NEW_REVIEW_ACTIONS:
                 op.execute(
                     f"ALTER TYPE reviewaction ADD VALUE IF NOT EXISTS '{value}'"
                 )
+
+    # Clean up any partially-created tables from previous failed runs.
+    # We drop in reverse dependency order so FK constraints do not block us.
+    _cascade = " CASCADE" if _is_postgres() else ""
+    for _tbl in ("skill_subscriptions", "skill_comments", "skill_ratings",
+                 "skill_likes", "skill_versions", "skills"):
+        op.execute(f"DROP TABLE IF EXISTS {_tbl}{_cascade}")
 
     # ----- skills ----------------------------------------------------------
     op.create_table(
