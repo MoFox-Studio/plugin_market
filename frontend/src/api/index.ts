@@ -303,10 +303,10 @@ export const api = {
       return get<Skill[]>('/api/v1/me/skills')
     },
     categories(): Promise<string[]> {
-      return get<string[]>('/api/v1/skills/categories')
+      return get<{ items: string[] }>('/api/v1/skills/categories').then(r => r.items)
     },
     tags(): Promise<string[]> {
-      return get<string[]>('/api/v1/skills/tags')
+      return get<{ items: string[] }>('/api/v1/skills/tags').then(r => r.items)
     },
   },
 
