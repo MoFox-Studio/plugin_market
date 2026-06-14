@@ -828,6 +828,9 @@ class SkillService:
                 for c in cats:
                     if isinstance(c, str):
                         seen.add(c)
+        if not seen:
+            # Preset fallback categories when no skills exist yet
+            return ["工具", "娱乐", "开发", "知识", "社交"]
         return sorted(seen)
 
     async def get_tags(self) -> list[str]:
