@@ -505,6 +505,7 @@ export interface Skill {
   skill_id: string
   display_name: string
   description: string
+  readme_markdown?: string | null
   owner_id: string
   owner_login?: string | null
   owner_display_name?: string | null

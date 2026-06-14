@@ -300,7 +300,7 @@ export const api = {
       return del(`/api/v1/skills/${encodeURIComponent(skillId)}`)
     },
     my(): Promise<Skill[]> {
-      return get<Skill[]>('/api/v1/me/skills')
+      return get<{ items: Skill[] }>('/api/v1/me/skills').then(r => r.items)
     },
     categories(): Promise<string[]> {
       return get<{ items: string[] }>('/api/v1/skills/categories').then(r => r.items)

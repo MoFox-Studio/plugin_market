@@ -963,6 +963,7 @@ class Skill(BaseModel):
     skill_id: str
     display_name: str
     description: str
+    readme_markdown: str | None = None
     owner_id: str
     owner_login: str | None = None
     owner_display_name: str | None = None

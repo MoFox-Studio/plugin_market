@@ -142,10 +142,10 @@ onMounted(loadSkill)
       </div>
     </header>
 
-    <!-- description -->
+    <!-- SKILL.md preview -->
     <section class="skill-section">
-      <h2>描述</h2>
-      <pre class="skill-desc">{{ skill.description }}</pre>
+      <h2>SKILL.md 预览</h2>
+      <pre class="skill-desc">{{ skill.readme_markdown || skill.description }}</pre>
     </section>
 
     <!-- versions -->

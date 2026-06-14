@@ -524,6 +524,7 @@ class SkillORM(Base):
     skill_id: Mapped[str] = mapped_column(String(120), primary_key=True)
     display_name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
+    readme_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
     owner_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), index=True)
     icon_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     categories: Mapped[list[str]] = mapped_column(JSON, default=list)
