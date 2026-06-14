@@ -528,7 +528,7 @@ class SkillORM(Base):
     icon_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     categories: Mapped[list[str]] = mapped_column(JSON, default=list)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
-    status: Mapped[SkillStatus] = mapped_column(SAEnum(SkillStatus), default=SkillStatus.PUBLISHED, index=True)
+    status: Mapped[SkillStatus] = mapped_column(SAEnum(SkillStatus, native_enum=False), default=SkillStatus.PUBLISHED, index=True)
     trust_level: Mapped[TrustLevel] = mapped_column(SAEnum(TrustLevel), default=TrustLevel.COMMUNITY)
     download_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
