@@ -498,3 +498,102 @@ export interface ActivityDay {
   comments_created: number
   ratings_created: number
 }
+
+// ── Skill market types ──
+
+export interface Skill {
+  skill_id: string
+  display_name: string
+  description: string
+  owner_id: string
+  owner_login?: string | null
+  owner_display_name?: string | null
+  owner_avatar_url?: string | null
+  icon_url?: string | null
+  categories: string[]
+  tags: string[]
+  status: string
+  trust_level: string
+  latest_version?: string | null
+  download_count: number
+  likes_count: number
+  comments_count: number
+  rating_avg: number
+  rating_count: number
+  viewer_has_liked?: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface SkillVersion {
+  version: string
+  package_size: number
+  checksum_sha256: string
+  release_notes?: string | null
+  min_mofox_version?: string | null
+  download_count: number
+  created_at: string
+}
+
+export interface SkillComment {
+  id: number
+  skill_id: string
+  parent_id?: number | null
+  content: string
+  created_at: string
+  updated_at?: string
+  is_deleted?: boolean
+  author: CommentAuthor
+}
+
+export interface SkillCommentCreate {
+  content: string
+  parent_id?: number | null
+}
+
+export interface SkillListResponse {
+  items: Skill[]
+  total: number
+}
+
+export interface SkillCommentListResponse {
+  items: SkillComment[]
+  total: number
+}
+
+export interface SkillRatingInfo {
+  distribution?: Record<string, number>
+  viewer_rating?: number
+}
+
+export interface SkillInstallRecord {
+  skill_id: string
+  download_count: number
+}
+
+export interface SkillVersionListResponse {
+  items: SkillVersion[]
+  total: number
+}
+
+export interface SkillCreate {
+  skill_id: string
+  version: string
+  release_notes?: string | null
+  min_mofox_version?: string | null
+  categories?: string[]
+  tags?: string[]
+}
+
+export interface SkillVersionCreate {
+  version: string
+  release_notes?: string | null
+  min_mofox_version?: string | null
+}
+
+export interface SkillUpdate {
+  display_name?: string | null
+  icon_url?: string | null
+  categories?: string[] | null
+  tags?: string[] | null
+}

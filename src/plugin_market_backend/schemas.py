@@ -950,3 +950,135 @@ class MarketHome(BaseModel):
     categories_preview: dict[str, list[Plugin]] = Field(default_factory=dict)
     stats: MarketStats
     active_announcements: list[AnnouncementDTO] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Skill market schemas
+# ---------------------------------------------------------------------------
+
+
+class Skill(BaseModel):
+    """Market skill record (list item / detail)."""
+
+    skill_id: str
+    display_name: str
+    description: str
+    owner_id: str
+    owner_login: str | None = None
+    owner_display_name: str | None = None
+    owner_avatar_url: str | None = None
+    icon_url: str | None = None
+    categories: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    status: str  # SkillStatus
+    trust_level: str  # TrustLevel
+    latest_version: str | None = None
+    download_count: int = 0
+    likes_count: int = 0
+    comments_count: int = 0
+    rating_avg: float = 0.0
+    rating_count: int = 0
+    viewer_has_liked: bool = False
+    viewer_rating: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SkillVersion(BaseModel):
+    """Installable skill version record."""
+
+    version: str
+    package_size: int
+    checksum_sha256: str
+    release_notes: str | None = None
+    min_mofox_version: str | None = None
+    download_count: int = 0
+    created_at: datetime
+
+
+class SkillCreate(BaseModel):
+    """Request body for publishing a new skill (zip via UploadFile in route)."""
+
+    skill_id: str = Field(min_length=1, pattern=r"^[a-z][a-z0-9_\-]*$")
+    version: str = Field(min_length=1)
+    release_notes: str | None = None
+    min_mofox_version: str | None = None
+    categories: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class SkillVersionCreate(BaseModel):
+    """Request body for publishing a new skill version (zip via UploadFile in route)."""
+
+    version: str = Field(min_length=1)
+    release_notes: str | None = None
+    min_mofox_version: str | None = None
+
+
+class SkillUpdate(BaseModel):
+    """Request body for updating mutable skill metadata."""
+
+    display_name: str | None = Field(default=None, min_length=1)
+    icon_url: str | None = None
+    categories: list[str] | None = None
+    tags: list[str] | None = None
+
+
+class SkillComment(BaseModel):
+    """User comment on a skill."""
+
+    id: int
+    skill_id: str
+    parent_id: int | None
+    content: str
+    created_at: datetime
+    updated_at: datetime
+    is_deleted: bool = False
+    author: CommentAuthor
+    mentions: list[MentionCandidate] = Field(default_factory=list)
+
+
+class SkillCommentCreate(BaseModel):
+    """Request body for submitting a comment on a skill."""
+
+    content: str = Field(min_length=1, max_length=4000)
+    parent_id: int | None = None
+
+
+class SkillCommentListResponse(BaseModel):
+    """Paginated skill comment response."""
+
+    items: list[SkillComment]
+    total: int
+
+
+class SkillListResponse(BaseModel):
+    """Paginated skill list response."""
+
+    items: list[Skill]
+    total: int
+
+
+class SkillRatingInfo(BaseModel):
+    """Aggregated rating stats for a skill."""
+
+    skill_id: str
+    rating_avg: float
+    rating_count: int
+    distribution: dict[str, int] = Field(default_factory=dict)
+    viewer_rating: int | None = None
+
+
+class SkillInstallRecord(BaseModel):
+    """Response after recording a skill install / download."""
+
+    skill_id: str
+    version: str
+    download_count: int
+
+
+class SkillVersionListResponse(BaseModel):
+    """Skill version list response."""
+
+    items: list[SkillVersion]
+    total: int

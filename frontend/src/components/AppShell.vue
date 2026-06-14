@@ -56,6 +56,6 @@ const showFooter = computed(() => {
 </template>
 
 <style scoped>
-.app-shell-fluid { min-width: 0; }
+.app-shell-fluid { min-width: 0; flex: 1; }
 .app-shell[data-layout="fluid"] { display: flex; flex-direction: column; }
 </style>

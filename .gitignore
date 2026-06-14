@@ -93,3 +93,4 @@ poetry.lock
 /test/__pycache__/
 
 .env
+.agents/

@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useTaxonomyStore } from '@/stores/taxonomy'
 import { formatNumber, formatRelative, formatDate, formatBytes, statusText, categoryLabel, reviewActionText, EDITABLE_PLUGIN_CATEGORIES } from '@/utils/format'
-import type { AccessTokenStatus, MyFollowItem, MyFollowListResponse, MySubscriptionItem, MySubscriptionListResponse, Plugin, PluginMetadataPatch, PluginSnapshot } from '@/types'
+import type { AccessTokenStatus, MyFollowItem, MyFollowListResponse, MySubscriptionItem, MySubscriptionListResponse, Plugin, PluginMetadataPatch, PluginSnapshot, Skill } from '@/types'
 import TrustBadge from '@/components/TrustBadge.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -37,6 +37,19 @@ const subscriptions = ref<MySubscriptionItem[]>([])
 const subscriptionsBusy = ref(false)
 const follows = ref<MyFollowItem[]>([])
 const followsBusy = ref(false)
+
+// --- skills ---
+const mySkills = ref<Skill[]>([])
+const skillsBusy = ref(false)
+const skillPublishOpen = ref(false)
+const skillPublishSaving = ref(false)
+const skillPublishSkillId = ref('')
+const skillPublishVersion = ref('0.1.0')
+const skillPublishNotes = ref('')
+const skillPublishCategories = ref('')
+const skillPublishTags = ref('')
+const skillZipInput = ref<HTMLInputElement | null>(null)
+const skillZipFile = ref<File | null>(null)
 
 async function copyText(value: string, successMessage: string) {
   try {
@@ -227,9 +240,82 @@ async function unfollow(authorId: string) {
   }
 }
 
+// --- skills ---
+async function loadMySkills() {
+  skillsBusy.value = true
+  try {
+    mySkills.value = await api.skills.my()
+  } catch {
+    mySkills.value = []
+  } finally {
+    skillsBusy.value = false
+  }
+}
+
+function openSkillPublish() {
+  skillPublishSkillId.value = ''
+  skillPublishVersion.value = '0.1.0'
+  skillPublishNotes.value = ''
+  skillPublishCategories.value = ''
+  skillPublishTags.value = ''
+  skillZipFile.value = null
+  skillPublishOpen.value = true
+}
+
+function closeSkillPublish() { skillPublishOpen.value = false }
+
+function pickSkillZip() { skillZipInput.value?.click() }
+
+function onSkillZipChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file) skillZipFile.value = file
+}
+
+async function publishSkill() {
+  if (!skillZipFile.value) { toast.show('请选择 zip 文件', 'error'); return }
+  if (!skillPublishSkillId.value.trim()) { toast.show('请输入 Skill ID', 'error'); return }
+  skillPublishSaving.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', skillZipFile.value)
+    fd.append('skill_id', skillPublishSkillId.value.trim())
+    fd.append('version', skillPublishVersion.value.trim() || '0.1.0')
+    if (skillPublishNotes.value.trim()) fd.append('release_notes', skillPublishNotes.value.trim())
+    if (skillPublishCategories.value.trim()) {
+      const cats = skillPublishCategories.value.split(',').map(s => s.trim()).filter(Boolean)
+      cats.forEach(c => fd.append('categories', c))
+    }
+    if (skillPublishTags.value.trim()) {
+      const tgs = skillPublishTags.value.split(',').map(s => s.trim()).filter(Boolean)
+      tgs.forEach(t => fd.append('tags', t))
+    }
+    await api.skills.create(fd)
+    skillPublishOpen.value = false
+    toast.show('Skill 发布成功！', 'ok')
+    await loadMySkills()
+  } catch (e) {
+    toast.show((e as Error).message || '发布失败', 'error')
+  } finally {
+    skillPublishSaving.value = false
+  }
+}
+
+async function deleteSkill(skillId: string) {
+  if (!confirm(`确认删除 ${skillId} 吗？`)) return
+  try {
+    await api.skills.delete(skillId)
+    mySkills.value = mySkills.value.filter(s => s.skill_id !== skillId)
+    toast.show('Skill 已删除', 'ok')
+  } catch (e) {
+    toast.show((e as Error).message || '删除失败', 'error')
+  }
+}
+
 onMounted(async () => {
   loading.value = true
-  await Promise.all([loadPlugins(), loadAccessToken(), loadSubscriptions(), loadFollows(), taxonomy.load()])
+  await Promise.all([loadPlugins(), loadAccessToken(), loadSubscriptions(), loadFollows(), loadMySkills(), taxonomy.load()])
   loading.value = false
 })
 </script>
@@ -353,6 +439,34 @@ onMounted(async () => {
         <EmptyState v-else title="暂无关注" message="关注作者后，这里会集中展示你关注的创作者。" />
       </section>
     </div>
+
+    <!-- My Skills -->
+    <section class="me-card" data-anim="enter-3">
+      <div class="me-section-head">
+        <h2>我的 Skills</h2>
+        <small>{{ mySkills.length }}</small>
+      </div>
+      <div v-if="mySkills.length" class="me-sub-list">
+        <div v-for="sk in mySkills" :key="sk.skill_id" class="me-sub-row">
+          <div class="me-sub-row-icon">
+            <img v-if="sk.icon_url" :src="sk.icon_url" :alt="sk.display_name">
+            <template v-else>{{ sk.display_name[0]?.toUpperCase() || '?' }}</template>
+          </div>
+          <div class="me-sub-row-info">
+            <div class="me-sub-row-head">
+              <router-link :to="`/skill/${encodeURIComponent(sk.skill_id)}`" class="me-sub-row-name">{{ sk.display_name }}</router-link>
+              <span v-if="sk.latest_version" class="badge status-published">v{{ sk.latest_version }}</span>
+            </div>
+            <small class="me-sub-row-meta">{{ sk.skill_id }} · ⬇ {{ sk.download_count }} · ⭐ {{ sk.rating_avg?.toFixed(1) || '-' }} · {{ formatRelative(sk.updated_at) }}</small>
+          </div>
+          <button type="button" class="btn btn-sm btn-ghost" @click="deleteSkill(sk.skill_id)">删除</button>
+        </div>
+      </div>
+      <EmptyState v-else title="还没有 Skill" message="发布你的第一个 Skill 吧！" />
+      <div style="margin-top: var(--space-3)">
+        <button type="button" class="btn btn-primary btn-sm" @click="openSkillPublish">发布新 Skill</button>
+      </div>
+    </section>
 
     <div class="me-layout" data-anim="enter-4">
       <!-- Plugin list (left) -->
@@ -539,6 +653,54 @@ onMounted(async () => {
         <footer class="me-modal-foot">
           <button type="button" class="btn btn-ghost" :disabled="metadataSaving" @click="closeMetadataEditor">取消</button>
           <button type="button" class="btn btn-primary" :disabled="metadataSaving" @click="saveMetadataPatch">{{ metadataSaving ? '保存中…' : '保存' }}</button>
+        </footer>
+      </section>
+    </div>
+
+    <!-- Skill publish modal -->
+    <div v-if="skillPublishOpen" class="me-modal-backdrop" @click.self="closeSkillPublish">
+      <section class="me-modal">
+        <header class="me-modal-head">
+          <div>
+            <span class="kicker">PUBLISH SKILL</span>
+            <h2>发布新 Skill</h2>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" @click="closeSkillPublish">关闭</button>
+        </header>
+        <div class="me-modal-body">
+          <label class="me-form-field">
+            <span>Skill ID</span>
+            <input v-model="skillPublishSkillId" type="text" placeholder="例如 arxiv-watcher" maxlength="120">
+          </label>
+          <label class="me-form-field">
+            <span>版本号</span>
+            <input v-model="skillPublishVersion" type="text" placeholder="0.1.0">
+          </label>
+          <label class="me-form-field">
+            <span>更新说明（可选）</span>
+            <input v-model="skillPublishNotes" type="text" placeholder="初始版本">
+          </label>
+          <label class="me-form-field">
+            <span>分类（用逗号分隔）</span>
+            <input v-model="skillPublishCategories" type="text" placeholder="工具, 开发">
+          </label>
+          <label class="me-form-field">
+            <span>标签（用逗号分隔）</span>
+            <input v-model="skillPublishTags" type="text" placeholder="ai, paper">
+          </label>
+          <label class="me-form-field">
+            <span>Skill Zip 包</span>
+            <div class="me-form-icon-row">
+              <input type="text" readonly :value="skillZipFile?.name || '未选择文件'" placeholder="选择 zip 文件…">
+              <button type="button" class="btn btn-sm" @click="pickSkillZip">选择文件</button>
+              <input ref="skillZipInput" class="me-form-file" type="file" accept=".zip" @change="onSkillZipChange">
+            </div>
+            <small class="me-form-hint">上传包含 SKILL.md 的 zip 包，最大 10 MiB。</small>
+          </label>
+        </div>
+        <footer class="me-modal-foot">
+          <button type="button" class="btn btn-ghost" :disabled="skillPublishSaving" @click="closeSkillPublish">取消</button>
+          <button type="button" class="btn btn-primary" :disabled="skillPublishSaving || !skillZipFile" @click="publishSkill">{{ skillPublishSaving ? '发布中…' : '发布' }}</button>
         </footer>
       </section>
     </div>

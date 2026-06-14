@@ -47,6 +47,19 @@ const routes: RouteRecordRaw[] = [
     meta: { shellGroup: 'market' },
   },
   {
+    path: '/skills',
+    name: 'skills',
+    component: () => import('@/views/SkillMarketView.vue'),
+    meta: { shellGroup: 'market' },
+  },
+  {
+    path: '/skill/:id',
+    name: 'skill',
+    component: () => import('@/views/SkillDetailView.vue'),
+    props: true,
+    meta: { shellGroup: 'market' },
+  },
+  {
     path: '/admin',
     name: 'admin',
     component: () => import('@/views/AdminLayout.vue'),

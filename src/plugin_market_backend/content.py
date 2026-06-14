@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import io
 import secrets
+import zipfile
 from pathlib import Path
 
 import bleach
+import yaml
 from markdown import markdown
 from PIL import Image, ImageOps
 
@@ -246,3 +249,128 @@ def delete_profile_background_url(url: str | None) -> None:
             path.unlink()
         except OSError:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Skill package storage
+# ---------------------------------------------------------------------------
+
+SKILL_PACKAGES_DIR = Path("data") / "skill_packages"
+MAX_SKILL_PACKAGE_BYTES = 10 * 1024 * 1024  # 10 MiB
+
+
+def ensure_skill_dirs() -> None:
+    """Ensure the skill package storage directory exists."""
+
+    SKILL_PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def store_skill_package(skill_id: str, version: str, zip_bytes: bytes) -> str:
+    """Persist a skill zip package and return its storage path.
+
+    The package is stored as ``data/skill_packages/{skill_id}/{version}.zip``.
+    """
+
+    ensure_skill_dirs()
+    skill_dir = SKILL_PACKAGES_DIR / skill_id
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    package_path = skill_dir / f"{version}.zip"
+    package_path.write_bytes(zip_bytes)
+    return str(package_path)
+
+
+def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
+    """Validate a skill zip package and extract metadata.
+
+    Returns ``(name, description, readme_text)``.
+
+    The zip must:
+    * Be a valid zip archive.
+    * Not exceed ``MAX_SKILL_PACKAGE_BYTES``.
+    * Contain a ``SKILL.md`` file at the root.
+    * The ``SKILL.md`` must have YAML front matter with at least ``name``.
+
+    Raises ``ApiError(422, ...)`` on any validation failure.
+    """
+
+    if len(zip_bytes) == 0:
+        raise ApiError(422, "SKILL_PACKAGE_EMPTY", "Skill package is empty.")
+    if len(zip_bytes) > MAX_SKILL_PACKAGE_BYTES:
+        raise ApiError(
+            422,
+            "SKILL_PACKAGE_TOO_LARGE",
+            f"Skill package must not exceed {MAX_SKILL_PACKAGE_BYTES // 1024 // 1024} MiB.",
+            {"max_bytes": MAX_SKILL_PACKAGE_BYTES, "received": len(zip_bytes)},
+        )
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            # Security: reject paths that escape the archive root
+            for name in zf.namelist():
+                if name.startswith("/") or ".." in name.split("/"):
+                    raise ApiError(
+                        422,
+                        "SKILL_PACKAGE_INSECURE_PATH",
+                        f"Skill package contains an insecure path: {name!r}.",
+                    )
+
+            # Locate SKILL.md at the root (allow one level of nesting via a
+            # top-level directory, common when zipping a folder)
+            skill_md_candidates = [
+                n for n in zf.namelist()
+                if n == "SKILL.md" or n.endswith("/SKILL.md") and n.count("/") == 1
+            ]
+            if not skill_md_candidates:
+                raise ApiError(
+                    422,
+                    "SKILL_PACKAGE_NO_SKILL_MD",
+                    "Skill package must contain a SKILL.md file at the root.",
+                )
+            # Prefer an exact root match; otherwise use the first single-nesting candidate
+            skill_md_name = "SKILL.md" if "SKILL.md" in skill_md_candidates else skill_md_candidates[0]
+            readme_text = zf.read(skill_md_name).decode("utf-8")
+
+            # Parse YAML front matter
+            front_matter: dict[str, str] = {}
+            body_lines: list[str] = []
+            if readme_text.startswith("---"):
+                parts = readme_text.split("---", 2)
+                if len(parts) >= 3:
+                    try:
+                        front_matter = yaml.safe_load(parts[1]) or {}
+                    except yaml.YAMLError as exc:
+                        raise ApiError(
+                            422,
+                            "SKILL_PACKAGE_INVALID_FRONT_MATTER",
+                            "SKILL.md front matter is not valid YAML.",
+                        ) from exc
+                    body_lines = parts[2].splitlines()
+            else:
+                body_lines = readme_text.splitlines()
+
+            name = front_matter.get("name", "").strip()
+            if not name:
+                raise ApiError(
+                    422,
+                    "SKILL_PACKAGE_MISSING_NAME",
+                    "SKILL.md front matter must include a non-empty 'name' field.",
+                )
+            description = front_matter.get("description", "").strip()
+            body = "\n".join(body_lines).strip()
+
+            return name, description, body
+
+    except ApiError:
+        raise
+    except zipfile.BadZipFile as exc:
+        raise ApiError(
+            422,
+            "SKILL_PACKAGE_NOT_ZIP",
+            "Skill package is not a valid zip archive.",
+        ) from exc
+    except UnicodeDecodeError as exc:
+        raise ApiError(
+            422,
+            "SKILL_PACKAGE_ENCODING",
+            "SKILL.md must be a UTF-8 encoded text file.",
+        ) from exc

@@ -55,6 +55,7 @@ async function onLogout() {
     <nav class="topbar-nav">
       <router-link class="navlink" to="/" active-class="active" exact>推荐</router-link>
       <router-link class="navlink" to="/browse" active-class="active">浏览</router-link>
+      <router-link class="navlink" to="/skills" active-class="active">Skills</router-link>
       <router-link class="navlink" to="/me" active-class="active">我的</router-link>
       <span class="auth-slot" data-auth-slot>
         <template v-if="auth.isAuthenticated && auth.viewer">

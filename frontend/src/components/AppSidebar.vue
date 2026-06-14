@@ -90,6 +90,7 @@ const marketSections = computed<SidebarSection[]>(() => {
       hint: '来回穿梭。',
       items: [
         { label: '回到推荐页', to: { name: 'home' }, meta: 'Home' },
+        { label: 'Skill 市场', to: { name: 'skills' }, meta: 'Skills' },
       ],
     },
   ]

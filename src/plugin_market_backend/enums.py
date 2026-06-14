@@ -49,6 +49,13 @@ class AuthorType(StrEnum):
     ORGANIZATION = "organization"
 
 
+class SkillStatus(StrEnum):
+    """Skill lifecycle states."""
+
+    PUBLISHED = "published"
+    BLOCKED = "blocked"
+
+
 class ReviewAction(StrEnum):
     """Audited market actions."""
 
@@ -83,3 +90,9 @@ class ReviewAction(StrEnum):
     BULK_DEPRECATE = "bulk_deprecate"
     BULK_SET_TRUST_LEVEL = "bulk_set_trust_level"
     BULK_DELETE = "bulk_delete"
+    # --- skill market (0006) ---
+    PUBLISH_SKILL = "publish_skill"
+    UPDATE_SKILL = "update_skill"
+    PUBLISH_SKILL_VERSION = "publish_skill_version"
+    BLOCK_SKILL = "block_skill"
+    DELETE_SKILL = "delete_skill"

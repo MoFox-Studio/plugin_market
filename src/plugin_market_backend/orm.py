@@ -8,7 +8,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, Stri
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from plugin_market_backend.enums import AuthorType, PluginStatus, ReviewAction, SyncStatus, TrustLevel, VersionStatus
+from plugin_market_backend.enums import AuthorType, PluginStatus, ReviewAction, SkillStatus, SyncStatus, TrustLevel, VersionStatus
 
 
 def utc_now() -> datetime:
@@ -505,3 +505,121 @@ class PluginMetadataChangeORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False, index=True
     )
+
+
+# ---------------------------------------------------------------------------
+# Skill market (migration 0006)
+# ---------------------------------------------------------------------------
+
+
+class SkillORM(Base):
+    """Market skill record."""
+
+    __tablename__ = "skills"
+    __table_args__ = (
+        Index("idx_skills_status_trust", "status", "trust_level"),
+        Index("idx_skills_updated_at", "updated_at"),
+    )
+
+    skill_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    owner_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), index=True)
+    icon_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    categories: Mapped[list[str]] = mapped_column(JSON, default=list)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    status: Mapped[SkillStatus] = mapped_column(SAEnum(SkillStatus), default=SkillStatus.PUBLISHED, index=True)
+    trust_level: Mapped[TrustLevel] = mapped_column(SAEnum(TrustLevel), default=TrustLevel.COMMUNITY)
+    download_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    owner: Mapped[AuthorORM] = relationship()
+    versions: Mapped[list[SkillVersionORM]] = relationship(back_populates="skill", cascade="all, delete-orphan")
+
+
+class SkillVersionORM(Base):
+    """Installable skill version (zip package)."""
+
+    __tablename__ = "skill_versions"
+    __table_args__ = (
+        UniqueConstraint("skill_id", "version", name="uq_skill_version"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    skill_id: Mapped[str] = mapped_column(ForeignKey("skills.skill_id"), index=True)
+    version: Mapped[str] = mapped_column(String(80), index=True)
+    package_path: Mapped[str] = mapped_column(String(500))
+    package_size: Mapped[int] = mapped_column(Integer)
+    checksum_sha256: Mapped[str] = mapped_column(String(64))
+    release_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    min_mofox_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    download_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    skill: Mapped[SkillORM] = relationship(back_populates="versions")
+
+
+class SkillLikeORM(Base):
+    """Like relationship between an author and a skill."""
+
+    __tablename__ = "skill_likes"
+    __table_args__ = (UniqueConstraint("skill_id", "author_id", name="uq_skill_like"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    skill_id: Mapped[str] = mapped_column(ForeignKey("skills.skill_id"), index=True)
+    author_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class SkillRatingORM(Base):
+    """User rating (1-5) for a skill."""
+
+    __tablename__ = "skill_ratings"
+    __table_args__ = (UniqueConstraint("skill_id", "author_id", name="uq_skill_rating"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    skill_id: Mapped[str] = mapped_column(ForeignKey("skills.skill_id"), index=True)
+    author_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), index=True)
+    score: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class SkillCommentORM(Base):
+    """Threaded comment on a skill."""
+
+    __tablename__ = "skill_comments"
+    __table_args__ = (
+        Index(
+            "idx_skill_comments_skill_parent_created",
+            "skill_id",
+            "parent_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    skill_id: Mapped[str] = mapped_column(ForeignKey("skills.skill_id"), index=True)
+    author_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), index=True)
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("skill_comments.id"), nullable=True, index=True)
+    content: Mapped[str] = mapped_column(Text)
+    mention_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class SkillSubscriptionORM(Base):
+    """Subscription relationship between an author and a skill."""
+
+    __tablename__ = "skill_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("skill_id", "author_id", name="uq_skill_subscription"),
+        Index("idx_skill_subscriptions_skill_created", "skill_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    skill_id: Mapped[str] = mapped_column(ForeignKey("skills.skill_id"), index=True)
+    author_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
