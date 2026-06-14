@@ -48,7 +48,12 @@ def upgrade() -> None:
 
     if _is_postgres():
         with op.get_context().autocommit_block():
-            op.execute("CREATE TYPE IF NOT EXISTS skillstatus AS ENUM ('published', 'blocked')")
+            op.execute("""
+                DO $$ BEGIN
+                    CREATE TYPE skillstatus AS ENUM ('published', 'blocked');
+                EXCEPTION WHEN duplicate_object THEN NULL;
+                END $$;
+            """)
             for value in NEW_REVIEW_ACTIONS:
                 op.execute(
                     f"ALTER TYPE reviewaction ADD VALUE IF NOT EXISTS '{value}'"
