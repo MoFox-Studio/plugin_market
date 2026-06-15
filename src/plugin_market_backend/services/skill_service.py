@@ -400,8 +400,22 @@ class SkillService:
 
         return file_path, ver.package_size, ver.checksum_sha256
 
-    async def record_download(self, skill_id: str, version: str) -> SkillInstallRecord:
-        """Increment the download counter for a skill version."""
+    async def record_download(self, skill_id: str, version: str | None = None) -> SkillInstallRecord:
+        """Increment the download counter for a skill version.
+
+        If *version* is ``None``, the latest version is used.
+        """
+
+        if version is None:
+            versions = await self._load_versions_for_skill(skill_id)
+            if not versions:
+                raise ApiError(
+                    404,
+                    "SKILL_NO_VERSIONS",
+                    "Skill has no versions yet.",
+                    {"skill_id": skill_id},
+                )
+            version = versions[0].version
 
         ver = await self.session.scalar(
             select(SkillVersionORM).where(

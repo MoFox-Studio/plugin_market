@@ -1546,7 +1546,7 @@ async def download_skill_version(skill_id: str, version: str) -> FileResponse:
         file_path, file_size, checksum = await SkillService(session).get_version_download(skill_id, version)
         await SkillService(session).record_download(skill_id, version)
 
-    safe_skill = "".join(ch for ch in skill_id if ch.isalnum() or ch in "-_.")
+    safe_skill = "".join(ch for ch in skill_id if ch.isascii() and (ch.isalnum() or ch in "-_.")) or "skill"
     filename = f"{safe_skill}-{version}.zip"
     return FileResponse(
         file_path,
@@ -1668,7 +1668,7 @@ async def toggle_skill_subscription(
 @app.post("/api/v1/skills/{skill_id}/install-record", response_model=SkillInstallRecord)
 async def record_skill_install(
     skill_id: str,
-    version: str = Query(...),
+    version: str | None = Query(default=None),
 ) -> SkillInstallRecord:
     """Increment the download counter when a client installs a version."""
 
