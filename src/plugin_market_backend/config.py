@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     env: str = "development"
     database_url: str = "sqlite+aiosqlite:///./data/plugin_market.db"
+    storage_dir: str = "./data"
     cors_origins: list[str] = Field(default_factory=list)
     admin_token: str = "admin-token"
     author_token: str = "dev-token"
@@ -43,6 +44,12 @@ class Settings(BaseSettings):
         if raw_path == ":memory:":
             return None
         return Path(raw_path)
+
+    @property
+    def storage_path(self) -> Path:
+        """Return the absolute storage root for uploaded packages and media."""
+
+        return Path(self.storage_dir).expanduser().resolve()
 
 
 @lru_cache(maxsize=1)

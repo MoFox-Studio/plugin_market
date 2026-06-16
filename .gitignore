@@ -58,6 +58,8 @@ secrets.yml
 # Data files
 *.sqlite3
 *.db
+data/plugin_media/
+data/skill_packages/
 
 # Jupyter
 .ipynb_checkpoints

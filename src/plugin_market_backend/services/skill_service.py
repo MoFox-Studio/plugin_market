@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from plugin_market_backend.content import (
     extract_and_validate_skill,
+    resolve_skill_package_path,
     store_skill_package,
 )
 from plugin_market_backend.enums import ReviewAction, SkillStatus, TrustLevel
@@ -389,7 +390,7 @@ class SkillService:
                 {"skill_id": skill_id, "version": version},
             )
 
-        file_path = ver.package_path
+        file_path = resolve_skill_package_path(ver.package_path)
         if not os.path.isfile(file_path):
             raise ApiError(
                 404,
@@ -398,7 +399,7 @@ class SkillService:
                 {"skill_id": skill_id, "version": version},
             )
 
-        return file_path, ver.package_size, ver.checksum_sha256
+        return str(file_path), ver.package_size, ver.checksum_sha256
 
     async def record_download(self, skill_id: str, version: str | None = None) -> SkillInstallRecord:
         """Increment the download counter for a skill version.

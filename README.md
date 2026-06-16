@@ -24,6 +24,7 @@ uv run uvicorn plugin_market_backend.app:app --host 127.0.0.1 --port 8787
 
 
 默认开发配置会使用 `./data/plugin_market.db`，启动时自动建表并写入 demo 数据。
+Skill zip 包和上传媒体默认也会落在 `./data/` 下。
 
 前端入口：
 
@@ -40,6 +41,7 @@ docker compose up --build
 ```
 
 生产部署前应复制 `.env.example` 并替换所有 token 和 webhook secret。
+当前 Compose 配置会把仓库下的 `./data` 显式挂载到容器 `/app/data`，所以数据库、Skill 包和上传媒体在容器重建后仍会保留。
 
 当前仓库内置的 `docker-compose.yml` 适合以下生产拓扑：
 
@@ -55,6 +57,8 @@ cp .env.example .env
 docker compose up -d --build
 docker compose logs -f api
 ```
+
+如果你是从旧的 named volume 配置升级到当前版本，先把旧容器 `/app/data` 里的内容迁移到仓库本地 `./data/`，再执行重建。
 
 容器启动时会先执行数据库引导：
 
@@ -101,6 +105,7 @@ server {
 
 ```text
 PLUGIN_MARKET_DATABASE_URL=sqlite+aiosqlite:///./data/plugin_market.db
+PLUGIN_MARKET_STORAGE_DIR=./data
 PLUGIN_MARKET_ADMIN_TOKEN=admin-token
 PLUGIN_MARKET_AUTHOR_TOKEN=dev-token
 PLUGIN_MARKET_GITHUB_WEBHOOK_SECRET=

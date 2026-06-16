@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import io
+import re
 import secrets
 import zipfile
 from pathlib import Path
@@ -15,11 +15,12 @@ import yaml
 from markdown import markdown
 from PIL import Image, ImageOps
 
+from plugin_market_backend.config import get_settings
 from plugin_market_backend.errors import ApiError
 
-PLUGIN_MEDIA_DIR = Path("data") / "plugin_media"
-PLUGIN_ICON_DIR = PLUGIN_MEDIA_DIR / "icons"
-PROFILE_BG_DIR = PLUGIN_MEDIA_DIR / "profile_backgrounds"
+_SKILL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
+_VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+_LEGACY_DATA_PREFIX = "data"
 
 # Upload limits (must match documented behaviour for the frontend).
 MAX_ICON_BYTES = 2 * 1024 * 1024  # 2 MiB
@@ -59,8 +60,8 @@ ALLOWED_MARKDOWN_ATTRIBUTES = {
 def ensure_plugin_media_dirs() -> None:
     """Ensure directories for stored plugin media exist."""
 
-    PLUGIN_ICON_DIR.mkdir(parents=True, exist_ok=True)
-    PROFILE_BG_DIR.mkdir(parents=True, exist_ok=True)
+    plugin_icon_dir().mkdir(parents=True, exist_ok=True)
+    profile_background_dir().mkdir(parents=True, exist_ok=True)
 
 
 def store_plugin_icon(plugin_id: str, icon_png_base64: str) -> str:
@@ -103,7 +104,7 @@ def delete_plugin_icon(plugin_id: str) -> None:
 def plugin_icon_path(plugin_id: str) -> Path:
     """Return the icon path for a plugin."""
 
-    return PLUGIN_ICON_DIR / f"{plugin_id}.png"
+    return plugin_icon_dir() / f"{plugin_id}.png"
 
 
 def plugin_icon_url(plugin_id: str) -> str:
@@ -230,7 +231,7 @@ def store_profile_background(author_id: str, raw_bytes: bytes) -> str:
     safe_id = "".join(ch for ch in author_id if ch.isalnum() or ch in {"-", "_"}).strip("-_") or "anon"
     suffix = secrets.token_hex(4)
     filename = f"{safe_id}-{suffix}.jpg"
-    target = PROFILE_BG_DIR / filename
+    target = profile_background_dir() / filename
     working.save(target, format="JPEG", quality=86, optimize=True)
     return f"/plugin-media/profile_backgrounds/{filename}"
 
@@ -243,7 +244,7 @@ def delete_profile_background_url(url: str | None) -> None:
     name = url.split("/")[-1]
     if not name:
         return
-    path = PROFILE_BG_DIR / name
+    path = profile_background_dir() / name
     if path.exists():
         try:
             path.unlink()
@@ -255,28 +256,130 @@ def delete_profile_background_url(url: str | None) -> None:
 # Skill package storage
 # ---------------------------------------------------------------------------
 
-SKILL_PACKAGES_DIR = Path("data") / "skill_packages"
 MAX_SKILL_PACKAGE_BYTES = 10 * 1024 * 1024  # 10 MiB
+
+
+def storage_root_dir() -> Path:
+    """Return the configured storage root directory."""
+
+    return get_settings().storage_path
+
+
+def plugin_media_dir() -> Path:
+    """Return the root directory for uploaded public media."""
+
+    return storage_root_dir() / "plugin_media"
+
+
+def plugin_icon_dir() -> Path:
+    """Return the directory for normalized plugin icons."""
+
+    return plugin_media_dir() / "icons"
+
+
+def profile_background_dir() -> Path:
+    """Return the directory for uploaded profile backgrounds."""
+
+    return plugin_media_dir() / "profile_backgrounds"
+
+
+def skill_packages_dir() -> Path:
+    """Return the directory for stored skill zip packages."""
+
+    return storage_root_dir() / "skill_packages"
+
+
+PLUGIN_MEDIA_DIR = plugin_media_dir()
 
 
 def ensure_skill_dirs() -> None:
     """Ensure the skill package storage directory exists."""
 
-    SKILL_PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
+    skill_packages_dir().mkdir(parents=True, exist_ok=True)
+
+
+def _validate_skill_id(skill_id: str) -> str:
+    """Validate and normalize a skill id used in filesystem storage."""
+
+    normalized = skill_id.strip()
+    if not _SKILL_ID_PATTERN.fullmatch(normalized):
+        raise ApiError(
+            422,
+            "INVALID_SKILL_ID",
+            "skill_id must match ^[a-z][a-z0-9_-]*$.",
+            {"skill_id": skill_id},
+        )
+    return normalized
+
+
+def _validate_skill_version(version: str) -> str:
+    """Validate and normalize a skill version used in filesystem storage."""
+
+    normalized = version.strip()
+    if not _VERSION_PATTERN.fullmatch(normalized):
+        raise ApiError(
+            422,
+            "INVALID_SKILL_VERSION",
+            "version contains unsupported filesystem characters.",
+            {"version": version},
+        )
+    return normalized
 
 
 def store_skill_package(skill_id: str, version: str, zip_bytes: bytes) -> str:
     """Persist a skill zip package and return its storage path.
 
-    The package is stored as ``data/skill_packages/{skill_id}/{version}.zip``.
+    The package is stored under the configured storage root as
+    ``skill_packages/{skill_id}/{version}.zip``.
     """
 
     ensure_skill_dirs()
-    skill_dir = SKILL_PACKAGES_DIR / skill_id
+    safe_skill_id = _validate_skill_id(skill_id)
+    safe_version = _validate_skill_version(version)
+    skill_dir = skill_packages_dir() / safe_skill_id
     skill_dir.mkdir(parents=True, exist_ok=True)
-    package_path = skill_dir / f"{version}.zip"
+    package_path = skill_dir / f"{safe_version}.zip"
     package_path.write_bytes(zip_bytes)
-    return str(package_path)
+    return Path("skill_packages", safe_skill_id, f"{safe_version}.zip").as_posix()
+
+
+def resolve_skill_package_path(stored_path: str) -> Path:
+    """Resolve a stored skill package path to an absolute filesystem path.
+
+    Supports both the current storage-relative format and legacy values like
+    ``data/skill_packages/...`` that were persisted before the storage-root
+    normalization.
+    """
+
+    raw_path = Path(stored_path)
+    if raw_path.is_absolute():
+        return raw_path
+
+    storage_root = storage_root_dir()
+    candidates: list[Path] = []
+    if raw_path.parts and raw_path.parts[0] == _LEGACY_DATA_PREFIX:
+        stripped = Path(*raw_path.parts[1:]) if len(raw_path.parts) > 1 else Path()
+        if stripped.parts:
+            candidates.append((storage_root / stripped).resolve())
+        candidates.append((storage_root.parent / raw_path).resolve())
+    else:
+        candidates.append((storage_root / raw_path).resolve())
+    candidates.append((Path.cwd() / raw_path).resolve())
+
+    seen: set[str] = set()
+    deduped: list[Path] = []
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(candidate)
+
+    for candidate in deduped:
+        if candidate.exists():
+            return candidate
+
+    return deduped[0]
 
 
 def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
