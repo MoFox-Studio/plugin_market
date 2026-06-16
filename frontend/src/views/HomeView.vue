@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useHomeStore } from '@/stores/home'
 import { useTaxonomyStore } from '@/stores/taxonomy'
 import { formatNumber } from '@/utils/format'
-import type { CurationEntry, Plugin } from '@/types'
+import type { CurationEntry, Plugin, CategoryPreviewSection } from '@/types'
 import HeroPoster from '@/components/HeroPoster.vue'
 import AuthorReel from '@/components/AuthorReel.vue'
 import LatestStrip from '@/components/LatestStrip.vue'
@@ -54,7 +54,7 @@ const trendingAuthors = computed(() => home.trendingAuthors)
 
 const latestPlugins = computed<Plugin[]>(() => home.data?.latest || [])
 const topRated = computed<Plugin[]>(() => home.data?.top_rated || [])
-const categoriesPreview = computed<Record<string, Plugin[]>>(() => home.data?.categories_preview || {})
+const categoriesPreview = computed<Record<string, CategoryPreviewSection>>(() => home.data?.categories_preview || {})
 
 const stats = computed(() => home.data?.stats)
 

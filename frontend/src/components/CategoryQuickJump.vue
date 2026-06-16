@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { categoryLabel } from '@/utils/format'
-import type { Plugin } from '@/types'
+import type { CategoryPreviewSection } from '@/types'
 
 interface CategoryItem {
   key: string
@@ -12,7 +12,7 @@ interface CategoryItem {
 }
 
 const props = defineProps<{
-  preview: Record<string, Plugin[]>
+  preview: Record<string, CategoryPreviewSection>
 }>()
 
 const TONE_ORDER: Array<CategoryItem['tone']> = ['coral', 'lemon', 'mint', 'plum']
@@ -31,11 +31,11 @@ const EN_FALLBACK: Record<string, string> = {
 
 const items = computed<CategoryItem[]>(() => {
   const entries = Object.entries(props.preview).slice(0, 6)
-  return entries.map(([key, plugins], idx) => ({
+  return entries.map(([key, section], idx) => ({
     key,
     label: categoryLabel(key),
     en: EN_FALLBACK[key.toLowerCase()] || key.toUpperCase(),
-    count: plugins.length,
+    count: section.total,
     tone: TONE_ORDER[idx % TONE_ORDER.length],
   }))
 })

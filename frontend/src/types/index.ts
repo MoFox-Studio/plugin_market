@@ -447,13 +447,18 @@ export interface BulkActionResult {
   results: BulkActionItemResult[]
 }
 
+export interface CategoryPreviewSection {
+  items: Plugin[]
+  total: number
+}
+
 export interface MarketHome {
   showcase: CurationEntry[]
   featured_plugins: Plugin[]
   trending_authors: TrendingItem[]
   latest: Plugin[]
   top_rated: Plugin[]
-  categories_preview: Record<string, Plugin[]>
+  categories_preview: Record<string, CategoryPreviewSection>
   stats: MarketStats
   active_announcements: Announcement[]
 }

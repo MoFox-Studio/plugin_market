@@ -27,6 +27,7 @@ from plugin_market_backend.schemas import (
     AdminDashboard,
     Author,
     AuthorFollowState,
+    CategoryPreviewSection,
     Comment,
     CommentAuthor,
     CurationEntryDTO,
@@ -323,7 +324,7 @@ class MarketService:
         per_category_limit: int = 6,
         categories_limit: int = 6,
         viewer_id: str | None = None,
-    ) -> dict[str, list[Plugin]]:
+    ) -> dict[str, CategoryPreviewSection]:
         """Return preview buckets for the most populated published categories."""
 
         stmt = (
@@ -346,11 +347,14 @@ class MarketService:
                 counts[category] = counts.get(category, 0) + 1
 
         category_order = sorted(counts, key=lambda item: (-counts[item], item))[:categories_limit]
-        preview: dict[str, list[Plugin]] = {}
+        preview: dict[str, CategoryPreviewSection] = {}
         for category in category_order:
             matching = [plugin for plugin in rows if category in (plugin.categories or [])]
             ranked = self._sort_plugins(matching, stats, "trending")[:per_category_limit]
-            preview[category] = [self._plugin_schema(plugin, stats.get(plugin.plugin_id)) for plugin in ranked]
+            preview[category] = CategoryPreviewSection(
+                items=[self._plugin_schema(plugin, stats.get(plugin.plugin_id)) for plugin in ranked],
+                total=counts[category],
+            )
         return preview
 
     async def home_showcase(

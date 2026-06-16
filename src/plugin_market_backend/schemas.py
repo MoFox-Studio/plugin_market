@@ -939,6 +939,13 @@ class BulkActionResult(BaseModel):
 # Market home aggregate -------------------------------------------------------
 
 
+class CategoryPreviewSection(BaseModel):
+    """A preview bucket for one category including actual total count."""
+
+    items: list[Plugin] = Field(default_factory=list)
+    total: int = 0
+
+
 class MarketHome(BaseModel):
     """Aggregate response for ``GET /api/v1/market/home``."""
 
@@ -947,7 +954,7 @@ class MarketHome(BaseModel):
     trending_authors: list[TrendingItem] = Field(default_factory=list)
     latest: list[Plugin] = Field(default_factory=list)
     top_rated: list[Plugin] = Field(default_factory=list)
-    categories_preview: dict[str, list[Plugin]] = Field(default_factory=dict)
+    categories_preview: dict[str, CategoryPreviewSection] = Field(default_factory=dict)
     stats: MarketStats
     active_announcements: list[AnnouncementDTO] = Field(default_factory=list)
 

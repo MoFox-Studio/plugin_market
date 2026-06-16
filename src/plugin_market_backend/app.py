@@ -44,6 +44,7 @@ from plugin_market_backend.schemas import (
     AuthorProfileUpdate,
     BulkActionRequest,
     BulkActionResult,
+    CategoryPreviewSection,
     Comment,
     CommentCreate,
     CommentListResponse,
@@ -199,7 +200,7 @@ async def _load_home_trending_authors() -> list[TrendingItem]:
         return await MarketService(session).trending_authors(limit=6)
 
 
-async def _load_home_categories_preview(viewer_id: str | None) -> dict[str, list[Plugin]]:
+async def _load_home_categories_preview(viewer_id: str | None) -> dict[str, CategoryPreviewSection]:
     async with session_scope() as session:
         return await MarketService(session).home_categories_preview(viewer_id=viewer_id)
 
