@@ -11,6 +11,7 @@ import LatestStrip from '@/components/LatestStrip.vue'
 import CategoryQuickJump from '@/components/CategoryQuickJump.vue'
 import VolKickerBar from '@/components/VolKickerBar.vue'
 import PluginCard from '@/components/PluginCard.vue'
+import api from '@/api'
 
 const home = useHomeStore()
 const taxonomy = useTaxonomyStore()
@@ -57,6 +58,8 @@ const categoriesPreview = computed<Record<string, Plugin[]>>(() => home.data?.ca
 
 const stats = computed(() => home.data?.stats)
 
+const popularSkills = ref<Skill[]>([])
+
 function gotoBrowse(query?: Record<string, string>): void {
   void router.push({ name: 'market', query: query || {} })
 }
@@ -71,6 +74,12 @@ function freshCount(): number {
 onMounted(async () => {
   await taxonomy.load()
   await home.loadHome()
+  try {
+    const res = await api.skills.list({ sort: 'downloads', page_size: 3 })
+    popularSkills.value = res.items || []
+  } catch (e) {
+    // skip on error
+  }
 })
 </script>
 
@@ -149,6 +158,10 @@ onMounted(async () => {
                 <span class="t-num">认</span>
                 <span class="t-text">认证作者</span>
               </button>
+              <button type="button" class="shortcut-tile" @click="router.push({ name: 'skills' })">
+                <span class="t-num">⚡</span>
+                <span class="t-text">Skill 市场</span>
+              </button>
             </div>
           </div>
         </aside>
@@ -196,6 +209,42 @@ onMounted(async () => {
       </div>
       <div class="grid">
         <PluginCard v-for="plugin in topRated.slice(0, 6)" :key="plugin.plugin_id" :plugin="plugin" />
+      </div>
+    </section>
+
+    <!-- POPULAR SKILLS -->
+    <section class="section" v-if="popularSkills.length" data-anim="enter-5">
+      <div class="section-head">
+        <div class="titles">
+          <span class="kicker">POPULAR SKILLS · 热门技能</span>
+          <h2>Skill 推荐</h2>
+          <p>增强 MoFox 的独立技能模块。</p>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn btn-ghost" @click="router.push({ name: 'skills' })">去 Skill 市场 →</button>
+        </div>
+      </div>
+      <div class="skills-grid">
+        <article
+          v-for="skill in popularSkills"
+          :key="skill.skill_id"
+          class="skill-card"
+          @click="router.push({ name: 'skill', params: { id: skill.skill_id } })"
+        >
+          <div class="skill-card-icon">
+            <img v-if="skill.icon_url" :src="skill.icon_url" :alt="skill.display_name">
+            <span v-else>{{ skill.display_name[0]?.toUpperCase() || '?' }}</span>
+          </div>
+          <div class="skill-card-body">
+            <h3>{{ skill.display_name }}</h3>
+            <p class="skill-card-desc">{{ skill.description.length > 80 ? skill.description.slice(0, 80) + '…' : skill.description }}</p>
+            <div class="skill-card-meta">
+              <span class="skill-card-author">{{ skill.owner_display_name || skill.owner_login || skill.owner_id }}</span>
+              <span class="skill-card-stat">⭐ {{ skill.rating_avg?.toFixed(1) || '-' }}</span>
+              <span class="skill-card-stat">⬇ {{ skill.download_count }}</span>
+            </div>
+          </div>
+        </article>
       </div>
     </section>
 
@@ -471,4 +520,57 @@ onMounted(async () => {
 @media (prefers-reduced-motion: reduce) {
   [data-anim] { animation: none; }
 }
+
+/* Skills grid */
+.skills-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+.skill-card {
+  display: grid; grid-template-columns: auto 1fr; gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--dur-fast);
+}
+.skill-card:hover {
+  border-color: var(--blue-300);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
+}
+.skill-card-icon {
+  width: 48px; height: 48px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--coral), var(--lemon));
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 20px;
+  color: var(--ink-900);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.skill-card-icon img { width: 100%; height: 100%; object-fit: cover; }
+.skill-card-body { display: grid; gap: 4px; min-width: 0; }
+.skill-card-body h3 {
+  margin: 0;
+  font-family: var(--font-display); font-weight: 800;
+  font-size: 16px; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.skill-card-desc {
+  margin: 0;
+  font-size: 13px; color: var(--ink-600);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.5;
+}
+.skill-card-meta {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-500);
+  margin-top: 4px;
+}
+.skill-card-author { font-weight: 600; }
+.skill-card-stat { opacity: 0.8; }
 </style>

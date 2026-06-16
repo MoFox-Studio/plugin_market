@@ -25,6 +25,7 @@ COPY --from=frontend-build /src/plugin_market_backend/static/ ./src/plugin_marke
 
 RUN uv sync --frozen --no-dev
 
+VOLUME ["/app/data"]
 EXPOSE 8787
 
 CMD ["sh", "-c", "uv run python -m plugin_market_backend.bootstrap && uv run uvicorn plugin_market_backend.app:app --host 0.0.0.0 --port 8787"]

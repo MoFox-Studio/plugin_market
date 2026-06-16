@@ -127,8 +127,9 @@ async function uploadForm<T = any>(path: string, formData: FormData): Promise<T>
   const r = await fetch(path, { method: 'POST', credentials: 'include', body: formData })
   const data = await r.json().catch(() => null)
   if (!r.ok) {
+    const msg = data?.error?.message || `上传失败 (HTTP ${r.status})`
     throw new ApiError(
-      data?.error?.message || r.statusText || 'Upload failed',
+      msg,
       r.status,
       data?.error?.code,
     )

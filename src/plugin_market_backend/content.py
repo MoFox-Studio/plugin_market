@@ -324,7 +324,7 @@ def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
                 raise ApiError(
                     422,
                     "SKILL_PACKAGE_NO_SKILL_MD",
-                    "Skill package must contain a SKILL.md file at the root.",
+                    "Skill package must contain a SKILL.md file (exact uppercase) at the zip root.",
                 )
             # Prefer an exact root match; otherwise use the first single-nesting candidate
             skill_md_name = "SKILL.md" if "SKILL.md" in skill_md_candidates else skill_md_candidates[0]
@@ -342,7 +342,7 @@ def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
                         raise ApiError(
                             422,
                             "SKILL_PACKAGE_INVALID_FRONT_MATTER",
-                            "SKILL.md front matter is not valid YAML.",
+                            "SKILL.md 的 YAML 头部格式错误，请检查 `---` 包裹的 YAML 语法",
                         ) from exc
                     body_lines = parts[2].splitlines()
             else:
@@ -353,7 +353,7 @@ def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
                 raise ApiError(
                     422,
                     "SKILL_PACKAGE_MISSING_NAME",
-                    "SKILL.md front matter must include a non-empty 'name' field.",
+                    "SKILL.md 的 YAML 头部必须包含非空的 name 字段，例如: `name: My Skill`",
                 )
             description = front_matter.get("description", "").strip()
             body = "\n".join(body_lines).strip()

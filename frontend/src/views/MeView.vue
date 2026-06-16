@@ -54,7 +54,20 @@ const skillZipFile = ref<File | null>(null)
 
 async function copyText(value: string, successMessage: string) {
   try {
-    await navigator.clipboard.writeText(value)
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value)
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = value
+      ta.style.position = 'fixed'
+      ta.style.left = '-9999px'
+      ta.style.top = '-9999px'
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
     toast.show(successMessage, 'ok')
   } catch {
     toast.show('复制失败，请检查浏览器权限', 'error')
@@ -296,7 +309,8 @@ async function publishSkill() {
     toast.show('Skill 发布成功！', 'ok')
     await loadMySkills()
   } catch (e) {
-    toast.show((e as Error).message || '发布失败', 'error')
+    const msg = e instanceof Error ? e.message : '发布失败'
+    toast.show(msg, 'error')
   } finally {
     skillPublishSaving.value = false
   }

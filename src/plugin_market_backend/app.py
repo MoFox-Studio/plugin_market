@@ -21,7 +21,7 @@ from sqlalchemy import func, select
 from plugin_market_backend.auth import require_author_token, require_market_access_token
 from plugin_market_backend.caching import aget_or_set, cache_bus
 from plugin_market_backend.config import get_settings
-from plugin_market_backend.content import PLUGIN_MEDIA_DIR, ensure_plugin_media_dirs
+from plugin_market_backend.content import PLUGIN_MEDIA_DIR, ensure_plugin_media_dirs, ensure_skill_dirs
 from plugin_market_backend.database import configure_database, init_database, session_scope
 from plugin_market_backend.enums import PluginStatus, ReviewAction, TrustLevel, VersionStatus
 from plugin_market_backend.errors import ApiError, api_error_handler, validation_error_handler
@@ -248,6 +248,7 @@ app.add_exception_handler(RequestValidationError, validation_error_handler)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 SERVER_STARTED_AT = datetime.now(timezone.utc)
 ensure_plugin_media_dirs()
+ensure_skill_dirs()
 app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 app.mount("/plugin-media", StaticFiles(directory=PLUGIN_MEDIA_DIR), name="plugin-media")
 
