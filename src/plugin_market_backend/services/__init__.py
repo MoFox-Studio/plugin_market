@@ -25,7 +25,7 @@ from plugin_market_backend.services.curation_service import CurationService
 from plugin_market_backend.services.inbox_service import InboxService
 from plugin_market_backend.services.inline_edit_service import InlineEditService
 from plugin_market_backend.services.profile_service import ProfileService
-from plugin_market_backend.services.skill_service import SkillService
+from plugin_market_backend.services.skill_service import SkillService, synchronize_skill_storage
 
 __all__ = [
     "AUDIENCE_VALUES",
@@ -38,4 +38,5 @@ __all__ = [
     "SkillService",
     "assert_can_edit_plugin_metadata",
     "audience_matches",
+    "synchronize_skill_storage",
 ]

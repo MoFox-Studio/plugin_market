@@ -103,7 +103,7 @@ from plugin_market_backend.schemas import (
 )
 from plugin_market_backend.seed import seed_rich_demo
 from plugin_market_backend.service import MarketService
-from plugin_market_backend.services import AnnouncementsService, BulkOpsService, CurationService, InboxService, InlineEditService, ProfileService, SkillService
+from plugin_market_backend.services import AnnouncementsService, BulkOpsService, CurationService, InboxService, InlineEditService, ProfileService, SkillService, synchronize_skill_storage
 from plugin_market_backend.session_auth import (
     author_schema,
     clear_browser_session,
@@ -234,6 +234,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     if settings.seed_demo_data:
         async with session_scope() as session:
             await seed_rich_demo(session)
+    async with session_scope() as session:
+        await synchronize_skill_storage(session)
     yield
 
 
@@ -1549,7 +1551,8 @@ async def download_skill_version(skill_id: str, version: str) -> FileResponse:
         await SkillService(session).record_download(skill_id, version)
 
     safe_skill = "".join(ch for ch in skill_id if ch.isascii() and (ch.isalnum() or ch in "-_.")) or "skill"
-    filename = f"{safe_skill}-{version}.zip"
+    safe_version = "".join(ch for ch in version if ch.isascii() and (ch.isalnum() or ch in "-_.")) or "version"
+    filename = f"{safe_skill}-{safe_version}.zip"
     return FileResponse(
         file_path,
         media_type="application/zip",

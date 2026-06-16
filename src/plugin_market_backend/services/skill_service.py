@@ -17,18 +17,28 @@ All write methods append :class:`ReviewRecordORM` audit records.
 
 from __future__ import annotations
 
+from datetime import datetime
 import hashlib
 import os
+import shutil
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from plugin_market_backend.content import (
     extract_and_validate_skill,
+    infer_skill_storage_identifiers,
+    inspect_skill_archive,
+    iter_skill_package_files,
+    load_skill_package_manifest,
     resolve_skill_package_path,
+    skill_package_storage_path,
     store_skill_package,
+    validate_skill_id,
+    validate_skill_version,
+    write_skill_package_manifest,
 )
-from plugin_market_backend.enums import ReviewAction, SkillStatus, TrustLevel
+from plugin_market_backend.enums import AuthorType, ReviewAction, SkillStatus, TrustLevel
 from plugin_market_backend.errors import ApiError
 from plugin_market_backend.orm import (
     AuthorORM,
@@ -88,6 +98,9 @@ class SkillService:
         Returns the newly-created skill DTO.
         """
 
+        skill_id = validate_skill_id(skill_id)
+        version = validate_skill_version(version)
+
         # Validate and extract metadata from the zip
         name, description, _readme = extract_and_validate_skill(zip_bytes)
 
@@ -102,7 +115,7 @@ class SkillService:
             )
 
         # Store the zip package
-        package_path = store_skill_package(skill_id, version, zip_bytes)
+        package_path = store_skill_package(owner_id, skill_id, version, zip_bytes)
         package_size = len(zip_bytes)
         checksum = hashlib.sha256(zip_bytes).hexdigest()
 
@@ -137,6 +150,26 @@ class SkillService:
             created_at=now,
         )
         self.session.add(ver)
+        write_skill_package_manifest(
+            package_path,
+            {
+                "owner_id": owner_id,
+                "skill_id": skill_id,
+                "version": version,
+                "display_name": name,
+                "description": description or "",
+                "readme_markdown": _readme or None,
+                "categories": categories or [],
+                "tags": tags or [],
+                "status": SkillStatus.PUBLISHED.value,
+                "trust_level": TrustLevel.COMMUNITY.value,
+                "release_notes": release_notes,
+                "min_mofox_version": min_mofox_version,
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+                "version_created_at": now.isoformat(),
+            },
+        )
 
         # Audit record
         await _append_audit(
@@ -167,6 +200,9 @@ class SkillService:
         The zip is validated the same way as :meth:`create_skill`.
         """
 
+        skill_id = validate_skill_id(skill_id)
+        version = validate_skill_version(version)
+
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
             raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
@@ -190,9 +226,10 @@ class SkillService:
             )
 
         # Store the zip package
-        package_path = store_skill_package(skill_id, version, zip_bytes)
+        package_path = store_skill_package(skill.owner_id, skill_id, version, zip_bytes)
         package_size = len(zip_bytes)
         checksum = hashlib.sha256(zip_bytes).hexdigest()
+        created_at = utc_now()
 
         ver = SkillVersionORM(
             skill_id=skill_id,
@@ -203,12 +240,40 @@ class SkillService:
             release_notes=release_notes,
             min_mofox_version=min_mofox_version,
             download_count=0,
-            created_at=utc_now(),
+            created_at=created_at,
         )
         self.session.add(ver)
+        write_skill_package_manifest(
+            package_path,
+            {
+                "owner_id": skill.owner_id,
+                "skill_id": skill_id,
+                "version": version,
+                "display_name": skill.display_name,
+                "description": skill.description or "",
+                "readme_markdown": skill.readme_markdown,
+                "categories": skill.categories or [],
+                "tags": skill.tags or [],
+                "status": (
+                    skill.status.value if hasattr(skill.status, "value") else str(skill.status)
+                ),
+                "trust_level": (
+                    skill.trust_level.value
+                    if hasattr(skill.trust_level, "value")
+                    else str(skill.trust_level)
+                ),
+                "release_notes": release_notes,
+                "min_mofox_version": min_mofox_version,
+                "created_at": (
+                    skill.created_at.isoformat() if skill.created_at is not None else None
+                ),
+                "updated_at": updated_at.isoformat(),
+                "version_created_at": created_at.isoformat(),
+            },
+        )
 
         # Update skill timestamp
-        skill.updated_at = utc_now()
+        skill.updated_at = updated_at
 
         await _append_audit(
             self.session,
@@ -925,6 +990,323 @@ class SkillService:
             )
         ).all()
         return list(rows)
+
+
+async def synchronize_skill_storage(session: AsyncSession) -> int:
+    """Backfill storage metadata and recover missing skill rows from disk."""
+
+    await _backfill_skill_storage_metadata(session)
+    return await _recover_missing_skills_from_storage(session)
+
+
+async def _backfill_skill_storage_metadata(session: AsyncSession) -> None:
+    """Ensure stored skill packages have stable paths and sidecar manifests."""
+
+    rows = (
+        await session.execute(
+            select(SkillORM, SkillVersionORM).join(
+                SkillVersionORM,
+                SkillVersionORM.skill_id == SkillORM.skill_id,
+            )
+        )
+    ).all()
+
+    for skill, version in rows:
+        current_path = resolve_skill_package_path(version.package_path)
+        target_path = skill_package_storage_path(skill.owner_id, skill.skill_id, version.version)
+        target_abs_path = resolve_skill_package_path(target_path)
+
+        if current_path.exists() and current_path.resolve() != target_abs_path.resolve():
+            target_abs_path.parent.mkdir(parents=True, exist_ok=True)
+            if not target_abs_path.exists():
+                shutil.move(str(current_path), str(target_abs_path))
+
+        if target_abs_path.exists():
+            version.package_path = target_path
+            write_skill_package_manifest(
+                target_path,
+                {
+                    "owner_id": skill.owner_id,
+                    "skill_id": skill.skill_id,
+                    "version": version.version,
+                    "display_name": skill.display_name,
+                    "description": skill.description or "",
+                    "readme_markdown": skill.readme_markdown,
+                    "categories": skill.categories or [],
+                    "tags": skill.tags or [],
+                    "status": (
+                        skill.status.value if hasattr(skill.status, "value") else str(skill.status)
+                    ),
+                    "trust_level": (
+                        skill.trust_level.value
+                        if hasattr(skill.trust_level, "value")
+                        else str(skill.trust_level)
+                    ),
+                    "release_notes": version.release_notes,
+                    "min_mofox_version": version.min_mofox_version,
+                    "created_at": (
+                        skill.created_at.isoformat() if skill.created_at is not None else None
+                    ),
+                    "updated_at": (
+                        skill.updated_at.isoformat() if skill.updated_at is not None else None
+                    ),
+                    "version_created_at": (
+                        version.created_at.isoformat() if version.created_at is not None else None
+                    ),
+                },
+            )
+
+    await session.flush()
+
+
+async def _recover_missing_skills_from_storage(session: AsyncSession) -> int:
+    """Recreate missing skill rows from persisted zip packages and manifests."""
+
+    existing_skills = set((await session.scalars(select(SkillORM.skill_id))).all())
+    existing_versions = set(
+        tuple(row)
+        for row in (
+            await session.execute(select(SkillVersionORM.skill_id, SkillVersionORM.version))
+        ).all()
+    )
+
+    recovered = 0
+    for stored_path, absolute_path in iter_skill_package_files():
+        manifest = load_skill_package_manifest(stored_path) or {}
+        owner_from_path, skill_from_path, version_from_path = infer_skill_storage_identifiers(
+            stored_path
+        )
+        zip_bytes = absolute_path.read_bytes()
+        archive = inspect_skill_archive(zip_bytes)
+
+        skill_id = str(
+            manifest.get("skill_id")
+            or archive.front_matter.get("skill_id")
+            or skill_from_path
+            or ""
+        ).strip()
+        version = str(
+            manifest.get("version")
+            or archive.front_matter.get("version")
+            or version_from_path
+            or ""
+        ).strip()
+        owner_id = str(
+            manifest.get("owner_id")
+            or archive.front_matter.get("owner_id")
+            or archive.front_matter.get("author_id")
+            or owner_from_path
+            or f"recovered:{skill_id or absolute_path.parent.name}"
+        ).strip()
+
+        if not skill_id or not version:
+            continue
+
+        skill_id = validate_skill_id(skill_id)
+        version = validate_skill_version(version)
+        owner_id = owner_id or f"recovered:{skill_id}"
+        await _ensure_recovery_author(
+            session,
+            owner_id=owner_id,
+            display_name=str(
+                manifest.get("owner_display_name")
+                or archive.front_matter.get("owner_display_name")
+                or archive.front_matter.get("author_name")
+                or owner_id
+            ).strip()
+            or owner_id,
+        )
+
+        created_at = (
+            _parse_recovery_datetime(
+                manifest.get("created_at") or archive.front_matter.get("created_at")
+            )
+            or utc_now()
+        )
+        updated_at = (
+            _parse_recovery_datetime(
+                manifest.get("updated_at") or archive.front_matter.get("updated_at")
+            )
+            or created_at
+        )
+        version_created_at = (
+            _parse_recovery_datetime(
+                manifest.get("version_created_at") or archive.front_matter.get("version_created_at")
+            )
+            or updated_at
+        )
+
+        categories = _coerce_string_list(
+            manifest.get("categories") or archive.front_matter.get("categories")
+        )
+        tags = _coerce_string_list(manifest.get("tags") or archive.front_matter.get("tags"))
+        release_notes = _coerce_optional_text(
+            manifest.get("release_notes") or archive.front_matter.get("release_notes")
+        )
+        min_mofox_version = _coerce_optional_text(
+            manifest.get("min_mofox_version") or archive.front_matter.get("min_mofox_version")
+        )
+        display_name = str(manifest.get("display_name") or archive.name).strip() or archive.name
+        description = (
+            _coerce_optional_text(manifest.get("description") or archive.description) or ""
+        )
+        readme_markdown = _coerce_optional_text(
+            manifest.get("readme_markdown") or archive.readme_text
+        )
+        status = _parse_skill_status(manifest.get("status"))
+        trust_level = _parse_trust_level(manifest.get("trust_level"))
+
+        write_skill_package_manifest(
+            stored_path,
+            {
+                "owner_id": owner_id,
+                "skill_id": skill_id,
+                "version": version,
+                "display_name": display_name,
+                "description": description,
+                "readme_markdown": readme_markdown,
+                "categories": categories,
+                "tags": tags,
+                "status": status.value,
+                "trust_level": trust_level.value,
+                "release_notes": release_notes,
+                "min_mofox_version": min_mofox_version,
+                "created_at": created_at.isoformat(),
+                "updated_at": updated_at.isoformat(),
+                "version_created_at": version_created_at.isoformat(),
+                "owner_display_name": owner_id,
+            },
+        )
+
+        if skill_id not in existing_skills:
+            skill = SkillORM(
+                skill_id=skill_id,
+                display_name=display_name,
+                description=description,
+                readme_markdown=readme_markdown,
+                owner_id=owner_id,
+                categories=categories,
+                tags=tags,
+                status=status,
+                trust_level=trust_level,
+                download_count=0,
+                created_at=created_at,
+                updated_at=updated_at,
+            )
+            session.add(skill)
+            existing_skills.add(skill_id)
+            recovered += 1
+
+        version_key = (skill_id, version)
+        if version_key not in existing_versions:
+            session.add(
+                SkillVersionORM(
+                    skill_id=skill_id,
+                    version=version,
+                    package_path=stored_path,
+                    package_size=len(zip_bytes),
+                    checksum_sha256=hashlib.sha256(zip_bytes).hexdigest(),
+                    release_notes=release_notes,
+                    min_mofox_version=min_mofox_version,
+                    download_count=0,
+                    created_at=version_created_at,
+                )
+            )
+            existing_versions.add(version_key)
+            recovered += 1
+
+    if recovered:
+        await session.flush()
+    return recovered
+
+
+async def _ensure_recovery_author(
+    session: AsyncSession,
+    *,
+    owner_id: str,
+    display_name: str,
+) -> None:
+    """Create a minimal author row when recovery finds an unknown owner."""
+
+    with session.no_autoflush:
+        existing = await session.get(AuthorORM, owner_id)
+        if existing is not None:
+            return
+        login = owner_id
+        by_login = (
+            await session.execute(select(AuthorORM).where(AuthorORM.github_login == login))
+        ).scalar_one_or_none()
+        if by_login is not None:
+            return
+
+    session.add(
+        AuthorORM(
+            author_id=owner_id,
+            github_login=owner_id,
+            display_name=display_name or owner_id,
+            author_type=AuthorType.USER,
+            verified_at=utc_now(),
+            created_at=utc_now(),
+            updated_at=utc_now(),
+        )
+    )
+    await session.flush()
+
+
+def _parse_recovery_datetime(value: object) -> datetime | None:
+    """Parse an optional stored ISO datetime."""
+
+    if isinstance(value, str) and value.strip():
+        normalized = value.strip().replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=utc_now().tzinfo)
+    return None
+
+
+def _coerce_optional_text(value: object) -> str | None:
+    """Normalize optional manifest/front-matter text values."""
+
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _coerce_string_list(value: object) -> list[str]:
+    """Normalize list-like manifest/front-matter values into clean strings."""
+
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return []
+
+
+def _parse_skill_status(value: object) -> SkillStatus:
+    """Parse a stored status, defaulting to published for recovery."""
+
+    if isinstance(value, str):
+        try:
+            return SkillStatus(value)
+        except ValueError:
+            return SkillStatus.PUBLISHED
+    return SkillStatus.PUBLISHED
+
+
+def _parse_trust_level(value: object) -> TrustLevel:
+    """Parse a stored trust level, defaulting to community for recovery."""
+
+    if isinstance(value, str):
+        try:
+            return TrustLevel(value)
+        except ValueError:
+            return TrustLevel.COMMUNITY
+    return TrustLevel.COMMUNITY
 
 
 # ----------------------------------------------------------------------

@@ -23,7 +23,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
+      - plugin_market_media:/app/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -31,3 +31,4 @@ services:
 
 volumes:
   plugin_market_pgdata:
+  plugin_market_media:

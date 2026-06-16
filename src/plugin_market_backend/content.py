@@ -5,10 +5,13 @@ from __future__ import annotations
 import base64
 import binascii
 import io
-import re
+import json
 import secrets
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+from urllib.parse import quote, unquote
 
 import bleach
 import yaml
@@ -18,9 +21,8 @@ from PIL import Image, ImageOps
 from plugin_market_backend.config import get_settings
 from plugin_market_backend.errors import ApiError
 
-_SKILL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
-_VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 _LEGACY_DATA_PREFIX = "data"
+SKILL_MANIFEST_SCHEMA_VERSION = 1
 
 # Upload limits (must match documented behaviour for the frontend).
 MAX_ICON_BYTES = 2 * 1024 * 1024  # 2 MiB
@@ -55,6 +57,16 @@ ALLOWED_MARKDOWN_ATTRIBUTES = {
     "th": ["align"],
     "td": ["align"],
 }
+
+
+@dataclass(slots=True)
+class SkillArchiveMetadata:
+    """Parsed metadata extracted from an uploaded skill zip package."""
+
+    name: str
+    description: str
+    readme_text: str
+    front_matter: dict[str, Any]
 
 
 def ensure_plugin_media_dirs() -> None:
@@ -298,49 +310,173 @@ def ensure_skill_dirs() -> None:
     skill_packages_dir().mkdir(parents=True, exist_ok=True)
 
 
-def _validate_skill_id(skill_id: str) -> str:
-    """Validate and normalize a skill id used in filesystem storage."""
+def _validate_storage_segment(value: str, *, field_name: str, error_code: str) -> str:
+    """Validate a logical identifier that will become one encoded path segment."""
 
-    normalized = skill_id.strip()
-    if not _SKILL_ID_PATTERN.fullmatch(normalized):
+    normalized = value.strip()
+    if not normalized:
+        raise ApiError(422, error_code, f"{field_name} must not be empty.", {field_name: value})
+    if normalized in {".", ".."}:
+        raise ApiError(422, error_code, f"{field_name} must not be '.' or '..'.", {field_name: value})
+    if "/" in normalized or "\\" in normalized:
         raise ApiError(
             422,
-            "INVALID_SKILL_ID",
-            "skill_id must match ^[a-z][a-z0-9_-]*$.",
-            {"skill_id": skill_id},
+            error_code,
+            f"{field_name} must not contain path separators.",
+            {field_name: value},
+        )
+    if any(ord(char) < 32 or ord(char) == 127 for char in normalized):
+        raise ApiError(
+            422,
+            error_code,
+            f"{field_name} must not contain control characters.",
+            {field_name: value},
         )
     return normalized
 
 
-def _validate_skill_version(version: str) -> str:
-    """Validate and normalize a skill version used in filesystem storage."""
+def validate_skill_id(skill_id: str) -> str:
+    """Validate and normalize a skill id used in APIs and storage."""
 
-    normalized = version.strip()
-    if not _VERSION_PATTERN.fullmatch(normalized):
-        raise ApiError(
-            422,
-            "INVALID_SKILL_VERSION",
-            "version contains unsupported filesystem characters.",
-            {"version": version},
-        )
-    return normalized
+    return _validate_storage_segment(
+        skill_id,
+        field_name="skill_id",
+        error_code="INVALID_SKILL_ID",
+    )
 
 
-def store_skill_package(skill_id: str, version: str, zip_bytes: bytes) -> str:
+def validate_skill_version(version: str) -> str:
+    """Validate and normalize a skill version used in APIs and storage."""
+
+    return _validate_storage_segment(
+        version,
+        field_name="version",
+        error_code="INVALID_SKILL_VERSION",
+    )
+
+
+def _encode_storage_segment(value: str) -> str:
+    """Encode an arbitrary identifier into a single filesystem-safe segment."""
+
+    return quote(value, safe="")
+
+
+def _decode_storage_segment(value: str) -> str:
+    """Decode one storage path segment back to its logical identifier."""
+
+    return unquote(value)
+
+
+def _skill_storage_segments(owner_id: str, skill_id: str, version: str) -> tuple[str, str, str]:
+    """Return encoded storage path segments for a skill package."""
+
+    normalized_owner = _validate_storage_segment(
+        owner_id,
+        field_name="owner_id",
+        error_code="INVALID_OWNER_ID",
+    )
+    normalized_skill_id = validate_skill_id(skill_id)
+    normalized_version = validate_skill_version(version)
+    return (
+        _encode_storage_segment(normalized_owner),
+        _encode_storage_segment(normalized_skill_id),
+        _encode_storage_segment(normalized_version),
+    )
+
+
+def infer_skill_storage_identifiers(stored_path: str) -> tuple[str | None, str | None, str | None]:
+    """Infer ``(owner_id, skill_id, version)`` from a stored package path."""
+
+    raw_path = Path(stored_path)
+    parts = list(raw_path.parts)
+    if parts and parts[0] == _LEGACY_DATA_PREFIX:
+        parts = parts[1:]
+    if not parts or parts[0] != "skill_packages":
+        return None, None, None
+
+    if len(parts) >= 4:
+        owner_id = _decode_storage_segment(parts[-3])
+        skill_id = _decode_storage_segment(parts[-2])
+        version = _decode_storage_segment(Path(parts[-1]).stem)
+        return owner_id, skill_id, version
+
+    if len(parts) >= 3:
+        skill_id = _decode_storage_segment(parts[-2])
+        version = _decode_storage_segment(Path(parts[-1]).stem)
+        return None, skill_id, version
+
+    return None, None, None
+
+
+def skill_package_manifest_path(package_path: Path) -> Path:
+    """Return the sidecar manifest path for one stored skill zip package."""
+
+    return package_path.with_suffix(".json")
+
+
+def iter_skill_package_files() -> list[tuple[str, Path]]:
+    """Return all stored skill package files as ``(stored_path, absolute_path)``."""
+
+    root = skill_packages_dir()
+    if not root.exists():
+        return []
+
+    storage_root = storage_root_dir()
+    items: list[tuple[str, Path]] = []
+    for package_path in root.rglob("*.zip"):
+        items.append((package_path.relative_to(storage_root).as_posix(), package_path))
+    items.sort(key=lambda item: item[0])
+    return items
+
+
+def skill_package_storage_path(owner_id: str, skill_id: str, version: str) -> str:
+    """Return the relative storage path for one skill package."""
+
+    safe_owner_id, safe_skill_id, safe_version = _skill_storage_segments(owner_id, skill_id, version)
+    return Path("skill_packages", safe_owner_id, safe_skill_id, f"{safe_version}.zip").as_posix()
+
+
+def store_skill_package(owner_id: str, skill_id: str, version: str, zip_bytes: bytes) -> str:
     """Persist a skill zip package and return its storage path.
 
     The package is stored under the configured storage root as
-    ``skill_packages/{skill_id}/{version}.zip``.
+    ``skill_packages/{owner_id}/{skill_id}/{version}.zip`` using encoded
+    path segments, so logical ids may include Chinese characters or uppercase.
     """
 
     ensure_skill_dirs()
-    safe_skill_id = _validate_skill_id(skill_id)
-    safe_version = _validate_skill_version(version)
-    skill_dir = skill_packages_dir() / safe_skill_id
+    stored_path = skill_package_storage_path(owner_id, skill_id, version)
+    safe_owner_id, safe_skill_id, safe_version = _skill_storage_segments(owner_id, skill_id, version)
+    skill_dir = skill_packages_dir() / safe_owner_id / safe_skill_id
     skill_dir.mkdir(parents=True, exist_ok=True)
     package_path = skill_dir / f"{safe_version}.zip"
     package_path.write_bytes(zip_bytes)
-    return Path("skill_packages", safe_skill_id, f"{safe_version}.zip").as_posix()
+    return stored_path
+
+
+def write_skill_package_manifest(stored_package_path: str, payload: dict[str, Any]) -> None:
+    """Persist a JSON sidecar manifest for one stored skill package."""
+
+    package_path = resolve_skill_package_path(stored_package_path)
+    manifest_path = skill_package_manifest_path(package_path)
+    data = {"schema_version": SKILL_MANIFEST_SCHEMA_VERSION, **payload}
+    manifest_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def load_skill_package_manifest(stored_package_path: str) -> dict[str, Any] | None:
+    """Load the optional JSON sidecar manifest for one stored skill package."""
+
+    manifest_path = skill_package_manifest_path(resolve_skill_package_path(stored_package_path))
+    if not manifest_path.exists():
+        return None
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return raw if isinstance(raw, dict) else None
 
 
 def resolve_skill_package_path(stored_path: str) -> Path:
@@ -382,19 +518,8 @@ def resolve_skill_package_path(stored_path: str) -> Path:
     return deduped[0]
 
 
-def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
-    """Validate a skill zip package and extract metadata.
-
-    Returns ``(name, description, readme_text)``.
-
-    The zip must:
-    * Be a valid zip archive.
-    * Not exceed ``MAX_SKILL_PACKAGE_BYTES``.
-    * Contain a ``SKILL.md`` file at the root.
-    * The ``SKILL.md`` must have YAML front matter with at least ``name``.
-
-    Raises ``ApiError(422, ...)`` on any validation failure.
-    """
+def inspect_skill_archive(zip_bytes: bytes) -> SkillArchiveMetadata:
+    """Validate a skill zip package and return parsed metadata."""
 
     if len(zip_bytes) == 0:
         raise ApiError(422, "SKILL_PACKAGE_EMPTY", "Skill package is empty.")
@@ -408,7 +533,6 @@ def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
 
     try:
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-            # Security: reject paths that escape the archive root
             for name in zf.namelist():
                 if name.startswith("/") or ".." in name.split("/"):
                     raise ApiError(
@@ -417,11 +541,10 @@ def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
                         f"Skill package contains an insecure path: {name!r}.",
                     )
 
-            # Locate SKILL.md at the root (allow one level of nesting via a
-            # top-level directory, common when zipping a folder)
             skill_md_candidates = [
-                n for n in zf.namelist()
-                if n == "SKILL.md" or n.endswith("/SKILL.md") and n.count("/") == 1
+                name
+                for name in zf.namelist()
+                if name == "SKILL.md" or name.endswith("/SKILL.md") and name.count("/") == 1
             ]
             if not skill_md_candidates:
                 raise ApiError(
@@ -429,39 +552,49 @@ def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
                     "SKILL_PACKAGE_NO_SKILL_MD",
                     "Skill package must contain a SKILL.md file (exact uppercase) at the zip root.",
                 )
-            # Prefer an exact root match; otherwise use the first single-nesting candidate
+
             skill_md_name = "SKILL.md" if "SKILL.md" in skill_md_candidates else skill_md_candidates[0]
             readme_text = zf.read(skill_md_name).decode("utf-8")
 
-            # Parse YAML front matter
-            front_matter: dict[str, str] = {}
+            front_matter: dict[str, Any] = {}
             body_lines: list[str] = []
             if readme_text.startswith("---"):
                 parts = readme_text.split("---", 2)
                 if len(parts) >= 3:
                     try:
-                        front_matter = yaml.safe_load(parts[1]) or {}
+                        parsed_front_matter = yaml.safe_load(parts[1]) or {}
                     except yaml.YAMLError as exc:
                         raise ApiError(
                             422,
                             "SKILL_PACKAGE_INVALID_FRONT_MATTER",
                             "SKILL.md 的 YAML 头部格式错误，请检查 `---` 包裹的 YAML 语法",
                         ) from exc
+                    if not isinstance(parsed_front_matter, dict):
+                        raise ApiError(
+                            422,
+                            "SKILL_PACKAGE_INVALID_FRONT_MATTER",
+                            "SKILL.md 的 YAML 头部必须是键值对对象。",
+                        )
+                    front_matter = parsed_front_matter
                     body_lines = parts[2].splitlines()
             else:
                 body_lines = readme_text.splitlines()
 
-            name = front_matter.get("name", "").strip()
+            name = str(front_matter.get("name", "")).strip()
             if not name:
                 raise ApiError(
                     422,
                     "SKILL_PACKAGE_MISSING_NAME",
                     "SKILL.md 的 YAML 头部必须包含非空的 name 字段，例如: `name: My Skill`",
                 )
-            description = front_matter.get("description", "").strip()
+            description = str(front_matter.get("description", "")).strip()
             body = "\n".join(body_lines).strip()
-
-            return name, description, body
+            return SkillArchiveMetadata(
+                name=name,
+                description=description,
+                readme_text=body,
+                front_matter=front_matter,
+            )
 
     except ApiError:
         raise
@@ -477,3 +610,10 @@ def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
             "SKILL_PACKAGE_ENCODING",
             "SKILL.md must be a UTF-8 encoded text file.",
         ) from exc
+
+
+def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
+    """Validate a skill zip package and extract core metadata."""
+
+    metadata = inspect_skill_archive(zip_bytes)
+    return metadata.name, metadata.description, metadata.readme_text

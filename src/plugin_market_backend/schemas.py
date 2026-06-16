@@ -1007,7 +1007,7 @@ class SkillVersion(BaseModel):
 class SkillCreate(BaseModel):
     """Request body for publishing a new skill (zip via UploadFile in route)."""
 
-    skill_id: str = Field(min_length=1, pattern=r"^[a-z][a-z0-9_\-]*$")
+    skill_id: str = Field(min_length=1)
     version: str = Field(min_length=1)
     release_notes: str | None = None
     min_mofox_version: str | None = None

@@ -24,7 +24,7 @@ uv run uvicorn plugin_market_backend.app:app --host 127.0.0.1 --port 8787
 
 
 默认开发配置会使用 `./data/plugin_market.db`，启动时自动建表并写入 demo 数据。
-Skill zip 包和上传媒体默认也会落在 `./data/` 下。
+Skill zip 包和上传媒体默认也会落在 `./data/` 下；服务启动时会自动扫描 `skill_packages/` 并恢复缺失的 Skill 索引记录。
 
 前端入口：
 
@@ -41,13 +41,19 @@ docker compose up --build
 ```
 
 生产部署前应复制 `.env.example` 并替换所有 token 和 webhook secret。
-当前 Compose 配置会把仓库下的 `./data` 显式挂载到容器 `/app/data`，所以数据库、Skill 包和上传媒体在容器重建后仍会保留。
+当前 Compose 配置继续使用 Docker named volume 持久化 `/app/data`，这样会沿用你现有部署里的数据库、Skill 包和上传媒体数据。
 
 当前仓库内置的 `docker-compose.yml` 适合以下生产拓扑：
 
 - `postgres` 仅在 Docker 网络内暴露，不直接开放到公网。
 - `api` 仅绑定宿主机 `127.0.0.1:8787`，用于给 Nginx、Caddy 等反向代理转发。
 - 反向代理再把公网域名，例如 `https://market.mofox-sama.com`，转发到 `http://127.0.0.1:8787`。
+
+Skill 存储说明：
+
+- 上传的 Skill zip 会保存在容器内 `/app/data/skill_packages/`。
+- 包旁边会写入 sidecar JSON 元数据，用于数据库丢失后的自动恢复。
+- Skill ID 与版本号允许中文和大小写；磁盘路径会自动做安全编码，不直接使用原始字符串落盘。
 
 建议部署步骤：
 
@@ -57,8 +63,6 @@ cp .env.example .env
 docker compose up -d --build
 docker compose logs -f api
 ```
-
-如果你是从旧的 named volume 配置升级到当前版本，先把旧容器 `/app/data` 里的内容迁移到仓库本地 `./data/`，再执行重建。
 
 容器启动时会先执行数据库引导：
 

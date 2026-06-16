@@ -12,13 +12,18 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from plugin_market_backend.config import get_settings
 
 
-HEAD_REVISION = "0005_subscriptions_and_tokens"
+SUBSCRIPTIONS_REVISION = "0005_subscriptions_and_tokens"
+SKILL_MARKET_REVISION = "0006_skill_market"
+SKILL_README_REVISION = "0007_skill_readme_markdown"
+HEAD_REVISION = SKILL_README_REVISION
 REVISION_ORDER = {
     "0001_initial": 1,
     "0002_github_sessions": 2,
     "0003_community": 3,
     "0004_overhaul_phase1": 4,
-    HEAD_REVISION: 5,
+    SUBSCRIPTIONS_REVISION: 5,
+    SKILL_MARKET_REVISION: 6,
+    SKILL_README_REVISION: 7,
 }
 
 
@@ -75,7 +80,22 @@ def _physical_revision(sync_conn) -> str | None:
     }
     existing_subscriptions_tables = subscriptions_tables.intersection(tables)
     if existing_subscriptions_tables:
-        revision = HEAD_REVISION
+        revision = SUBSCRIPTIONS_REVISION
+
+    skill_tables = {
+        "skills",
+        "skill_versions",
+        "skill_likes",
+        "skill_ratings",
+        "skill_comments",
+        "skill_subscriptions",
+    }
+    existing_skill_tables = skill_tables.intersection(tables)
+    if {"skills", "skill_versions"}.issubset(existing_skill_tables):
+        revision = SKILL_MARKET_REVISION
+        skill_columns = {item["name"] for item in inspector.get_columns("skills")}
+        if "readme_markdown" in skill_columns:
+            revision = SKILL_README_REVISION
 
     return revision
 
