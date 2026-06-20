@@ -14,6 +14,7 @@ from urllib.parse import urlencode, urlparse
 
 from fastapi import Depends, FastAPI, File, Form, Header, Query, Request, Response, UploadFile, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
@@ -244,6 +245,13 @@ app = FastAPI(
     description="Persistent plugin market index and governance backend.",
     version="0.1.0",
     lifespan=lifespan,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.add_exception_handler(ApiError, api_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
