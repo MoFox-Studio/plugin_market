@@ -25,17 +25,20 @@ async def exchange_oauth_code(settings: Settings, code: str) -> str:
 
     if not settings.github_oauth_client_id or not settings.github_oauth_client_secret:
         raise ApiError(503, "GITHUB_OAUTH_NOT_CONFIGURED", "GitHub OAuth is not configured.")
-    async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.post(
-            f"{settings.github_login_base_url}/access_token",
-            headers={"Accept": "application/json"},
-            data={
-                "client_id": settings.github_oauth_client_id,
-                "client_secret": settings.github_oauth_client_secret,
-                "code": code,
-                "redirect_uri": settings.github_oauth_redirect_uri or None,
-            },
-        )
+    try:
+        async with httpx.AsyncClient(timeout=15, trust_env=settings.github_trust_env) as client:
+            response = await client.post(
+                f"{settings.github_login_base_url}/access_token",
+                headers={"Accept": "application/json"},
+                data={
+                    "client_id": settings.github_oauth_client_id,
+                    "client_secret": settings.github_oauth_client_secret,
+                    "code": code,
+                    "redirect_uri": settings.github_oauth_redirect_uri or None,
+                },
+            )
+    except httpx.RequestError as exc:
+        raise ApiError(503, "GITHUB_UNAVAILABLE", "GitHub OAuth is temporarily unavailable. Please retry.") from exc
     payload = response.json()
     token = payload.get("access_token")
     if response.status_code >= 400 or not token:
@@ -46,11 +49,14 @@ async def exchange_oauth_code(settings: Settings, code: str) -> str:
 async def fetch_github_user(settings: Settings, access_token: str) -> GitHubUser:
     """Fetch the GitHub user attached to an OAuth or personal access token."""
 
-    async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.get(
-            f"{settings.github_api_base_url}/user",
-            headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {access_token}"},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=15, trust_env=settings.github_trust_env) as client:
+            response = await client.get(
+                f"{settings.github_api_base_url}/user",
+                headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {access_token}"},
+            )
+    except httpx.RequestError as exc:
+        raise ApiError(503, "GITHUB_UNAVAILABLE", "GitHub user lookup is temporarily unavailable. Please retry.") from exc
     if response.status_code == 401:
         raise ApiError(401, "GITHUB_TOKEN_INVALID", "GitHub token is invalid.")
     if response.status_code >= 400:

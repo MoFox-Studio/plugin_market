@@ -53,6 +53,16 @@ async def consume_oauth_state(state: str) -> str:
         return redirect_to
 
 
+async def validate_oauth_state(state: str) -> str:
+    """Validate an OAuth state without consuming it before remote calls succeed."""
+
+    async with session_scope() as session:
+        record = await session.get(OAuthStateORM, state)
+        if record is None or _is_expired(record.expires_at):
+            raise ApiError(401, "OAUTH_STATE_INVALID", "GitHub OAuth state is invalid or expired.")
+        return record.redirect_to
+
+
 async def create_browser_session(author_id: str, access_token: str) -> str:
     """Create a browser session for an authenticated author."""
 

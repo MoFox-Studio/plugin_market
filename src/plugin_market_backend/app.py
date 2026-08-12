@@ -111,6 +111,7 @@ from plugin_market_backend.session_auth import (
     consume_oauth_state,
     create_browser_session,
     create_oauth_state,
+    validate_oauth_state,
     current_author_from_request,
     require_browser_admin,
     require_browser_author,
@@ -375,6 +376,7 @@ async def list_plugins(
     category: str | None = Query(default=None),
     tag: str | None = Query(default=None),
     trust_level: TrustLevel | None = Query(default=None),
+    author_id: str | None = Query(default=None),
     sort: str = Query(default="updated"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
@@ -390,6 +392,7 @@ async def list_plugins(
             category=category,
             tag=tag,
             trust_level=trust_level,
+            author_id=author_id,
             sort=sort,
             offset=offset,
             limit=limit,
@@ -693,9 +696,12 @@ async def github_login(redirect_to: str = Query(default="/")) -> RedirectRespons
 async def github_callback(request: Request, code: str, state: str) -> RedirectResponse:
     """Finish GitHub OAuth login."""
 
-    redirect_to = await consume_oauth_state(state)
+    redirect_to = await validate_oauth_state(state)
     token = await exchange_oauth_code(get_settings(), code)
     author = await upsert_github_author(token)
+    # Consume the one-time state only after GitHub calls succeed, so a transient
+    # network failure can be retried instead of becoming "invalid or expired".
+    await consume_oauth_state(state)
     session_id = await create_browser_session(author.author_id, token)
     response = RedirectResponse(redirect_to or "/")
     response.set_cookie(

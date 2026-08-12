@@ -234,6 +234,7 @@ class MarketService:
         category: str | None = None,
         tag: str | None = None,
         trust_level: TrustLevel | None = None,
+        author_id: str | None = None,
         sort: str = "updated",
         offset: int = 0,
         limit: int = 50,
@@ -259,6 +260,13 @@ class MarketService:
             )
         if trust_level is not None:
             stmt = stmt.where(PluginORM.trust_level == trust_level)
+        if author_id:
+            stmt = stmt.where(
+                or_(
+                    PluginORM.owner_id == author_id,
+                    PluginORM.maintainers.any(PluginMaintainerORM.author_id == author_id),
+                )
+            )
         rows = list((await self.session.scalars(stmt)).all())
         if category:
             rows = [plugin for plugin in rows if category in (plugin.categories or [])]

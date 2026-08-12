@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -11,6 +12,8 @@ import EmptyState from '@/components/EmptyState.vue'
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
 const toast = useToastStore()
+const route = useRoute()
+const router = useRouter()
 
 const plugins = ref<Plugin[]>([])
 const author = ref<Plugin | null>(null)
@@ -19,6 +22,10 @@ const pins = ref<PinnedPlugin[]>([])
 const followState = ref<AuthorFollowState | null>(null)
 const followPending = ref(false)
 const loading = ref(true)
+const page = ref(1)
+const total = ref(0)
+const pageSize = 21
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
 
 const heroStyle = computed(() => {
   if (profile.value?.background_image_url) {
@@ -34,7 +41,7 @@ const heroStyle = computed(() => {
 const totals = computed(() => {
   const items = plugins.value
   return {
-    plugins: items.length,
+    plugins: total.value,
     likes: items.reduce((acc, p) => acc + (p.likes_count || 0), 0),
     downloads: items.reduce((acc, p) => acc + (p.downloads_count || 0), 0),
   }
@@ -55,24 +62,29 @@ async function loadPage() {
   loading.value = true
   try {
     const [result, profileResult, pinResult, followResult] = await Promise.all([
-      api.get('/api/v1/plugins?limit=100&sort=popular'),
+      api.get(`/api/v1/plugins?limit=${pageSize}&offset=${(page.value - 1) * pageSize}&sort=popular&author_id=${encodeURIComponent(props.id)}`),
       api.get(`/api/v1/authors/${encodeURIComponent(props.id)}/profile`).catch(() => null),
       api.get(`/api/v1/authors/${encodeURIComponent(props.id)}/pins`).catch(() => []),
       api.authors.followState(props.id).catch(() => null),
     ])
-    const items = (result.items || []).filter(
-      (p: Plugin) => p.owner_id === props.id || (p.maintainers || []).includes(props.id)
-    )
+    const items = result.items || []
     plugins.value = items
+    total.value = result.total || 0
     author.value = items.find((p: Plugin) => p.owner_id === props.id) || items[0] || null
     profile.value = profileResult
     pins.value = pinResult
     followState.value = followResult
   } catch {
     plugins.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
+}
+
+function setPage(nextPage: number) {
+  const bounded = Math.min(Math.max(1, nextPage), totalPages.value)
+  void router.push({ query: { ...route.query, page: bounded === 1 ? undefined : String(bounded) } })
 }
 
 async function toggleFollow() {
@@ -92,7 +104,14 @@ async function toggleFollow() {
   }
 }
 
-onMounted(loadPage)
+watch(
+  () => [props.id, route.query.page],
+  () => {
+    page.value = Math.max(1, Number.parseInt(String(route.query.page || '1'), 10) || 1)
+    void loadPage()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -172,6 +191,11 @@ onMounted(loadPage)
             <PluginCard v-for="p in plugins" :key="p.plugin_id" :plugin="p" />
           </div>
           <EmptyState v-else title="暂无插件" message="该作者尚未发布任何已审核通过的插件。" />
+          <nav v-if="totalPages > 1" class="author-pagination" aria-label="作者插件分页">
+            <button type="button" class="btn btn-ghost btn-sm" :disabled="page <= 1" @click="setPage(page - 1)">上一页</button>
+            <span>第 {{ page }} / {{ totalPages }} 页 · 共 {{ total }} 个插件</span>
+            <button type="button" class="btn btn-ghost btn-sm" :disabled="page >= totalPages" @click="setPage(page + 1)">下一页</button>
+          </nav>
         </section>
       </div>
     </template>
@@ -313,6 +337,11 @@ onMounted(loadPage)
 }
 
 .author-section { display: grid; gap: var(--space-4); }
+.author-pagination {
+  display: flex; justify-content: center; align-items: center; gap: var(--space-3);
+  flex-wrap: wrap; padding-top: var(--space-4);
+}
+.author-pagination span { font-family: var(--font-mono); font-size: 12px; color: var(--ink-500); }
 .author-section-head .kicker {
   display: inline-flex; align-items: center; gap: 8px;
   font-family: var(--font-brand); letter-spacing: var(--letter-kicker);

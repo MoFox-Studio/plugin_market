@@ -28,6 +28,42 @@ async def test_list_plugins_filters_and_paginates(client: AsyncClient) -> None:
     assert len(body["items"]) == 1
 
 
+async def test_list_plugins_filters_by_author_before_paginating(client: AsyncClient) -> None:
+    """Author pages should paginate over that author's complete result set."""
+
+    for plugin_id in ("author_page_one", "author_page_two", "author_page_three"):
+        response = await client.post(
+            "/api/v1/plugins",
+            json=plugin_payload(plugin_id),
+            headers=AUTHOR_HEADERS,
+        )
+        assert response.status_code == 200
+
+    first = await client.get(
+        "/api/v1/plugins",
+        params={"author_id": "mock-author", "sort": "updated", "limit": 2, "offset": 0},
+    )
+    second = await client.get(
+        "/api/v1/plugins",
+        params={"author_id": "mock-author", "sort": "updated", "limit": 2, "offset": 2},
+    )
+    missing = await client.get(
+        "/api/v1/plugins",
+        params={"author_id": "missing-author", "limit": 2},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["total"] == 4
+    assert second.json()["total"] == 4
+    assert len(first.json()["items"]) == 2
+    assert len(second.json()["items"]) == 2
+    assert {item["plugin_id"] for item in first.json()["items"]}.isdisjoint(
+        {item["plugin_id"] for item in second.json()["items"]}
+    )
+    assert missing.json() == {"items": [], "total": 0}
+
+
 async def test_public_plugin_detail_and_versions(client: AsyncClient) -> None:
     """Plugin details, versions and recommendation should be available."""
 

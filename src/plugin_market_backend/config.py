@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     github_oauth_redirect_uri: str = ""
     github_api_base_url: str = "https://api.github.com"
     github_login_base_url: str = "https://github.com/login/oauth"
+    github_trust_env: bool = True
     session_secret: str = "change-me-in-production"
     session_cookie_name: str = "plugin_market_session"
     admin_github_logins: list[str] = Field(default_factory=list)
