@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 
@@ -27,16 +28,23 @@ def error_payload(code: str, message: str, details: dict[str, Any] | None = None
     return {"error": {"code": code, "message": message, "details": details or {}}}
 
 
-async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
+def _private_headers(request: Request) -> dict[str, str]:
+    if request.url.path in {"/api/v1/recommendations", "/api/v1/me/recommendation-preferences"}:
+        return {"Cache-Control": "private, no-store", "Vary": "Cookie, Authorization"}
+    return {}
+
+
+async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
     """Render ApiError as JSON."""
 
-    return JSONResponse(status_code=exc.status_code, content=error_payload(exc.code, exc.message, exc.details))
+    return JSONResponse(status_code=exc.status_code, content=error_payload(exc.code, exc.message, exc.details), headers=_private_headers(request))
 
 
-async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Render request validation errors using the same envelope."""
 
     return JSONResponse(
         status_code=422,
-        content=error_payload("VALIDATION_ERROR", "Request validation failed.", {"errors": exc.errors()}),
+        content=error_payload("VALIDATION_ERROR", "Request validation failed.", {"errors": jsonable_encoder(exc.errors())}),
+        headers=_private_headers(request),
     )
