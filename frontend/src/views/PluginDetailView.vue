@@ -1,559 +1,1155 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import api from '@/api'
-import { useAuthStore } from '@/stores/auth'
-import { useSubscriptionStore } from '@/stores/subscriptions'
-import { useToastStore } from '@/stores/toast'
-import { formatNumber, formatRelative, formatDate, formatBytes, categoryLabel, starPercent } from '@/utils/format'
-import type { Plugin, RatingInfo, PluginVersion, Dependency, Comment } from '@/types'
-import TrustBadge from '@/components/TrustBadge.vue'
-import RiskWarning from '@/components/RiskWarning.vue'
-import EmptyState from '@/components/EmptyState.vue'
-import MentionInput from '@/components/MentionInput.vue'
-import { parseMentionsRoundTrip } from '@/utils/mentions'
-
-const route = useRoute()
-const auth = useAuthStore()
-const subStore = useSubscriptionStore()
-const toast = useToastStore()
-
-const props = defineProps({ id: { type: String, required: true } })
-
-const plugin = ref<Plugin | null>(null)
-const rating = ref<RatingInfo | null>(null)
-const versions = ref<PluginVersion[]>([])
-const readme = ref<{ exists?: boolean; html?: string } | null>(null)
-const dependencies = ref<Dependency[]>([])
-const comments = ref<Comment[]>([])
-const loading = ref(true)
-const activeTab = ref('overview')
-const commentContent = ref('')
-const commentMentionIds = ref<string[]>([])
-const submittingComment = ref(false)
-const expandedReplyThreads = ref<Record<string, boolean>>({})
-
-interface CommentThread {
-  root: Comment
-  replies: Comment[]
+import { useMarketDialog } from '@/composables/useMarketDialog';
+const { confirm: confirmAction, prompt: promptAction } = useMarketDialog();
+import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { useRoute } from 'vue-router';
+import api from '@/api';
+import { useAuthStore } from '@/stores/auth';
+import { useSubscriptionStore } from '@/stores/subscriptions';
+import { useToastStore } from '@/stores/toast';
+import {
+  formatNumber,
+  formatRelative,
+  formatDate,
+  formatBytes,
+  categoryLabel,
+  statusText,
+  trustLevelLabel,
+} from '@/utils/format';
+import type {
+  Plugin,
+  RatingInfo,
+  PluginVersion,
+  Dependency,
+  Comment,
+} from '@/types';
+import MentionInput from '@/components/MentionInput.vue';
+import RiskWarning from '@/components/RiskWarning.vue';
+import RecommendationSection from '@/components/RecommendationSection.vue';
+import CatalogFrame from '@/components/catalog/CatalogFrame.vue';
+import DossierNavigation from '@/components/catalog/DossierNavigation.vue';
+import DossierLead from '@/components/catalog/DossierLead.vue';
+import ReadmeDocument from '@/components/catalog/ReadmeDocument.vue';
+import { dossierChapter } from '@/components/catalog/dossierChapter';
+import AppIcon from '@/components/AppIcon.vue';
+import CatalogState from '@/components/catalog/CatalogState.vue';
+import CatalogComment from '@/components/catalog/CatalogComment.vue';
+import { useCatalogResource } from '@/components/catalog/useCatalogResource';
+const props = defineProps<{ id: string }>();
+const route = useRoute(),
+  auth = useAuthStore(),
+  subscriptions = useSubscriptionStore(),
+  toast = useToastStore();
+const pluginId = computed(() => props.id || String(route.params.id));
+const main = useCatalogResource<{ plugin: Plugin; rating: RatingInfo } | null>(
+  () => null,
+);
+const plugin = computed(() => main.data?.plugin),
+  rating = computed(() => main.data?.rating);
+const versions = useCatalogResource<PluginVersion[]>(() => []),
+  dependencies = useCatalogResource<Dependency[]>(() => []),
+  comments = useCatalogResource<Comment[]>(() => []);
+const readme = useCatalogResource<{ exists?: boolean; html?: string }>(
+  () => ({}),
+);
+const documentHtml = computed(() => {
+  const html = readme.data.html?.trim();
+  if (!readme.data.exists || !html) return '';
+  const fragment = document.createElement('template');
+  fragment.innerHTML = html;
+  const hasContent = fragment.content.textContent?.trim() || fragment.content.querySelector('img[src],audio[src],video[src]');
+  return hasContent ? html : '';
+});
+const authorDescription = computed(() => plugin.value?.description?.trim() || plugin.value?.summary?.trim() || '');
+const projectLinks = computed(() => [
+  { label: '项目仓库', href: plugin.value?.repository_url, icon: 'github' },
+  { label: '项目主页', href: plugin.value?.homepage, icon: 'arrow' },
+].filter((link) => link.href && /^https?:\/\//i.test(link.href)));
+const guideLabel = computed(() => {
+  if (readme.loading) return '使用说明';
+  if (documentHtml.value) return '使用文档';
+  return authorDescription.value ? '功能说明' : '项目资料';
+});
+function sectionLink(hash: '#usage' | '#get') {
+  return { path: route.path, query: route.query, hash };
 }
-
-const pluginId = computed(() => props.id || route.params.id as string)
-
-async function loadData() {
-  loading.value = true
-  const id = encodeURIComponent(pluginId.value)
-  try {
-    const [snapshot, versionsRes, readmeRes, depsRes] = await Promise.all([
-      api.get(`/api/v1/plugins/${id}/community`),
-      api.get(`/api/v1/plugins/${id}/versions`).catch(() => ({ items: [] })),
-      api.get(`/api/v1/plugins/${id}/readme`).catch(() => ({ exists: false, html: null })),
-      api.get(`/api/v1/plugins/${id}/dependencies`).catch(() => ({ items: [] })),
-    ])
-    plugin.value = snapshot.plugin
-    rating.value = snapshot.rating
-    versions.value = versionsRes.items || []
-    readme.value = readmeRes
-    dependencies.value = depsRes.items || []
-    await loadComments()
-  } finally {
-    loading.value = false
-  }
+function pluginChapter(hash: string) {
+  return hash === '#get' ? 'overview' : dossierChapter(hash);
 }
-
-async function loadComments() {
-  const id = encodeURIComponent(pluginId.value)
-  const result = await api.get(`/api/v1/plugins/${id}/comments?limit=50`).catch(() => ({ items: [] }))
-  comments.value = result.items || []
-}
-
-const commentThreads = computed<CommentThread[]>(() => {
-  const commentsById = new Map<number, Comment>()
-  const repliesByParent = new Map<number, Comment[]>()
-  const topLevel: Comment[] = []
-
-  for (const comment of comments.value) {
-    commentsById.set(Number(comment.id), comment)
-  }
-
-  for (const comment of comments.value) {
-    if (comment.parent_id === null || comment.parent_id === undefined) {
-      topLevel.push(comment)
-      continue
-    }
-
-    const parentId = Number(comment.parent_id)
-    if (!commentsById.has(parentId)) {
-      topLevel.push(comment)
-      continue
-    }
-
-    const bucket = repliesByParent.get(parentId) || []
-    bucket.push(comment)
-    repliesByParent.set(parentId, bucket)
-  }
-
-  return topLevel.map((root) => ({
-    root,
-    replies: (repliesByParent.get(Number(root.id)) || []).slice().sort((left, right) => {
-      return new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
-    }),
-  }))
-})
-
+const requestedVersion = computed(() =>
+  typeof route.query.version === 'string' ? route.query.version : '',
+);
+const selectedVersion = computed(
+  () =>
+    versions.data.find(
+      (item) =>
+        !item.is_yanked &&
+        item.status === 'published' &&
+        (requestedVersion.value
+          ? item.version === requestedVersion.value
+          : !item.is_prerelease),
+    )?.version || '',
+);
+const latestVersion = computed(() =>
+  versions.data.find((item) => item.version === selectedVersion.value),
+);
+const activeTab = ref('overview'),
+  commentContent = ref(''),
+  mentionIds = ref<string[]>([]),
+  submitting = ref(false),
+  subscriptionBusy = ref(false),
+  ratingBusy = ref(false),
+  installBusy = ref(false),
+  deleting = ref<string | null>(null);
+const expanded = ref<Record<string, boolean>>({});
+let epoch = 0;
+const subscribed = computed(
+  () => subscriptions.get(pluginId.value) ?? plugin.value?.viewer_has_liked,
+);
 const ratingRows = computed(() => {
-  const total = plugin.value?.rating_count || 0
+  const total = Object.values(rating.value?.distribution || {}).reduce(
+    (sum, count) => sum + Number(count),
+    0,
+  );
   return [5, 4, 3, 2, 1].map((score) => {
-    const count = Number(rating.value?.distribution?.[String(score)] || 0)
+    const count = Number(rating.value?.distribution?.[String(score)] || 0);
     return {
       score,
       count,
-      percent: total ? Math.round((count / total) * 100) : 0,
+      percent: total ? Math.min(100, (count / total) * 100) : 0,
+    };
+  });
+});
+const threads = computed(() => {
+  const byId = new Map(comments.data.map((item) => [String(item.id), item])),
+    grouped = new Map<string, Comment[]>();
+  for (const item of comments.data) {
+    let root = item,
+      visited = new Set<string>([String(item.id)]);
+    while (
+      root.parent_id != null &&
+      byId.has(String(root.parent_id)) &&
+      !visited.has(String(root.parent_id))
+    ) {
+      visited.add(String(root.parent_id));
+      root = byId.get(String(root.parent_id))!;
     }
-  })
-})
-
-const viewerRating = computed(() => rating.value?.viewer_rating || 0)
-
-async function submitComment() {
-  const content = commentContent.value.trim()
-  if (!content) return
-  submittingComment.value = true
+    const key = String(root.id);
+    if (!grouped.has(key)) grouped.set(key, []);
+    if (String(item.id) !== key) grouped.get(key)!.push(item);
+  }
+  return [...grouped].map(([key, replies]) => ({
+    root: byId.get(key)!,
+    replies: replies.sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    ),
+  }));
+});
+const path = () => `/api/v1/plugins/${encodeURIComponent(pluginId.value)}`;
+function loadVersions() {
+  const p = path();
+  return versions.load(() =>
+    api
+      .get<{ items: PluginVersion[] }>(`${p}/versions`)
+      .then((res) => res.items || []),
+  );
+}
+function loadReadme() {
+  const p = path();
+  return readme.load(() => api.get(`${p}/readme`));
+}
+function loadDependencies() {
+  const p = path();
+  return dependencies.load(() =>
+    api
+      .get<{ items: Dependency[] }>(`${p}/dependencies`)
+      .then((res) => res.items || []),
+  );
+}
+async function loadComments() {
+  const p = path(),
+    current = epoch;
+  await comments.load(() =>
+    api
+      .get<{ items: Comment[] }>(`${p}/comments?limit=50`)
+      .then((res) => res.items || []),
+  );
+  if (current === epoch) revealChapter();
+}
+function loadData() {
+  const p = path();
+  void main.load(() => api.get(`${p}/community`));
+  void loadVersions();
+  void loadReadme();
+  void loadDependencies();
+  void loadComments();
+}
+async function refreshCommunity(current: number, id: string) {
+  const result = await api.get<{ plugin: Plugin; rating: RatingInfo }>(
+    `/api/v1/plugins/${encodeURIComponent(id)}/community`,
+  );
+  if (current === epoch) main.data = result;
+}
+function requireLogin() {
+  if (auth.isAuthenticated) return false;
+  toast.show('登录后即可参与社区互动', 'error');
+  return true;
+}
+async function subscribe() {
+  if (subscriptionBusy.value || requireLogin()) return;
+  const id = pluginId.value,
+    current = epoch;
+  subscriptionBusy.value = true;
   try {
-    await api.post(`/api/v1/plugins/${encodeURIComponent(pluginId.value)}/comments`, { content })
-    commentContent.value = ''
-    commentMentionIds.value = []
-    toast.show('已发布', 'ok')
-    await loadComments()
+    const result = await api.plugins.toggleSubscription(id);
+    if (current !== epoch) return;
+    subscriptions.set(id, result.subscribed);
+    if (main.data)
+      main.data = {
+        ...main.data,
+        plugin: {
+          ...main.data.plugin,
+          viewer_has_liked: result.subscribed,
+          likes_count: result.subscriptions_count,
+        },
+      };
+    toast.show(result.subscribed ? '已订阅插件更新' : '已取消订阅', 'ok');
   } catch (e) {
-    toast.show((e as Error).message || '发布失败', 'error')
+    if (current === epoch) toast.show((e as Error).message, 'error');
   } finally {
-    submittingComment.value = false
+    if (current === epoch) subscriptionBusy.value = false;
   }
 }
-
-async function deleteComment(commentId: string) {
-  if (!confirm('确定删除这条评论吗？')) return
+async function rate(score: number | null) {
+  if (ratingBusy.value || requireLogin()) return;
+  const id = pluginId.value,
+    current = epoch;
+  ratingBusy.value = true;
   try {
-    await api.del(`/api/v1/plugins/${encodeURIComponent(pluginId.value)}/comments/${commentId}`)
-    toast.show('已删除', 'ok')
-    await loadComments()
+    const p = `/api/v1/plugins/${encodeURIComponent(id)}/rating`;
+    if (score === null) await api.del(p);
+    else await api.post(p, { score });
+    await refreshCommunity(current, id);
+    if (current === epoch)
+      toast.show(score === null ? '已清除评分' : '感谢你的评分', 'ok');
   } catch (e) {
-    toast.show((e as Error).message || '删除失败', 'error')
+    if (current === epoch) toast.show((e as Error).message, 'error');
+  } finally {
+    if (current === epoch) ratingBusy.value = false;
   }
 }
-
-async function handleInstall() {
+async function submitComment() {
+  const content = commentContent.value.trim();
+  if (!content || submitting.value || requireLogin()) return;
+  const p = path(),
+    current = epoch;
+  submitting.value = true;
   try {
-    const v = await api.post(`/api/v1/plugins/${encodeURIComponent(pluginId.value)}/install-record`)
-    if (v?.asset_download_url) window.open(v.asset_download_url, '_blank', 'noopener')
-    toast.show('已记录下载', 'ok')
+    await api.post(`${p}/comments`, { content });
+    if (current !== epoch) return;
+    commentContent.value = '';
+    mentionIds.value = [];
+    if (main.data)
+      main.data = {
+        ...main.data,
+        plugin: {
+          ...main.data.plugin,
+          comments_count: main.data.plugin.comments_count + 1,
+        },
+      };
+    toast.show('评论已发布', 'ok');
+    await loadComments();
   } catch (e) {
-    toast.show((e as Error).message || '下载失败', 'error')
+    if (current === epoch) toast.show((e as Error).message, 'error');
+  } finally {
+    if (current === epoch) submitting.value = false;
   }
 }
-
-async function handleSubscribe() {
-  if (!auth.isAuthenticated) {
-    toast.show('请先登录', '')
-    setTimeout(() => { location.href = auth.getLoginUrl() }, 600)
-    return
-  }
+async function removeComment(id: string) {
+  if (deleting.value || !(await confirmAction('确定删除这条评论吗？'))) return;
+  const p = path(),
+    current = epoch;
+  deleting.value = id;
   try {
-    const r = await api.plugins.toggleSubscription(pluginId.value)
-    subStore.set(pluginId.value, r.subscribed)
-    toast.show(r.subscribed ? '已订阅' : '已取消订阅', 'ok')
-    await loadData()
+    await api.del(`${p}/comments/${encodeURIComponent(id)}`);
+    if (current !== epoch) return;
+    toast.show('评论已删除', 'ok');
+    await loadComments();
+    await refreshCommunity(current, pluginId.value);
   } catch (e) {
-    toast.show((e as Error).message || '操作失败', 'error')
+    if (current === epoch) toast.show((e as Error).message, 'error');
+  } finally {
+    if (current === epoch) deleting.value = null;
   }
 }
-
-async function handleRate(score: number) {
-  if (!auth.isAuthenticated) {
-    toast.show('请先登录', '')
-    setTimeout(() => { location.href = auth.getLoginUrl() }, 600)
-    return
-  }
+function canRemove(comment: Comment) {
+  return (
+    !!auth.viewer &&
+    (auth.viewer.author_id === comment.author.author_id || auth.isAdmin)
+  );
+}
+async function install() {
+  if (installBusy.value || !selectedVersion.value) return;
+  const p = path(),
+    current = epoch;
+  const tab = window.open('about:blank', '_blank');
+  if (tab) tab.opener = null;
+  installBusy.value = true;
   try {
-    await api.post(`/api/v1/plugins/${encodeURIComponent(pluginId.value)}/rating`, { score })
-    toast.show('感谢你的评分', 'ok')
-    await loadData()
+    const result = await api.post<{ asset_download_url?: string }>(
+      `${p}/install-record?version=${encodeURIComponent(selectedVersion.value)}`,
+    );
+    if (!result?.asset_download_url)
+      throw new Error('暂时没有可获取的安装包。');
+    const url = new URL(result.asset_download_url, location.origin);
+    if (!['https:', 'http:'].includes(url.protocol))
+      throw new Error('下载地址不可用。');
+    if (tab) tab.location.href = url.href;
+    else window.location.assign(url.href);
+    if (current === epoch) {
+      if (main.data)
+        main.data = {
+          ...main.data,
+          plugin: {
+            ...main.data.plugin,
+            downloads_count: main.data.plugin.downloads_count + 1,
+          },
+        };
+      toast.show('已打开下载地址', 'ok');
+    }
   } catch (e) {
-    toast.show((e as Error).message || '评分失败', 'error')
+    tab?.close();
+    if (current === epoch) toast.show((e as Error).message, 'error');
+  } finally {
+    if (current === epoch) installBusy.value = false;
   }
 }
-
-async function clearRating() {
+function recordVersion(version: string) {
+  void api
+    .post(`${path()}/install-record?version=${encodeURIComponent(version)}`)
+    .catch(() => {});
+}
+async function copyCommand() {
+  if (!plugin.value) return;
   try {
-    await api.del(`/api/v1/plugins/${encodeURIComponent(pluginId.value)}/rating`)
-    toast.show('已清除评分', 'ok')
-    await loadData()
-  } catch (e) {
-    toast.show((e as Error).message || '操作失败', 'error')
+    await navigator.clipboard.writeText(
+      `mofox plugin install ${plugin.value.plugin_id}@${selectedVersion.value}`,
+    );
+    toast.show('安装命令已复制', 'ok');
+  } catch {
+    toast.show('复制失败，请选中命令手动复制', 'error');
   }
 }
-
-function recordDownload(version: string) {
-  api.post(`/api/v1/plugins/${encodeURIComponent(pluginId.value)}/install-record?version=${encodeURIComponent(version)}`).catch(() => {})
+function revealChapter() {
+  activeTab.value = pluginChapter(route.hash);
+  if (!route.hash.startsWith('#comment-')) return;
+  const target = route.hash.slice('#comment-'.length);
+  const thread = threads.value.find((item) =>
+    item.replies.some((reply) => String(reply.id) === target),
+  );
+  if (thread) expanded.value = { ...expanded.value, [thread.root.id]: true };
 }
-
-function canDeleteComment(comment: Comment) {
-  if (!auth.viewer) return false
-  return auth.viewer.author_id === comment.author.author_id || auth.viewer.is_admin
-}
-
-function renderCommentContent(comment: Comment) {
-  return parseMentionsRoundTrip(comment.content, comment.mentions || [])
-}
-
-function visibleReplies(thread: CommentThread): Comment[] {
-  if (thread.replies.length <= 3 || expandedReplyThreads.value[String(thread.root.id)]) {
-    return thread.replies
-  }
-  return thread.replies.slice(0, 3)
-}
-
-function hiddenReplyCount(thread: CommentThread): number {
-  return Math.max(0, thread.replies.length - visibleReplies(thread).length)
-}
-
-function toggleReplies(threadId: string | number): void {
-  const key = String(threadId)
-  expandedReplyThreads.value = {
-    ...expandedReplyThreads.value,
-    [key]: !expandedReplyThreads.value[key],
-  }
-}
-
-watch(pluginId, async (nextId, prevId) => {
-  if (!nextId || nextId === prevId) {
-    return
-  }
-  activeTab.value = 'overview'
-  commentContent.value = ''
-  commentMentionIds.value = []
-  expandedReplyThreads.value = {}
-  await loadData()
-  window.scrollTo({ top: 0, behavior: 'auto' })
-})
-
-onMounted(loadData)
+watch(
+  [pluginId, () => auth.viewer?.author_id],
+  () => {
+    epoch++;
+    for (const resource of [main, versions, dependencies, comments, readme])
+      resource.reset();
+    activeTab.value = pluginChapter(route.hash);
+    commentContent.value = '';
+    mentionIds.value = [];
+    expanded.value = {};
+    submitting.value =
+      subscriptionBusy.value =
+      ratingBusy.value =
+      installBusy.value =
+      false;
+    deleting.value = null;
+    loadData();
+  },
+  { immediate: true },
+);
+watch(() => route.hash, revealChapter);
+onBeforeUnmount(() => {
+  epoch++;
+});
 </script>
-
 <template>
-  <div v-if="loading" class="loading-screen">加载插件详情…</div>
-  <template v-else-if="plugin">
-    <div class="detail-breadcrumb">
-      <router-link to="/" class="detail-breadcrumb-link">市场</router-link>
-      <span class="detail-breadcrumb-sep">/</span>
-      <span class="detail-breadcrumb-current">{{ plugin.display_name }}</span>
-    </div>
+  <CatalogFrame class="dossier-page">
+    <nav class="catalog-breadcrumb" aria-label="位置">
+      <router-link to="/browse">插件档案</router-link><span>/</span
+      ><span>{{ plugin?.display_name || pluginId }}</span>
+    </nav>
+    <CatalogState
+      :loading="main.loading"
+      :error="main.error"
+      :empty="!plugin"
+      :count="2"
+      @retry="loadData"
+    >
+      <template v-if="plugin">
+        <p v-if="requestedVersion" class="catalog-empty-note" role="status">
+          {{
+            versions.loading
+              ? '正在确认所选版本…'
+              : selectedVersion
+                ? `当前查看 v${selectedVersion}，下载和安装命令均对应此版本。`
+                : `指定版本 v${requestedVersion} 暂不可获取，请重试版本信息或选择其他版本。`
+          }}
+          <router-link
+            class="catalog-link"
+            :to="{ name: 'plugin', params: { id: pluginId } }"
+            >查看默认稳定版本</router-link
+          >
+        </p>
+        <DossierLead
+          class="plugin-identity" kind="插件"
+          :title="plugin.display_name" :identifier="plugin.plugin_id"
+          :summary="plugin.summary" :icon="plugin.icon_url"
+          :author="plugin.owner_display_name || plugin.owner_login || plugin.owner_id"
+          :author-id="plugin.owner_id" :updated-at="plugin.updated_at"
+          :version="selectedVersion" :categories="plugin.categories" :tags="plugin.tags"
+          category-route="market"
+          :note="statusText(plugin.status) + ' · ' + trustLevelLabel(plugin.trust_level)" :license="plugin.license"
+        >
+          <template #actions>
+            <nav class="plugin-lead-actions" :class="{ 'has-sticky-actions': selectedVersion }" aria-label="插件操作">
+              <router-link class="btn" :to="sectionLink('#usage')"><AppIcon name="book" :size="16" />{{ guideLabel }}</router-link>
+              <router-link class="btn btn-primary" :to="sectionLink('#get')"><AppIcon name="download" :size="16" />获取插件</router-link>
+            </nav>
+          </template>
+        </DossierLead>
+        <div class="catalog-dossier article-columns">
+        <DossierNavigation
+          :active="activeTab"
+          :versions="versions.data.length"
+          :comments="plugin.comments_count"
+          kind="插件"
+          :document-label="guideLabel"
+        />
+          <div class="catalog-main">
+            <div
+              v-show="activeTab === 'overview'"
+              id="overview"
+              class="detail-sections dossier-chapter"
+            >
+              <section class="catalog-panel">
 
-    <div class="detail">
-      <div class="main-col">
-        <!-- Hero -->
-        <section class="detail-hero">
-          <div class="detail-icon">
-            <img v-if="plugin.icon_url" :src="plugin.icon_url" alt="">
-            <template v-else>{{ (plugin.display_name || '?').trim()[0]?.toUpperCase() || '?' }}</template>
-          </div>
-          <div>
-            <div class="detail-title">
-              <h1>{{ plugin.display_name }}</h1>
-              <TrustBadge :level="plugin.trust_level" />
-              <span :class="['badge', `status-${plugin.status}`]">{{ plugin.status }}</span>
-              <span v-if="plugin.latest_version" class="card-version-chip">v{{ plugin.latest_version }}</span>
-            </div>
-            <div class="detail-sub">
-              <span>{{ plugin.plugin_id }}</span>
-              <span>·</span>
-              <span>作者 <router-link :to="`/author/${encodeURIComponent(plugin.owner_id)}`">{{ plugin.owner_display_name || plugin.owner_login || plugin.owner_id }}</router-link></span>
-              <span>·</span>
-              <span>{{ plugin.license }}</span>
-              <span>·</span>
-              <span>更新于 {{ formatRelative(plugin.updated_at) }}</span>
-            </div>
-          </div>
-          <p class="detail-summary">{{ plugin.summary }}</p>
-        </section>
+                <h2 class="section-offset">功能说明</h2>
+                <div class="catalog-document">
+                  {{ plugin.description || plugin.summary }}
+                </div>
+                <div
+                  v-if="plugin.categories?.length || plugin.tags?.length"
+                  class="catalog-tags section-offset"
+                >
+                  <router-link
+                    v-for="cat in plugin.categories || []"
+                    :key="cat"
+                    :to="{ name: 'market', query: { category: cat } }"
+                    >{{ categoryLabel(cat) }}</router-link
+                  ><router-link
+                    v-for="tag in plugin.tags || []"
+                    :key="tag"
+                    :to="{ name: 'market', query: { tag } }"
+                    >#{{ tag }}</router-link
+                  >
+                </div>
+              </section>
 
-        <!-- Tabs -->
-        <div class="tabs">
-          <button type="button" :class="{ active: activeTab === 'overview' }" @click="activeTab = 'overview'">简介</button>
-          <button type="button" :class="{ active: activeTab === 'versions' }" @click="activeTab = 'versions'">版本<span class="count">{{ versions.length }}</span></button>
-          <button type="button" :class="{ active: activeTab === 'comments' }" @click="activeTab = 'comments'">评论<span class="count">{{ plugin.comments_count }}</span></button>
-        </div>
-
-        <!-- Tab panels -->
-        <section v-show="activeTab === 'overview'">
-          <div class="panel">
-            <h3>插件简介</h3>
-            <div class="description">{{ plugin.description || plugin.summary }}</div>
-          </div>
-          <!-- Dependencies -->
-          <div v-if="dependencies.length" class="panel">
-            <h3>依赖插件</h3>
-            <div class="dependency-list">
-              <component
-                v-for="dep in dependencies"
-                :key="dep.plugin_id"
-                :is="dep.exists_in_market ? 'router-link' : 'div'"
-                :to="dep.exists_in_market ? `/plugin/${encodeURIComponent(dep.plugin_id)}` : undefined"
-                :class="['dependency-chip', { 'is-link': dep.exists_in_market }]"
+              <section
+                v-if="
+                  dependencies.loading ||
+                  dependencies.error ||
+                  dependencies.data.length
+                "
+                class="catalog-panel"
+                id="dependencies"
               >
-                <img v-if="dep.icon_url" class="dependency-icon" :src="dep.icon_url" alt="">
-                <span v-else class="dependency-icon dependency-icon-fallback">{{ (dep.display_name || dep.plugin_id).trim()[0]?.toUpperCase() || 'P' }}</span>
-                <span class="dependency-copy">
-                  <strong>{{ dep.display_name || dep.plugin_id }}</strong>
-                  <span>{{ dep.plugin_id }}</span>
-                </span>
-                <span v-if="dep.version_spec" class="dependency-spec">{{ dep.version_spec }}</span>
-                <span class="dependency-meta">{{ dep.exists_in_market ? '已收录于市场' : '尚未在市场中找到' }}</span>
-              </component>
-            </div>
-          </div>
-          <!-- README -->
-          <div v-if="readme?.exists && readme.html" class="panel">
-            <h3>README</h3>
-            <div class="markdown-content" v-html="readme.html"></div>
-          </div>
-          <!-- Tags -->
-          <div class="panel">
-            <h3>分类与标签</h3>
-            <div class="card-tags">
-              <span v-for="cat in (plugin.categories || [])" :key="cat" class="tag cat">{{ categoryLabel(cat) }}</span>
-              <span v-for="t in (plugin.tags || [])" :key="t" class="tag">#{{ t }}</span>
-            </div>
-          </div>
-          <!-- Maintainers -->
-          <div class="panel">
-            <h3>维护者</h3>
-            <div style="color:var(--muted);font-size:0.86rem">
-              <template v-for="(m, i) in plugin.maintainers" :key="m">
-                <router-link :to="`/author/${encodeURIComponent(m)}`">{{ m }}</router-link>
-                <template v-if="i < plugin.maintainers.length - 1"> · </template>
-              </template>
-            </div>
-          </div>
-        </section>
 
-        <!-- Versions -->
-        <section v-show="activeTab === 'versions'">
-          <div class="panel">
-            <h3>发布历史</h3>
-            <RiskWarning kind="inline" />
-            <div v-if="versions.length">
-              <div v-for="v in versions" :key="v.version" class="version-item">
-                <span class="ver">
-                  v{{ v.version }}
-                  <small v-if="v.is_prerelease" style="color:var(--warn)">pre</small>
-                  <small v-if="v.is_yanked" style="color:var(--bad)">yanked</small>
-                </span>
-                <div class="meta">
-                  <div><strong>{{ v.release_title || v.version }}</strong></div>
-                  <div>{{ formatDate(v.published_at) }} · {{ formatBytes(v.file_size) }} · API {{ v.plugin_api_version }} · 宿主 ≥ {{ v.min_host_version }}{{ v.max_host_version ? ` ≤ ${v.max_host_version}` : '' }}</div>
-                  <div>{{ formatNumber(v.download_count) }} 次下载 · 平台 {{ (v.supported_platforms || []).join(', ') || 'all' }}</div>
+                <h2 class="section-offset">依赖插件</h2>
+                <CatalogState
+                  :loading="dependencies.loading"
+                  :error="dependencies.error"
+                  :count="1"
+                  @retry="loadDependencies"
+                  ><div class="dependency-list">
+                    <component
+                      :is="dependency.exists_in_market ? 'router-link' : 'div'"
+                      v-for="dependency in dependencies.data"
+                      :key="dependency.plugin_id"
+                      :to="
+                        dependency.exists_in_market
+                          ? `/plugin/${encodeURIComponent(dependency.plugin_id)}`
+                          : undefined
+                      "
+                      class="dependency-row"
+                      ><div>
+                        <strong>{{
+                          dependency.display_name || dependency.plugin_id
+                        }}</strong
+                        ><code>{{
+                          dependency.version_spec || '未指定版本'
+                        }}</code>
+                      </div>
+                      <span>{{
+                        dependency.exists_in_market
+                          ? '查看档案 ↗'
+                          : '市场暂未收录'
+                      }}</span></component
+                    >
+                  </div></CatalogState
+                >
+              </section>
+              <section
+                v-if="plugin.maintainers?.length"
+                id="maintainers"
+                class="catalog-panel"
+              >
+                <h2>共同维护</h2>
+                <div class="catalog-tags">
+                  <router-link
+                    v-for="maintainer in plugin.maintainers"
+                    :key="maintainer"
+                    :to="`/author/${encodeURIComponent(maintainer)}`"
+                    >{{ maintainer }} ↗</router-link
+                  >
                 </div>
-                <div class="table-actions">
-                  <a class="btn btn-sm" :href="v.release_url" target="_blank" rel="noreferrer noopener">Release</a>
-                  <a class="btn btn-sm btn-primary" :href="v.asset_download_url" target="_blank" rel="noreferrer noopener" @click="recordDownload(v.version)">下载</a>
-                </div>
+              </section>
+            </div>
+            <section
+              v-show="activeTab === 'readme'"
+              id="readme"
+              class="catalog-panel dossier-chapter documentation-panel"
+            >
+
+              <div id="usage" class="document-header plugin-guide-heading">
+                <h2><AppIcon name="book" :size="20" />{{ guideLabel }}</h2>
+                <router-link class="catalog-link" :to="sectionLink('#get')"><AppIcon name="download" :size="15" />获取插件</router-link>
               </div>
-            </div>
-            <EmptyState v-else title="暂无版本" message="作者尚未发布任何已审核通过的版本。" />
-          </div>
-        </section>
+              <CatalogState
+                :loading="readme.loading"
+                :error="readme.error"
+                :count="2"
+                @retry="loadReadme"
+                ><ReadmeDocument
+                  v-if="documentHtml"
+                  :html="documentHtml"
+                  :reserved-ids="['usage', 'get']"
+                />
+              </CatalogState>
+                <div v-if="!readme.loading && !documentHtml" class="plugin-author-guide">
+                  <div v-if="authorDescription" class="catalog-document">{{ authorDescription }}</div>
+                  <nav v-if="projectLinks.length" class="guide-sources" aria-label="作者项目链接">
+                    <a v-for="link in projectLinks" :key="link.label" :href="link.href" target="_blank" rel="noopener noreferrer">
+                      <AppIcon :name="link.icon" :size="15" />{{ link.label }} ↗
+                    </a>
+                  </nav>
+                  <router-link v-if="!authorDescription && !projectLinks.length" class="catalog-link" :to="sectionLink('#get')">版本与兼容 ↗</router-link>
+                </div>
+            </section>
+            <section
+              v-show="activeTab === 'versions'"
+              id="versions"
+              class="catalog-panel dossier-chapter release-ledger"
+            >
 
-        <!-- Comments -->
-        <section v-show="activeTab === 'comments'">
-          <div class="panel">
-            <h3>评论 <span class="count" style="font-size:0.8rem;color:var(--muted);font-weight:400">{{ plugin.comments_count }} 条</span></h3>
-            <!-- Comment form -->
-            <div v-if="auth.isAuthenticated">
-              <form class="comment-form" @submit.prevent="submitComment">
+              <div class="document-header">
+                <h2>版本记录</h2>
+                <span>{{ versions.data.length }} 个版本</span>
+              </div>
+              <p class="catalog-muted">
+                检查兼容信息，选择适合当前环境的版本。安装命令与获取操作始终对应所选版本。
+              </p>
+              <CatalogState
+                :loading="versions.loading"
+                :error="versions.error"
+                :empty="!versions.data.length"
+                :count="2"
+                title="暂无公开版本"
+                message="作者还没有发布可获取的版本。"
+                @retry="loadVersions"
+                ><article
+                  v-for="version in versions.data"
+                  :key="version.version"
+                  class="release-row"
+                  :class="{
+                    'is-selected': selectedVersion === version.version,
+                    'is-withdrawn': version.is_yanked,
+                  }"
+                  :id="`version-${version.version}`"
+                >
+                  <header>
+                    <strong>v{{ version.version }}</strong
+                    ><span
+                      v-if="selectedVersion === version.version"
+                      class="release-selected"
+                      >当前获取版本</span
+                    ><span
+                      v-else-if="
+                        !version.is_prerelease &&
+                        !version.is_yanked &&
+                        version.status === 'published'
+                      "
+                      class="release-stable"
+                      >稳定版</span
+                    ><span v-if="version.is_prerelease">预发布</span
+                    ><span v-if="version.is_yanked">已撤回</span
+                    ><time>{{ formatDate(version.published_at) }}</time>
+                  </header>
+                  <h3>{{ version.release_title || '版本发布' }}</h3>
+                  <p>
+                    API {{ version.plugin_api_version || '—' }} · 宿主 ≥
+                    {{ version.min_host_version || '—'
+                    }}{{
+                      version.max_host_version
+                        ? ` 且 ≤ ${version.max_host_version}`
+                        : ''
+                    }}<br />{{ formatBytes(version.file_size) }} ·
+                    {{ formatNumber(version.download_count) }} 次下载 ·
+                    {{
+                      version.supported_platforms?.join(' / ') || '未限制平台'
+                    }}
+                  </p>
+                  <div class="catalog-actions">
+                    <router-link
+                      v-if="
+                        !version.is_yanked &&
+                        version.status === 'published' &&
+                        selectedVersion !== version.version
+                      "
+                      class="btn btn-sm"
+                      :to="{
+                        name: 'plugin',
+                        params: { id: pluginId },
+                        query: { ...route.query, version: version.version },
+                        hash: '#versions',
+                      }"
+                      >设为获取版本</router-link
+                    >
+                    <a
+                      v-if="version.release_url"
+                      class="btn btn-sm"
+                      :href="version.release_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >发布说明 ↗</a
+                    ><a
+                      v-if="
+                        version.asset_download_url &&
+                        !version.is_yanked &&
+                        version.status === 'published'
+                      "
+                      class="btn btn-primary btn-sm"
+                      :href="version.asset_download_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      @click="recordVersion(version.version)"
+                      ><AppIcon name="download" :size="14" /> 获取此版本</a
+                    >
+                  </div>
+                </article></CatalogState
+              >
+            </section>
+            <section
+              v-show="activeTab === 'comments'"
+              id="comments"
+              class="catalog-panel dossier-chapter discussion-panel"
+            >
+              <div class="catalog-kicker">
+                第四章　讨论 · {{ plugin.comments_count }} 条
+              </div>
+              <h2 class="section-offset">交流使用体验</h2>
+              <form
+                v-if="auth.isAuthenticated"
+                class="comment-form"
+                @submit.prevent="submitComment"
+              >
                 <MentionInput
                   v-model="commentContent"
                   :maxlength="4000"
-                  placeholder="分享你的安装体验或提出问题，用 @login 提及作者..."
-                  :disabled="submittingComment"
-                  @update:mentionedAuthorIds="commentMentionIds = $event"
+                  :disabled="submitting"
+                  placeholder="分享体验或提出问题，支持 @提及作者…"
+                  @update:mentioned-author-ids="mentionIds = $event"
                 />
-                <div class="comment-form-actions">
-                  <small>支持多行文字与 @ 提及。当前识别 {{ commentMentionIds.length }} 位作者，不要发送广告或个人隐私信息。</small>
-                  <button class="btn btn-primary btn-sm" type="submit" :disabled="submittingComment">发布评论</button>
+                <div class="comment-form-bottom">
+                  <small>已识别 {{ mentionIds.length }} 位提及作者</small
+                  ><button
+                    class="btn btn-primary btn-sm"
+                    :disabled="submitting || !commentContent.trim()"
+                  >
+                    {{ submitting ? '发布中…' : '发布评论' }}
+                  </button>
                 </div>
               </form>
-            </div>
-            <div v-else class="empty" style="padding:16px">
-              登录后可以发表评论与作者互动。
-              <div style="margin-top:8px">
-                <a class="btn btn-primary btn-sm" :href="auth.getLoginUrl()">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-                  GitHub 登录
-                </a>
+              <div v-else class="catalog-empty-note">
+                {{
+                  auth.loading
+                    ? '正在确认登录状态…'
+                    : '登录后，一起交流插件的使用体验。'
+                }}
+                <a
+                  v-if="!auth.loading"
+                  class="catalog-link"
+                  :href="auth.getLoginUrl()"
+                  >GitHub 登录 ↗</a
+                >
               </div>
-            </div>
-            <!-- Comment list -->
-            <div style="margin-top:14px">
-              <div v-if="commentThreads.length">
-                <div v-for="thread in commentThreads" :id="`comment-${thread.root.id}`" :key="thread.root.id" class="comment-thread">
-                  <div class="comment">
-                    <div class="comment-avatar">
-                      <img v-if="thread.root.author.avatar_url" :src="thread.root.author.avatar_url" alt="">
-                      <template v-else>{{ thread.root.author.display_name?.[0]?.toUpperCase() || '?' }}</template>
-                    </div>
-                    <div>
-                      <div class="comment-meta">
-                        <strong>{{ thread.root.author.display_name }}</strong>
-                        <span>@{{ thread.root.author.github_login }}</span>
-                        <span v-if="thread.root.author.is_admin" class="badge trust-official">管理员</span>
-                        <span>·</span>
-                        <span>{{ formatRelative(thread.root.created_at) }}</span>
-                      </div>
-                      <p class="comment-content rich-mention-content">
-                        <template v-for="(segment, index) in renderCommentContent(thread.root)" :key="`${thread.root.id}-${index}`">
-                          <router-link v-if="segment.type === 'mention' && segment.mention" class="mention-link" :to="`/author/${encodeURIComponent(segment.mention.author_id)}`">{{ segment.text }}</router-link>
-                          <span v-else>{{ segment.text }}</span>
-                        </template>
-                      </p>
-                      <div class="comment-actions">
-                        <button v-if="canDeleteComment(thread.root)" type="button" @click="deleteComment(thread.root.id)">删除</button>
-                      </div>
-                    </div>
-                  </div>
-
+              <CatalogState
+                :loading="comments.loading"
+                :error="comments.error"
+                :empty="!comments.data.length"
+                :count="2"
+                title="讨论从这里开始"
+                message="还没有评论，欢迎分享你的体验。"
+                @retry="loadComments"
+                ><div v-for="thread in threads" :key="thread.root.id">
+                  <CatalogComment
+                    :comment="thread.root"
+                    :removable="canRemove(thread.root)"
+                    :deleting="deleting === thread.root.id"
+                    @remove="removeComment(thread.root.id)"
+                  />
                   <div v-if="thread.replies.length" class="comment-replies">
-                    <div v-for="reply in visibleReplies(thread)" :id="`comment-${reply.id}`" :key="reply.id" class="comment comment-reply">
-                      <div class="comment-avatar">
-                        <img v-if="reply.author.avatar_url" :src="reply.author.avatar_url" alt="">
-                        <template v-else>{{ reply.author.display_name?.[0]?.toUpperCase() || '?' }}</template>
-                      </div>
-                      <div>
-                        <div class="comment-meta">
-                          <strong>{{ reply.author.display_name }}</strong>
-                          <span>@{{ reply.author.github_login }}</span>
-                          <span v-if="reply.author.is_admin" class="badge trust-official">管理员</span>
-                          <span>·</span>
-                          <span>{{ formatRelative(reply.created_at) }}</span>
-                        </div>
-                        <p class="comment-content rich-mention-content">
-                          <template v-for="(segment, index) in renderCommentContent(reply)" :key="`${reply.id}-${index}`">
-                            <router-link v-if="segment.type === 'mention' && segment.mention" class="mention-link" :to="`/author/${encodeURIComponent(segment.mention.author_id)}`">{{ segment.text }}</router-link>
-                            <span v-else>{{ segment.text }}</span>
-                          </template>
-                        </p>
-                        <div class="comment-actions">
-                          <button v-if="canDeleteComment(reply)" type="button" @click="deleteComment(reply.id)">删除</button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
+                    <CatalogComment
+                      v-for="reply in expanded[thread.root.id]
+                        ? thread.replies
+                        : thread.replies.slice(0, 3)"
+                      :key="reply.id"
+                      :comment="reply"
+                      :removable="canRemove(reply)"
+                      :deleting="deleting === reply.id"
+                      @remove="removeComment(reply.id)"
+                    /><button
                       v-if="thread.replies.length > 3"
-                      type="button"
                       class="btn btn-ghost btn-sm"
-                      style="justify-self:start"
-                      @click="toggleReplies(thread.root.id)"
+                      @click="
+                        expanded[thread.root.id] = !expanded[thread.root.id]
+                      "
                     >
-                      {{ expandedReplyThreads[String(thread.root.id)] ? '收起回复' : `展开其余 ${hiddenReplyCount(thread)} 条回复` }}
+                      {{
+                        expanded[thread.root.id]
+                          ? '收起回复'
+                          : `展开其余 ${thread.replies.length - 3} 条回复`
+                      }}
                     </button>
                   </div>
+                </div></CatalogState
+              >
+            </section>
+          </div>
+          <aside class="catalog-aside">
+            <section id="get" class="catalog-panel acquisition">
+              <div class="acquisition-label">
+                <span>获取插件</span><small>安装与兼容</small>
+              </div>
+              <h2 class="section-offset">
+                {{ selectedVersion ? `v${selectedVersion}` : '暂无可获取版本' }}
+              </h2>
+              <p class="catalog-muted">
+                {{
+                  selectedVersion
+                    ? `发布于 ${formatRelative(latestVersion?.published_at || plugin.latest_version_published_at)}`
+                    : '发布后即可在这里获取'
+                }}
+              </p>
+              <div class="catalog-actions">
+                <button
+                  class="btn btn-primary"
+                  :disabled="!selectedVersion || installBusy"
+                  @click="install"
+                >
+                  <AppIcon name="download" :size="16" />
+                  {{ installBusy ? '正在准备下载…' : '下载插件' }}</button
+                ><button
+                  class="btn"
+                  :disabled="subscriptionBusy || auth.loading"
+                  @click="subscribe"
+                >
+                  {{
+                    subscriptionBusy
+                      ? '正在更新…'
+                      : subscribed
+                        ? '已订阅更新 ✓'
+                        : '订阅更新 ＋'
+                  }}
+                </button>
+              </div>
+              <div v-if="selectedVersion" class="install-command">
+                <code
+                  >mofox plugin install {{ plugin.plugin_id }}@{{
+                    selectedVersion
+                  }}</code
+                ><button @click="copyCommand" aria-label="复制安装命令">
+                  复制
+                </button>
+              </div>
+              <a
+                v-if="!auth.isAuthenticated && !auth.loading"
+                class="login-link"
+                :href="auth.getLoginUrl()"
+                >登录后可订阅、评分与评论 ↗</a
+              >
+              <div class="catalog-stat-row">
+                <div>
+                  <b>{{ formatNumber(plugin.downloads_count) }}</b
+                  ><span>累计下载</span>
+                </div>
+                <div>
+                  <b>{{ formatNumber(plugin.likes_count) }}</b
+                  ><span>订阅人数</span>
+                </div>
+                <div>
+                  <b>{{
+                    plugin.rating_count
+                      ? Number(plugin.rating_avg).toFixed(1)
+                      : '—'
+                  }}</b
+                  ><span>{{ plugin.rating_count }} 条评分</span>
                 </div>
               </div>
-              <EmptyState v-else title="还没有评论" message="来抢占第一个评论吧！" />
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <!-- Sidebar -->
-      <aside class="install-panel">
-        <div class="panel">
-          <h3>安装</h3>
-          <RiskWarning kind="panel" />
-          <template v-if="plugin.latest_version">
-            <div style="color:var(--muted);font-size:0.8rem;margin-bottom:4px">最新稳定版</div>
-            <div style="font-family:'JetBrains Mono',Consolas,monospace;font-size:1rem;color:var(--ink);font-weight:600">v{{ plugin.latest_version }}</div>
-            <div style="font-size:0.78rem;color:var(--muted)">发布于 {{ formatRelative(plugin.latest_version_published_at) }}</div>
-          </template>
-          <div v-else style="color:var(--muted)">暂无可安装版本</div>
-
-          <div class="install-stats">
-            <div class="install-stat-card">
-              <b>{{ formatNumber(plugin.downloads_count) }}</b>
-              <span>累计下载</span>
-            </div>
-            <div class="install-stat-card">
-              <b>{{ formatNumber(plugin.likes_count) }}</b>
-              <span>订阅人数</span>
-            </div>
-            <div class="install-stat-card">
-              <b>{{ plugin.rating_avg.toFixed(2) }}</b>
-              <span>{{ plugin.rating_count }} 条评价</span>
-            </div>
-          </div>
-
-          <div class="install-actions">
-            <button type="button" class="btn btn-primary" :disabled="!plugin.latest_version" @click="handleInstall">下载插件</button>
-            <button type="button" class="btn" @click="handleSubscribe">{{ plugin.viewer_has_liked ? '已订阅' : '订阅更新' }}</button>
-          </div>
-
-          <code v-if="plugin.latest_version" class="install-code">mofox plugin install {{ plugin.plugin_id }}@{{ plugin.latest_version }}</code>
-
-          <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;font-size:0.82rem;color:var(--muted)">
-            <a v-if="plugin.homepage" :href="plugin.homepage" target="_blank" rel="noreferrer noopener">主页 ↗</a>
-            <a :href="plugin.repository_url" target="_blank" rel="noreferrer noopener">GitHub ↗</a>
-          </div>
-        </div>
-
-        <!-- Rating panel -->
-        <div class="panel">
-          <h3>评分 <span class="rating-ticket">{{ plugin.rating_count }} 票</span></h3>
-          <div class="rating-head">
-            <div class="rating-average">{{ plugin.rating_avg.toFixed(1) }}</div>
-            <div class="rating-meta">
-              <div class="rating">
-                <span class="stars" aria-hidden="true">
-                  ★★★★★
-                  <span class="fill" :style="{ width: starPercent(plugin.rating_avg) + '%' }">★★★★★</span>
-                </span>
+              <dl class="catalog-facts">
+                <div>
+                  <dt>插件 API</dt>
+                  <dd>
+                    {{
+                      latestVersion?.plugin_api_version ||
+                      (versions.loading ? '正在读取' : '未提供')
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>宿主版本</dt>
+                  <dd>
+                    {{
+                      latestVersion?.min_host_version
+                        ? `≥ ${latestVersion.min_host_version}${latestVersion.max_host_version ? `，≤ ${latestVersion.max_host_version}` : ''}`
+                        : '兼容性待确认'
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>支持平台</dt>
+                  <dd>
+                    {{
+                      latestVersion?.supported_platforms?.join(' / ') ||
+                      '请查看发布说明'
+                    }}
+                  </dd>
+                </div>
+              </dl>
+              <div v-if="versions.error" class="catalog-muted section-offset">
+                版本信息暂不可用，<button
+                  class="catalog-link"
+                  @click="loadVersions"
+                >
+                  重试
+                </button>
               </div>
-              <p>来自 {{ plugin.rating_count }} 位用户的评分反馈</p>
-            </div>
-          </div>
-          <div class="rating-dist" aria-label="评分分布">
-            <div v-for="row in ratingRows" :key="row.score" class="rating-dist-row" :title="`${row.score} 星：${row.count} 票`">
-              <span class="rating-dist-label">{{ row.score }}★</span>
-              <span class="rating-dist-bar">
-                <span :style="{ width: `${row.percent}%` }"></span>
-              </span>
-            </div>
-          </div>
-          <div class="rating-mine">
-            <div class="rating-mine-head">
-              <span>我的评分</span>
-              <small v-if="viewerRating">已评 {{ viewerRating }} 星</small>
-            </div>
-            <div class="rating-picker">
-              <button
-                v-for="n in 5"
-                :key="n"
-                type="button"
-                :class="['rating-star', { active: viewerRating >= n }]"
-                @click="handleRate(n)"
-              >&#9733;</button>
-              <button
-                v-if="viewerRating"
-                type="button"
-                class="btn btn-xs btn-ghost"
-                @click="clearRating"
-              >清除</button>
-            </div>
-            <div v-if="!auth.isAuthenticated" class="rating-login-tip">登录后可以评分和评论。</div>
+              <div class="external-links">
+                <a
+                  :href="plugin.repository_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >代码仓库 ↗</a
+                ><a
+                  v-if="plugin.homepage"
+                  :href="plugin.homepage"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >项目主页 ↗</a
+                >
+              </div>
+              <RiskWarning kind="panel" />
+            </section>
+            <section class="catalog-panel community-rating">
+
+              <h2 class="section-offset">社区评分</h2>
+              <p class="catalog-muted">
+                {{ plugin.rating_count }} 位用户的真实反馈
+              </p>
+              <div
+                v-for="row in ratingRows"
+                :key="row.score"
+                class="catalog-rating-row"
+                :aria-label="`${row.score}星：${row.count}人`"
+              >
+                <span>{{ row.score }}★</span
+                ><span class="catalog-rating-track"
+                  ><i :style="{ width: `${row.percent}%` }"></i></span
+                ><span>{{ row.count }}</span>
+              </div>
+              <div class="catalog-stars">
+                <button
+                  v-for="n in 5"
+                  :key="n"
+                  :class="{ active: (rating?.viewer_rating || 0) >= n }"
+                  :aria-label="`评 ${n} 星`"
+                  :aria-pressed="rating?.viewer_rating === n"
+                  :disabled="ratingBusy || auth.loading"
+                  @click="rate(n)"
+                >
+                  ★</button
+                ><button
+                  v-if="rating?.viewer_rating"
+                  class="clear-rating"
+                  :disabled="ratingBusy"
+                  @click="rate(null)"
+                >
+                  清除
+                </button>
+              </div>
+              <p class="catalog-caption">
+                {{
+                  rating?.viewer_rating
+                    ? `我的评分：${rating.viewer_rating} 星`
+                    : '点击星星，为插件评分'
+                }}
+              </p>
+            </section>
+          </aside>
+        </div>
+        <RecommendationSection
+          placement="detail"
+          :context-plugin-id="plugin.plugin_id"
+        />
+        <div v-if="selectedVersion" class="mobile-acquire">
+          <span
+            >{{ plugin.display_name
+            }}<small>v{{ selectedVersion }}</small></span
+          ><div class="mobile-acquire-links">
+            <router-link class="btn" :to="sectionLink('#usage')"><AppIcon name="book" :size="15" />{{ guideLabel }}</router-link>
+            <button
+            class="btn btn-primary"
+            :disabled="installBusy"
+            @click="install"
+          >
+            <AppIcon name="download" :size="15" />{{ installBusy ? '准备中…' : '下载插件' }}
+          </button>
           </div>
         </div>
-      </aside>
-    </div>
-  </template>
+      </template>
+    </CatalogState>
+  </CatalogFrame>
 </template>
+<style scoped>
+.plugin-lead-actions,
+.mobile-acquire-links,
+.plugin-guide-heading h2,
+.plugin-guide-heading a,
+.guide-sources,
+.guide-sources a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plugin-lead-actions { margin-top: 18px; flex-wrap: wrap; }
+.plugin-lead-actions .btn { min-height: 40px; }
+.plugin-guide-heading h2 { margin: 0; }
+.plugin-guide-heading a, .guide-sources a { font-size: 12px; color: var(--blue-700); }
+.plugin-author-guide { display: grid; gap: 18px; }
+.guide-sources { gap: 12px 20px; flex-wrap: wrap; }
+.plugin-guide-heading, .acquisition { scroll-margin-top: calc(var(--topbar-h, 64px) + 84px); }
+.mobile-acquire-links { flex: none; }
+@media (min-width: 1181px) {
+  .plugin-guide-heading, .acquisition { scroll-margin-top: calc(var(--topbar-h, 64px) + 22px); }
+}
+@media (max-width: 620px) {
+  .plugin-lead-actions.has-sticky-actions { display: none; }
+  .mobile-acquire-links { gap: 6px; }
+  .mobile-acquire-links .btn { min-height: 40px; padding-inline: 9px; gap: 5px; font-size: 12px; }
+}
+.detail-sections {
+  display: grid;
+  gap: 22px;
+}
+.section-offset {
+  margin-top: 18px !important;
+}
+.release-row {
+  padding: 24px 0;
+  border-bottom: 1px solid var(--line);
+}
+.release-row:last-child {
+  border: 0;
+  padding-bottom: 0;
+}
+.release-row header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  font: 12px var(--font-mono);
+}
+.release-row header strong {
+  font-size: 20px;
+  color: var(--blue-700);
+}
+.release-row header > span {
+  color: var(--warning-ink);
+  font-size: 10px;
+}
+.release-row time {
+  margin-left: auto;
+  color: var(--ink-500);
+  font-size: 11px;
+}
+.release-row h3 {
+  margin: 15px 0 7px !important;
+  font-size: 14px !important;
+}
+.release-row p {
+  font-size: 12px;
+  color: var(--ink-500);
+  margin: 0 0 15px;
+}
+.dependency-list {
+  display: grid;
+  gap: 10px;
+}
+.dependency-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+}
+.dependency-row > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.dependency-row code {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.dependency-row > span {
+  font-size: 10px;
+  color: var(--blue-600);
+  flex: none;
+}
+.comment-form {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.comment-form-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+.comment-form-bottom small {
+  font-size: 11px;
+  color: var(--ink-500);
+}
+.comment-replies {
+  margin-left: 46px;
+}
+.install-command {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin-top: 10px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-inline-start: 2px solid var(--blue-500);
+  font-size: 12px;
+}
+.install-command code {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  background: none;
+  padding: 0;
+  white-space: normal;
+  line-height: 1.8;
+}
+.install-command button {
+  min-height: 34px;
+  min-width: 40px;
+  padding-inline: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue-600);
+  flex: none;
+}
+.external-links {
+  display: flex;
+  gap: 18px;
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--blue-600);
+}
+.acquisition :deep(.risk-warning) {
+  margin-top: 22px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  font-size: 11px;
+  color: var(--ink-500);
+}
+.acquisition :deep(.risk-warning p) {
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 7px 0;
+}
+.acquisition :deep(.risk-warning strong) {
+  font-size: 11px;
+  color: var(--ink-700);
+}
+.catalog-stars .clear-rating {
+  font-size: 11px;
+  padding: 6px;
+  margin-left: 6px;
+}
+.login-link {
+  display: block;
+  font-size: 11px;
+  color: var(--blue-600);
+  margin-top: 13px;
+}
+.mobile-acquire {
+  display: none;
+}
+@media (max-width: 620px) {
+  .mobile-acquire {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 29;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    gap: 14px;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+  .mobile-acquire > span {
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-acquire small {
+    display: block;
+    font: 10px var(--font-mono);
+    margin-top: 4px;
+    color: var(--ink-500);
+  }
+  .mobile-acquire .btn {
+    flex: none;
+  }
+  .comment-replies {
+    margin-left: 22px;
+  }
+}
+</style>

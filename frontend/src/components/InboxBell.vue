@@ -1,62 +1,63 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useInboxStore } from '@/stores/inbox'
-import InboxList from '@/components/InboxList.vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { useInboxStore } from '@/stores/inbox';
+import InboxList from '@/components/InboxList.vue';
 
-const inbox = useInboxStore()
+const inbox = useInboxStore();
 
-const open = ref(false)
-const panelRef = ref<HTMLElement | null>(null)
+const open = ref(false);
+const panelRef = ref<HTMLElement | null>(null);
 
 async function toggleOpen(): Promise<void> {
-  open.value = !open.value
+  open.value = !open.value;
   if (open.value) {
-    await inbox.loadMessages({ offset: 0, limit: 20 })
-    await nextTick()
-    panelRef.value?.querySelector<HTMLElement>('[data-inbox-initial-focus]')?.focus()
+    await nextTick();
+    panelRef.value
+      ?.querySelector<HTMLElement>('[data-inbox-initial-focus]')
+      ?.focus();
   }
 }
 
 function closeDrawer(): void {
-  open.value = false
+  open.value = false;
 }
 
 function onDocumentClick(event: MouseEvent): void {
   if (!open.value || !panelRef.value) {
-    return
+    return;
   }
   if (panelRef.value.contains(event.target as Node)) {
-    return
+    return;
   }
-  closeDrawer()
+  closeDrawer();
 }
 
 function onDocumentKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
-    closeDrawer()
+    closeDrawer();
   }
 }
 
 watch(open, (value) => {
   if (typeof document === 'undefined') {
-    return
+    return;
   }
   if (value) {
-    document.addEventListener('click', onDocumentClick)
-    document.addEventListener('keydown', onDocumentKeydown)
-    return
+    document.addEventListener('click', onDocumentClick);
+    document.addEventListener('keydown', onDocumentKeydown);
+    return;
   }
-  document.removeEventListener('click', onDocumentClick)
-  document.removeEventListener('keydown', onDocumentKeydown)
-})
+  document.removeEventListener('click', onDocumentClick);
+  document.removeEventListener('keydown', onDocumentKeydown);
+});
 
 onBeforeUnmount(() => {
   if (typeof document === 'undefined') {
-    return
+    return;
   }
-  document.removeEventListener('click', onDocumentClick)
-  document.removeEventListener('keydown', onDocumentKeydown)
-})
+  document.removeEventListener('click', onDocumentClick);
+  document.removeEventListener('keydown', onDocumentKeydown);
+});
 </script>
 
 <template>
@@ -69,12 +70,26 @@ onBeforeUnmount(() => {
       :aria-expanded="open"
       @click.stop="toggleOpen"
     >
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+      <svg
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path
+          d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"
+        />
         <path d="M9.5 17a2.5 2.5 0 0 0 5 0" />
       </svg>
       <span class="inbox-bell-label">信箱</span>
-      <span v-if="inbox.hasUnread" class="inbox-bell-badge">{{ inbox.unreadBadge }}</span>
+      <span v-if="inbox.hasUnread" class="inbox-bell-badge">{{
+        inbox.unreadBadge
+      }}</span>
     </button>
 
     <transition name="inbox-drawer">
@@ -84,7 +99,14 @@ onBeforeUnmount(() => {
             <span class="inbox-drawer-kicker">Inbox</span>
             <strong>最近 20 条消息</strong>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm" data-inbox-initial-focus @click="closeDrawer">关闭</button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            data-inbox-initial-focus
+            @click="closeDrawer"
+          >
+            关闭
+          </button>
         </div>
         <InboxList eager @navigated="closeDrawer" />
       </section>

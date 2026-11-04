@@ -1,410 +1,370 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import api from '@/api'
-import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
-import { formatNumber, formatRelative } from '@/utils/format'
-import type { AuthorFollowState, AuthorProfile, PinnedPlugin, Plugin } from '@/types'
-import PluginCard from '@/components/PluginCard.vue'
-import EmptyState from '@/components/EmptyState.vue'
-
-const props = defineProps({ id: { type: String, required: true } })
-const auth = useAuthStore()
-const toast = useToastStore()
-const route = useRoute()
-const router = useRouter()
-
-const plugins = ref<Plugin[]>([])
-const author = ref<Plugin | null>(null)
-const profile = ref<AuthorProfile | null>(null)
-const pins = ref<PinnedPlugin[]>([])
-const followState = ref<AuthorFollowState | null>(null)
-const followPending = ref(false)
-const loading = ref(true)
-const page = ref(1)
-const total = ref(0)
-const pageSize = 21
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
-
-const heroStyle = computed(() => {
-  if (profile.value?.background_image_url) {
-    return {
-      backgroundImage: `linear-gradient(135deg, rgba(11, 18, 32, 0.74) 0%, rgba(11, 18, 32, 0.32) 60%, rgba(11, 18, 32, 0.6) 100%), url(${profile.value.background_image_url})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-    }
-  }
-  return {}
-})
-
-const totals = computed(() => {
-  const items = plugins.value
-  return {
-    plugins: total.value,
-    likes: items.reduce((acc, p) => acc + (p.likes_count || 0), 0),
-    downloads: items.reduce((acc, p) => acc + (p.downloads_count || 0), 0),
-  }
-})
-
-const pinnedPlugins = computed(() => pins.value.filter((item) => item.plugin))
-const isOwnPage = computed(() => auth.viewer?.author_id === props.id)
-
+import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import api from '@/api';
+import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import { formatNumber, formatRelative } from '@/utils/format';
+import type {
+  AuthorFollowState,
+  AuthorProfile,
+  PinnedPlugin,
+  Plugin,
+} from '@/types';
+import PluginCard from '@/components/PluginCard.vue';
+import CatalogFrame from '@/components/catalog/CatalogFrame.vue';
+import CatalogState from '@/components/catalog/CatalogState.vue';
+import { useCatalogResource } from '@/components/catalog/useCatalogResource';
+const props = defineProps<{ id: string }>();
+const route = useRoute(),
+  router = useRouter(),
+  auth = useAuthStore(),
+  toast = useToastStore();
+const profile = useCatalogResource<AuthorProfile | null>(() => null),
+  pins = useCatalogResource<PinnedPlugin[]>(() => []),
+  follow = useCatalogResource<AuthorFollowState | null>(() => null);
+const published = useCatalogResource(() => ({ items: [] as Plugin[], total: 0, loadedPage: 0 }));
+const initialWorksLoading = computed(() => published.loading && !published.data.loadedPage);
+const followBusy = ref(false),
+  brokenAvatar = ref(false),
+  pageSize = 21;
+const page = computed(() => {
+  const value = Number(route.query.page);
+  return Number.isSafeInteger(value) && value > 0 ? value : 1;
+});
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(published.data.total / pageSize)),
+);
+const identity = computed(
+  () =>
+    published.data.items.find((item) => item.owner_id === props.id) ||
+    pins.data.find((item) => item.plugin?.owner_id === props.id)?.plugin,
+);
+const isOwnPage = computed(() => auth.viewer?.author_id === props.id);
 const displayName = computed(() =>
-  author.value?.owner_display_name ||
-  author.value?.owner_login ||
-  profile.value?.author_id ||
-  props.id,
-)
-const githubLogin = computed(() => author.value?.owner_login || props.id)
-
-async function loadPage() {
-  loading.value = true
-  try {
-    const [result, profileResult, pinResult, followResult] = await Promise.all([
-      api.get(`/api/v1/plugins?limit=${pageSize}&offset=${(page.value - 1) * pageSize}&sort=popular&author_id=${encodeURIComponent(props.id)}`),
-      api.get(`/api/v1/authors/${encodeURIComponent(props.id)}/profile`).catch(() => null),
-      api.get(`/api/v1/authors/${encodeURIComponent(props.id)}/pins`).catch(() => []),
-      api.authors.followState(props.id).catch(() => null),
-    ])
-    const items = result.items || []
-    plugins.value = items
-    total.value = result.total || 0
-    author.value = items.find((p: Plugin) => p.owner_id === props.id) || items[0] || null
-    profile.value = profileResult
-    pins.value = pinResult
-    followState.value = followResult
-  } catch {
-    plugins.value = []
-    total.value = 0
-  } finally {
-    loading.value = false
-  }
+  isOwnPage.value
+    ? auth.viewer?.display_name || auth.viewer?.github_login || props.id
+    : identity.value?.owner_display_name ||
+      identity.value?.owner_login ||
+      props.id,
+);
+const avatarUrl = computed(() =>
+  isOwnPage.value ? auth.viewer?.avatar_url : identity.value?.owner_avatar_url,
+);
+const login = computed(() =>
+  isOwnPage.value ? auth.viewer?.github_login : identity.value?.owner_login,
+);
+const cover = computed(() =>
+  profile.data?.background_image_url
+    ? {
+        backgroundImage: `url(${JSON.stringify(profile.data.background_image_url)})`,
+      }
+    : {},
+);
+const pageTotals = computed(() =>
+  published.data.items.reduce(
+    (total, item) => ({
+      subscriptions: total.subscriptions + Number(item.likes_count || 0),
+      downloads: total.downloads + Number(item.downloads_count || 0),
+    }),
+    { subscriptions: 0, downloads: 0 },
+  ),
+);
+const pinned = computed(() => pins.data.filter((item) => item.plugin));
+let epoch = 0;
+function loadProfile() {
+  const id = props.id;
+  return profile.load(() =>
+    api.get(`/api/v1/authors/${encodeURIComponent(id)}/profile`),
+  );
 }
-
-function setPage(nextPage: number) {
-  const bounded = Math.min(Math.max(1, nextPage), totalPages.value)
-  void router.push({ query: { ...route.query, page: bounded === 1 ? undefined : String(bounded) } })
+function loadPins() {
+  const id = props.id;
+  return pins.load(() =>
+    api.get<PinnedPlugin[]>(`/api/v1/authors/${encodeURIComponent(id)}/pins`),
+  );
 }
-
+function loadFollow() {
+  const id = props.id;
+  return follow.load(() => api.authors.followState(id));
+}
+async function loadPublished() {
+  const id = props.id,
+    currentPath = route.fullPath,
+    requestedPage = page.value;
+  const query = new URLSearchParams({
+    author_id: id,
+    limit: String(pageSize),
+    offset: String((page.value - 1) * pageSize),
+    sort: 'popular',
+  });
+  await published.load(async () => ({
+    ...await api.get<{ items: Plugin[]; total: number }>(`/api/v1/plugins?${query}`),
+    loadedPage: requestedPage,
+  }));
+  if (
+    !published.loading && !published.error &&
+    route.fullPath === currentPath &&
+    page.value > totalPages.value
+  )
+    await router.replace({
+      query: {
+        ...route.query,
+        page: totalPages.value > 1 ? String(totalPages.value) : undefined,
+      },
+    });
+}
+function loadAuthor() {
+  void loadProfile();
+  void loadPins();
+  void loadFollow();
+}
+function setPage(value: number) {
+  void router.push({
+    query: { ...route.query, page: value > 1 ? String(value) : undefined },
+  });
+}
 async function toggleFollow() {
+  if (followBusy.value) return;
   if (!auth.isAuthenticated) {
-    toast.show('请先登录', '')
-    setTimeout(() => { location.href = auth.getLoginUrl(`/author/${encodeURIComponent(props.id)}`) }, 600)
-    return
+    toast.show('登录后即可关注作者', 'error');
+    return;
   }
-  followPending.value = true
+  const id = props.id,
+    current = epoch;
+  followBusy.value = true;
   try {
-    followState.value = await api.authors.toggleFollow(props.id)
-    toast.show(followState.value.following ? '已关注作者' : '已取消关注', 'ok')
-  } catch (e) {
-    toast.show((e as Error).message || '操作失败', 'error')
+    const result = await api.authors.toggleFollow(id);
+    if (current !== epoch) return;
+    follow.data = result;
+    toast.show(result.following ? '已关注作者' : '已取消关注', 'ok');
+  } catch (error) {
+    if (current === epoch) toast.show((error as Error).message, 'error');
   } finally {
-    followPending.value = false
+    if (current === epoch) followBusy.value = false;
   }
 }
-
 watch(
-  () => [props.id, route.query.page],
+  [() => props.id, () => auth.viewer?.author_id],
   () => {
-    page.value = Math.max(1, Number.parseInt(String(route.query.page || '1'), 10) || 1)
-    void loadPage()
+    epoch++;
+    profile.reset();
+    pins.reset();
+    follow.reset();
+    followBusy.value = brokenAvatar.value = false;
+    loadAuthor();
   },
   { immediate: true },
-)
+);
+watch(
+  [() => props.id, () => auth.viewer?.author_id, page],
+  ([id, viewer], previous) => {
+    if (id !== previous?.[0] || viewer !== previous?.[1]) published.reset();
+    void loadPublished();
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  epoch++;
+});
 </script>
-
 <template>
-  <div class="author-page">
-    <div class="author-loading" v-if="loading">加载中…</div>
-
-    <template v-else>
-      <header
-        class="author-hero"
-        :class="{ 'has-bg': profile?.background_image_url }"
-        :style="heroStyle"
-        data-anim="enter-1"
-      >
-        <div class="author-hero-overlay" v-if="!profile?.background_image_url" aria-hidden="true"></div>
-        <div class="author-hero-inner shell">
-          <div class="author-hero-text">
-            <span class="kicker">AUTHOR SPACE</span>
-            <h1>{{ displayName }}</h1>
-            <p class="author-hero-login">@{{ githubLogin }}</p>
-            <p class="author-hero-bio" v-if="profile?.bio">{{ profile.bio }}</p>
-            <p class="author-hero-bio is-empty" v-else>这位作者还没有填写公开 Bio，先看看 ta 公开发布的作品吧。</p>
-
-            <div class="author-hero-actions" v-if="!isOwnPage">
-              <button type="button" class="btn btn-sm" :disabled="followPending" @click="toggleFollow">
-                {{ followState?.following ? '已关注' : '关注作者' }}
-              </button>
-              <span class="author-followers">{{ formatNumber(followState?.followers_count || 0) }} 位关注者</span>
-            </div>
-
-            <div class="author-hero-stats">
-              <div><b>{{ formatNumber(totals.plugins) }}</b><span>插件</span></div>
-              <div><b>{{ formatNumber(totals.likes) }}</b><span>累计订阅</span></div>
-              <div><b>{{ formatNumber(totals.downloads) }}</b><span>累计下载</span></div>
+  <CatalogFrame class="author-edition">
+    <nav class="catalog-breadcrumb" aria-label="位置">
+      <router-link to="/browse">插件档案</router-link><span>/</span
+      ><span>创作者档案</span>
+    </nav>
+    <CatalogState
+      :loading="profile.loading"
+      :error="profile.error"
+      :count="1"
+      @retry="loadProfile"
+    >
+      <header class="portrait-spread">
+        <figure class="portrait-plate">
+          <div class="portrait-image" :class="{ 'has-cover': !!profile.data?.background_image_url }" :style="cover">
+            <div class="portrait-avatar">
+              <img v-if="avatarUrl && !brokenAvatar" :src="avatarUrl" alt="" @error="brokenAvatar = true" />
+              <span v-else aria-hidden="true">{{ displayName?.[0]?.toUpperCase() || 'A' }}</span>
             </div>
           </div>
-
-          <div class="author-hero-avatar-shell">
-            <div class="author-hero-avatar" :class="{ 'is-fallback': !author?.owner_avatar_url }">
-              <img v-if="author?.owner_avatar_url" :src="author.owner_avatar_url" :alt="displayName">
-              <span v-else>{{ displayName[0]?.toUpperCase() || 'A' }}</span>
-            </div>
+          <figcaption><span>创作者图录</span><span>{{ login ? '@' + login : props.id }}</span></figcaption>
+        </figure>
+        <div class="portrait-copy">
+          <p class="portrait-section">社区人物</p>
+          <h1>{{ displayName }}</h1>
+          <div class="portrait-bio">
+            <span>作者简介</span>
+            <p>{{ profile.data?.bio || '作者尚未填写个人简介。' }}</p>
+          </div>
+          <div class="author-actions">
+            <router-link
+              v-if="isOwnPage"
+              class="btn btn-primary"
+              to="/me/profile"
+              >编辑个人资料 ↗</router-link
+            ><button
+              v-else
+              class="btn btn-primary"
+              :disabled="
+                followBusy || follow.loading || !!follow.error || auth.loading
+              "
+              @click="toggleFollow"
+            >
+              {{
+                followBusy
+                  ? '正在更新…'
+                  : follow.data?.following
+                    ? '已关注 ✓'
+                    : '关注创作者 ＋'
+              }}</button
+            ><button
+              v-if="follow.error"
+              class="catalog-link"
+              @click="loadFollow"
+            >
+              关注状态加载失败，重试</button
+            ><span v-else class="catalog-caption">{{
+              follow.loading
+                ? '正在读取关注信息'
+                : `${formatNumber(follow.data?.followers_count || 0)} 位关注者`
+            }}</span
+            ><a
+              v-if="!auth.isAuthenticated && !auth.loading"
+              class="catalog-link"
+              :href="auth.getLoginUrl()"
+              >GitHub 登录 ↗</a
+            >
           </div>
         </div>
       </header>
+    </CatalogState>
+    <section v-if="pins.loading || pins.error || pinned.length">
+      <div class="catalog-section-heading">
+        <div>
 
-      <div class="shell author-body">
-
-        <section class="author-section" v-if="pinnedPlugins.length" data-anim="enter-2">
-          <div class="author-section-head">
-            <span class="kicker">PINNED · 置顶作品</span>
-            <h2>作者本人推荐</h2>
-            <p>下面这些是 ta 自己挑出来想让你先看到的作品。</p>
-          </div>
-          <div class="pinned-grid">
-            <article v-for="pin in pinnedPlugins" :key="pin.plugin_id" class="pinned-cell">
-              <div class="pinned-tag" v-if="pin.pinned_reason">
-                <span class="pinned-tag-kicker">PIN</span>
-                <p>{{ pin.pinned_reason }}</p>
-              </div>
-              <div class="pinned-tag is-default" v-else>
-                <span class="pinned-tag-kicker">PIN</span>
-                <p>作者置顶推荐</p>
-              </div>
-              <PluginCard :plugin="pin.plugin!" />
-              <small class="pinned-when">置顶于 {{ formatRelative(pin.pinned_at) }}</small>
-            </article>
-          </div>
-        </section>
-
-        <section class="author-section" data-anim="enter-3">
-          <div class="author-section-head">
-            <span class="kicker">PUBLISHED · 公开发布</span>
-            <h2>{{ pinnedPlugins.length ? '其他公开插件' : '公开插件' }}</h2>
-            <p>按综合热度排序。</p>
-          </div>
-          <div v-if="plugins.length" class="grid">
-            <PluginCard v-for="p in plugins" :key="p.plugin_id" :plugin="p" />
-          </div>
-          <EmptyState v-else title="暂无插件" message="该作者尚未发布任何已审核通过的插件。" />
-          <nav v-if="totalPages > 1" class="author-pagination" aria-label="作者插件分页">
-            <button type="button" class="btn btn-ghost btn-sm" :disabled="page <= 1" @click="setPage(page - 1)">上一页</button>
-            <span>第 {{ page }} / {{ totalPages }} 页 · 共 {{ total }} 个插件</span>
-            <button type="button" class="btn btn-ghost btn-sm" :disabled="page >= totalPages" @click="setPage(page + 1)">下一页</button>
-          </nav>
-        </section>
+          <h2>作者精选</h2>
+        </div>
+        <span class="catalog-caption"
+          >{{ pinned.length }} 件置顶作品</span
+        >
       </div>
-    </template>
-  </div>
+      <CatalogState
+        :loading="pins.loading"
+        :error="pins.error"
+        cards
+        :count="3"
+        @retry="loadPins"
+        ><div class="author-pins">
+          <article v-for="(pin, index) in pinned" :key="pin.plugin_id" class="pin-entry">
+            <p v-if="pin.pinned_reason" class="pin-note"><span>荐语</span>{{ pin.pinned_reason }}</p>
+            <PluginCard v-if="pin.plugin" :plugin="pin.plugin" :number="index + 1" /><span
+              class="catalog-caption"
+              >精选于 {{ formatRelative(pin.pinned_at) }}</span
+            >
+          </article>
+        </div></CatalogState
+      >
+    </section>
+    <section class="author-works" :aria-busy="published.loading">
+      <div class="catalog-section-heading">
+        <div>
+
+          <h2>
+            全部作品 <small>{{ published.data.total }}</small>
+          </h2>
+        </div>
+        <span class="catalog-caption" aria-live="polite">{{ published.loading && !initialWorksLoading ? '正在更新作品…' : '按热度排列' }}</span>
+      </div>
+        <div class="author-stats">
+          <div>
+            <strong>{{
+              published.loading || published.error ? '—' : formatNumber(published.data.total)
+            }}</strong
+            ><span>公开插件</span>
+          </div>
+          <div>
+            <strong>{{
+              published.loading || published.error ? '—' : formatNumber(pageTotals.subscriptions)
+            }}</strong
+            ><span>本页作品订阅</span>
+          </div>
+          <div>
+            <strong>{{
+              published.loading || published.error ? '—' : formatNumber(pageTotals.downloads)
+            }}</strong
+            ><span>本页作品下载</span>
+          </div>
+        </div>
+      <CatalogState
+        :loading="initialWorksLoading"
+        :error="published.error"
+        :empty="!published.data.items.length"
+        cards
+        title="暂未发布公开插件"
+        message="新的作品发布后，会出现在这里。"
+        @retry="loadPublished"
+        ><div class="catalog-grid edition-index">
+          <PluginCard
+            v-for="(plugin, index) in published.data.items"
+            :key="plugin.plugin_id"
+            :plugin="plugin"
+            :number="(published.data.loadedPage - 1) * pageSize + index + 1"
+          />
+        </div>
+        <nav
+          v-if="totalPages > 1"
+          class="catalog-pagination"
+          aria-label="作者作品分页"
+        >
+          <button
+            class="btn btn-sm"
+            :disabled="published.loading || page === 1"
+            @click="setPage(page - 1)"
+          >
+            ← 上一页</button
+          ><span>{{ published.data.loadedPage || page }} / {{ totalPages }}</span
+          ><button
+            class="btn btn-sm"
+            :disabled="published.loading || page >= totalPages"
+            @click="setPage(page + 1)"
+          >
+            下一页 →
+          </button>
+        </nav></CatalogState
+      >
+    </section>
+  </CatalogFrame>
 </template>
-
 <style scoped>
-.author-page { display: grid; }
-
-.author-loading {
-  text-align: center;
-  padding: var(--space-16) var(--space-5);
-  color: var(--ink-500);
-  font-family: var(--font-mono); font-size: 13px;
-}
-
-/* === HERO === */
-.author-hero {
-  position: relative;
-  overflow: hidden;
-  /* 默认渐变（无背景图时） — 蓝调天空系，柔和不抢戏 */
-  background:
-    linear-gradient(135deg,
-      var(--blue-700) 0%,
-      var(--blue-500) 38%,
-      #5fb8ff 70%,
-      #b9e1fb 110%);
-  color: #fff;
-  padding-block: var(--space-10);
-}
-.author-hero.has-bg { background: var(--ink-900); }
-.author-hero-overlay {
-  position: absolute; inset: 0;
-  background:
-    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.18) 0%, transparent 60%),
-    radial-gradient(circle at 80% 90%, rgba(11, 18, 32, 0.28) 0%, transparent 55%);
-  mix-blend-mode: overlay;
-  pointer-events: none;
-}
-
-.author-hero-inner {
-  position: relative; z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-6);
-  align-items: center;
-}
-@media (max-width: 768px) {
-  .author-hero-inner { grid-template-columns: 1fr; text-align: left; }
-}
-
-.author-hero-text { color: #fff; min-width: 0; }
-.author-hero-text .kicker {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
-  font-size: 12px; color: rgba(255,255,255,0.92);
-}
-.author-hero-text .kicker::before { content: ""; width: 22px; height: 2px; background: #fff; }
-.author-hero-text h1 {
-  margin: 8px 0 4px;
-  font-family: var(--font-display); font-weight: 900;
-  font-size: clamp(36px, 5vw, 56px);
-  line-height: 1.05;
-  text-shadow: 0 2px 14px rgba(11, 18, 32, 0.34);
-}
-.author-hero-login {
-  margin: 0 0 var(--space-3);
-  font-family: var(--font-mono); font-size: 14px;
-  color: rgba(255,255,255,0.86);
-}
-.author-hero-bio {
-  margin: 0 0 var(--space-4);
-  font-size: 15px; line-height: 1.7;
-  max-width: 60ch;
-  color: rgba(255,255,255,0.94);
-}
-.author-hero-bio.is-empty { color: rgba(255,255,255,0.7); font-style: italic; }
-
-.author-hero-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin: 0 0 var(--space-4);
-  flex-wrap: wrap;
-}
-
-.author-followers {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: rgba(255,255,255,0.84);
-}
-
-.author-hero-stats {
-  display: flex; gap: var(--space-6);
-  flex-wrap: wrap;
-}
-.author-hero-stats > div {
-  display: grid; gap: 2px;
-}
-.author-hero-stats b {
-  font-family: var(--font-brand); letter-spacing: 0.04em;
-  font-size: 28px; line-height: 1;
-}
-.author-hero-stats span {
-  font-family: var(--font-mono); font-size: 11.5px;
-  color: rgba(255,255,255,0.78);
-  letter-spacing: 0.04em;
-}
-
-.author-hero-avatar-shell {
-  display: grid; place-items: center;
-}
-.author-hero-avatar {
-  width: 140px; height: 140px;
-  border-radius: 50%;
-  background: var(--surface);
-  display: grid; place-items: center;
-  overflow: hidden;
-  border: 4px solid #fff;
-  box-shadow: 0 14px 40px rgba(11, 18, 32, 0.32);
-}
-.author-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.author-hero-avatar.is-fallback {
-  background: linear-gradient(135deg, var(--blue-500), var(--blue-700));
-  color: #fff;
-  font-family: var(--font-display); font-weight: 900; font-size: 56px;
-}
-@media (max-width: 768px) {
-  .author-hero-avatar { width: 96px; height: 96px; }
-}
-
-/* === BODY === */
-.author-body {
-  padding: var(--space-7) var(--space-7) var(--space-16);
-  display: grid; gap: var(--space-12);
-}
-@media (max-width: 768px) {
-  .author-body { padding: var(--space-5) var(--space-4) var(--space-12); }
-}
-
-.author-section { display: grid; gap: var(--space-4); }
-.author-pagination {
-  display: flex; justify-content: center; align-items: center; gap: var(--space-3);
-  flex-wrap: wrap; padding-top: var(--space-4);
-}
-.author-pagination span { font-family: var(--font-mono); font-size: 12px; color: var(--ink-500); }
-.author-section-head .kicker {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
-  font-size: 12px; color: var(--blue-700);
-}
-.author-section-head .kicker::before { content: ""; width: 22px; height: 2px; background: var(--coral); }
-.author-section-head h2 {
-  margin: 6px 0 4px;
-  font-family: var(--font-display); font-weight: 900;
-  font-size: clamp(24px, 2.6vw, 32px);
-  line-height: 1.15;
-}
-.author-section-head p { margin: 0; color: var(--ink-500); font-size: 13.5px; max-width: 56ch; }
-
-.pinned-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--space-4);
-}
-
-.pinned-cell {
-  position: relative;
-  display: grid; gap: 8px;
-  padding: var(--space-3);
-  background: var(--surface);
-  border: 1.5px solid var(--blue-200);
-  border-radius: var(--radius-md);
-}
-
-.pinned-tag {
-  display: grid; grid-template-columns: auto 1fr; gap: 8px;
-  align-items: flex-start;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--blue-100);
-  color: var(--blue-700);
-}
-.pinned-tag.is-default { background: var(--surface-soft); color: var(--ink-500); }
-.pinned-tag-kicker {
-  display: grid; place-items: center;
-  width: 30px; height: 18px;
-  background: var(--coral); color: #fff;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-brand); letter-spacing: 0.06em;
-  font-size: 10px; font-weight: 700;
-}
-.pinned-tag.is-default .pinned-tag-kicker { background: var(--ink-500); }
-.pinned-tag p { margin: 0; font-size: 12.5px; line-height: 1.5; }
-
-.pinned-when {
-  font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
-  text-align: right;
-}
-
-[data-anim] { animation: fade-up var(--dur-slow) var(--ease-emphasized) both; }
-[data-anim="enter-1"] { animation-delay: 60ms; }
-[data-anim="enter-2"] { animation-delay: 160ms; }
-[data-anim="enter-3"] { animation-delay: 220ms; }
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  [data-anim] { animation: none; }
+.portrait-spread { display: grid; grid-template-columns: minmax(190px, .6fr) minmax(0, 1fr); gap: clamp(24px, 5vw, 70px); align-items: center; padding: 12px 0 32px; border-bottom: 3px double var(--ink-500); }
+.portrait-plate { min-width: 0; margin: 0; }
+.portrait-image { display: grid; place-items: center; aspect-ratio: 4 / 3; padding: 22px; background: repeating-linear-gradient(135deg, transparent 0 7px, var(--line-soft) 7px 8px), var(--surface-soft); }
+.portrait-image.has-cover { background-position: center; background-size: cover; }
+.portrait-avatar { width: 52%; aspect-ratio: 1; display: grid; place-items: center; color: var(--blue-700); background: var(--surface); outline: 6px solid var(--surface); font: 800 clamp(40px, 6vw, 82px)/1 var(--font-editorial); }
+.portrait-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.portrait-plate figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 9px 0; font-size: 11px; color: var(--ink-500); overflow-wrap: anywhere; }
+.portrait-copy { min-width: 0; }
+.portrait-section { margin: 0 0 10px; font-size: 12px; color: var(--blue-700); letter-spacing: .15em; }
+.portrait-copy h1 { margin: 0; font: 800 clamp(38px, 5.3vw, 74px)/1.15 var(--font-editorial); color: var(--ink-900); overflow-wrap: anywhere; }
+.portrait-bio { margin: 22px 0; }
+.portrait-bio>span, .pin-note>span { display: block; font-size: 11px; color: var(--blue-700); margin-bottom: 6px; }
+.portrait-bio p { margin: 0; max-width: 56ch; font: 400 clamp(16px, 1.55vw, 20px)/1.85 var(--font-reading); white-space: pre-line; overflow-wrap: anywhere; }
+.author-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; font-size: 12px; }
+.author-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 26px; padding: 8px 0 18px; border-bottom: 1px solid var(--line); }
+.author-stats>div { display: flex; align-items: baseline; gap: 8px; }
+.author-stats strong { font: 700 21px/1.2 var(--font-editorial); }
+.author-stats span, .pin-entry>.catalog-caption { font-size: 11px; color: var(--ink-500); }
+.author-pins { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 20px 32px; }
+.pin-entry { min-width: 0; }
+.pin-note { margin: 0; padding: 10px 14px; border-left: 2px solid var(--blue-500); background: var(--surface-soft); font: 400 15px/1.7 var(--font-reading); overflow-wrap: anywhere; }
+.pin-entry>.catalog-caption { display: block; margin-top: 8px; }
+.author-edition :deep(.catalog-section-heading h2) { font: 800 clamp(23px, 2.5vw, 34px)/1.3 var(--font-editorial); }
+@media(max-width: 680px) {
+  .portrait-spread { grid-template-columns: 1fr; gap: 16px; }
+  .portrait-image { max-height: 220px; }
+  .portrait-avatar { width: auto; height: 85%; }
+  .portrait-copy h1 { font-size: 40px; }
+  .portrait-bio { margin: 14px 0 18px; }
 }
 </style>

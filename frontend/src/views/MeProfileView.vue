@@ -1,338 +1,379 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
-import api from '@/api'
-import type { AuthorProfile, PinnedPlugin, Plugin } from '@/types'
-import EmptyState from '@/components/EmptyState.vue'
-import BioEditor from '@/components/BioEditor.vue'
-import BackgroundUploader from '@/components/BackgroundUploader.vue'
-import PinnedPluginEditor from '@/components/PinnedPluginEditor.vue'
-
-const auth = useAuthStore()
-const toast = useToastStore()
-
-const loading = ref(true)
-const profile = ref<AuthorProfile | null>(null)
-const plugins = ref<Plugin[]>([])
-const bioDraft = ref('')
-const backgroundDraft = ref<string | null>(null)
-const pins = ref<PinnedPlugin[]>([])
-const savingProfile = ref(false)
-const pinsBusy = ref(false)
-
-async function loadPage(): Promise<void> {
-  const [profileResult, pinResult, pluginResult] = await Promise.all([
-    api.me.profile.get().catch(() => null),
-    api.me.pins.list().catch(() => []),
-    api.get('/api/v1/me/plugins').catch(() => ({ items: [] })),
-  ])
-  profile.value = profileResult
-  bioDraft.value = profileResult?.bio || ''
-  backgroundDraft.value = profileResult?.background_image_url || null
-  pins.value = pinResult
-  plugins.value = pluginResult.items || []
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import api from '@/api';
+import type { AuthorProfile, PinnedPlugin, Plugin } from '@/types';
+import BioEditor from '@/components/BioEditor.vue';
+import BackgroundUploader from '@/components/BackgroundUploader.vue';
+import PinnedPluginEditor from '@/components/PinnedPluginEditor.vue';
+import PageSkeleton from '@/components/PageSkeleton.vue';
+const auth = useAuthStore();
+const toast = useToastStore();
+const authChecking = ref(true);
+const loading = ref(false);
+const error = ref('');
+const profile = ref<AuthorProfile | null>(null);
+const plugins = ref<Plugin[]>([]);
+const bioDraft = ref('');
+const backgroundDraft = ref<string | null>(null);
+const pins = ref<PinnedPlugin[]>([]);
+const savingProfile = ref(false);
+const uploadingBackground = ref(false);
+const pinsBusy = ref(false);
+let task = 0;
+async function loadPage() {
+  if (!auth.isAuthenticated) return;
+  const version = ++task;
+  loading.value = true;
+  error.value = '';
+  try {
+    const [nextProfile, nextPins, nextPlugins] = await Promise.all([
+      api.me.profile.get(),
+      api.me.pins.list(),
+      api.get('/api/v1/me/plugins'),
+    ]);
+    if (version !== task) return;
+    profile.value = nextProfile;
+    bioDraft.value = nextProfile.bio || '';
+    backgroundDraft.value = nextProfile.background_image_url || null;
+    pins.value = nextPins;
+    plugins.value = nextPlugins.items || [];
+  } catch (err) {
+    if (version === task)
+      error.value = (err as Error).message || '无法读取个人档案';
+  } finally {
+    if (version === task) loading.value = false;
+  }
 }
-
 async function saveProfile() {
+  if (savingProfile.value || uploadingBackground.value || !profile.value)
+    return;
   if (bioDraft.value.length > 2000) {
-    toast.show('Bio 不能超过 2000 字', 'error')
-    return
+    toast.show('个人简介不能超过 2000 字', 'error');
+    return;
   }
-  if (backgroundDraft.value
-      && !/^https:\/\//i.test(backgroundDraft.value)
-      && !backgroundDraft.value.startsWith('/plugin-media/')) {
-    toast.show('背景图请使用 https 链接，或直接上传文件', 'error')
-    return
+  if (
+    backgroundDraft.value &&
+    !/^https:\/\//i.test(backgroundDraft.value) &&
+    !backgroundDraft.value.startsWith('/plugin-media/')
+  ) {
+    toast.show('请使用 HTTPS 图片地址或直接上传文件', 'error');
+    return;
   }
-  savingProfile.value = true
+  const version = task;
+  savingProfile.value = true;
   try {
-    profile.value = await api.me.profile.update({
+    const result = await api.me.profile.update({
       bio: bioDraft.value,
-      // 后端用 None 表示"不修改"、空字符串表示"清空"，所以这里把 null 标记成空串
-      background_image_url: backgroundDraft.value === null ? '' : backgroundDraft.value,
-    })
-    toast.show('个人空间资料已保存', 'ok')
-  } catch (e) {
-    toast.show((e as Error).message || '保存失败', 'error')
+      background_image_url: backgroundDraft.value ?? '',
+    });
+    if (version !== task) return;
+    profile.value = result;
+    toast.show('个人档案已保存', 'ok');
+  } catch (err) {
+    if (version === task)
+      toast.show((err as Error).message || '保存失败', 'error');
   } finally {
-    savingProfile.value = false
+    if (version === task) savingProfile.value = false;
   }
 }
-
-async function addPin(payload: { pluginId: string; reason: string | null }) {
-  pinsBusy.value = true
+async function updatePins(action: () => Promise<unknown>) {
+  if (pinsBusy.value) return;
+  const version = task;
+  pinsBusy.value = true;
   try {
-    await api.me.pins.add({ plugin_id: payload.pluginId, pinned_reason: payload.reason })
-    pins.value = await api.me.pins.list()
-    toast.show('已新增置顶作品', 'ok')
-  } catch (e) {
-    toast.show((e as Error).message || '新增置顶失败', 'error')
+    await action();
+    if (version !== task) return;
+    const result = await api.me.pins.list();
+    if (version !== task) return;
+    pins.value = result;
+    toast.show('代表作品已更新', 'ok');
+  } catch (err) {
+    if (version === task)
+      toast.show((err as Error).message || '更新失败', 'error');
   } finally {
-    pinsBusy.value = false
+    if (version === task) pinsBusy.value = false;
   }
 }
-
-async function resetPinReason(payload: { pluginId: string; reason: string | null }) {
-  pinsBusy.value = true
-  try {
-    await api.me.pins.update(payload.pluginId, { pinned_reason: payload.reason })
-    pins.value = await api.me.pins.list()
-    toast.show('已重置置顶理由', 'ok')
-  } catch (e) {
-    toast.show((e as Error).message || '更新失败', 'error')
-  } finally {
-    pinsBusy.value = false
-  }
-}
-
-async function removePin(pluginId: string) {
-  pinsBusy.value = true
-  try {
-    await api.me.pins.remove(pluginId)
-    pins.value = await api.me.pins.list()
-    toast.show('已取消置顶', 'ok')
-  } catch (e) {
-    toast.show((e as Error).message || '取消置顶失败', 'error')
-  } finally {
-    pinsBusy.value = false
-  }
-}
-
+const addPin = (payload: { pluginId: string; reason: string | null }) =>
+  updatePins(() =>
+    api.me.pins.add({
+      plugin_id: payload.pluginId,
+      pinned_reason: payload.reason,
+    }),
+  );
+const resetPinReason = (payload: { pluginId: string; reason: string | null }) =>
+  updatePins(() =>
+    api.me.pins.update(payload.pluginId, { pinned_reason: payload.reason }),
+  );
+const removePin = (id: string) => updatePins(() => api.me.pins.remove(id));
+watch(
+  () => auth.viewer?.author_id,
+  (id) => {
+    ++task;
+    profile.value = null;
+    pins.value = [];
+    plugins.value = [];
+    bioDraft.value = '';
+    backgroundDraft.value = null;
+    savingProfile.value = false;
+    uploadingBackground.value = false;
+    pinsBusy.value = false;
+    loading.value = false;
+    error.value = '';
+    if (id) void loadPage();
+  },
+  { immediate: true },
+);
 onMounted(async () => {
-  loading.value = true
-  await loadPage()
-  loading.value = false
-})
+  await auth.loadViewer();
+  authChecking.value = false;
+});
+onBeforeUnmount(() => {
+  ++task;
+});
 </script>
-
 <template>
-  <div class="profile-page" v-if="!auth.isAuthenticated">
-    <div class="profile-empty">
-      <EmptyState title="请先登录" message="登录后才能编辑公开资料和置顶作品。" />
-      <a class="btn btn-primary" :href="auth.getLoginUrl('/me/profile')">GitHub 登录</a>
-    </div>
-  </div>
-
-  <div class="profile-page" v-else>
-    <header class="profile-hero" data-anim="enter-1">
-      <div class="profile-hero-bg" aria-hidden="true"></div>
-      <div class="profile-hero-inner">
-        <div>
-          <span class="kicker">PROFILE SPACE</span>
-          <h1>个人空间设置</h1>
-          <p>这里只管 Bio、背景图、置顶作品三件事，不会和插件治理混在一起。</p>
-        </div>
-        <div class="profile-hero-actions">
-          <router-link class="btn btn-ghost btn-sm" :to="{ name: 'me' }">← 回到工作台</router-link>
-          <router-link
-            v-if="profile"
-            class="btn btn-sm"
-            :to="`/author/${encodeURIComponent(profile.author_id)}`"
-            target="_blank"
-          >预览公开主页 ↗</router-link>
-        </div>
+  <div class="page-wrap profile-page">
+    <header class="profile-heading">
+      <div class="profile-running"><b>人物栏</b><span>公开资料编辑</span></div>
+      <div class="profile-title">
+        <h1>创作者档案</h1>
+        <p v-if="auth.viewer">署名 · {{ auth.viewer.display_name }} <span>@{{ auth.viewer.github_login }}</span></p>
+        <p v-else>一份公开的作者介绍，由简介、背景和代表作品组成。</p>
       </div>
+      <RouterLink class="btn" to="/me">← 返回工作台</RouterLink>
     </header>
-
-    <div class="profile-layout" data-anim="enter-2">
-      <!-- 左：资料编辑 -->
-      <section class="profile-card">
-        <div class="profile-card-head">
+    <PageSkeleton
+      v-if="authChecking || auth.loading || loading"
+      type="detail"
+      :count="3"
+    />
+    <section v-else-if="auth.error" class="profile-error" role="alert">
+      <h2>暂时无法确认登录状态</h2>
+      <p>{{ auth.error }}</p>
+      <button class="btn" @click="auth.loadViewer(true)">重新连接</button>
+    </section>
+    <section v-else-if="!auth.isAuthenticated" class="access-panel">
+      <div class="profile-entry">
+        <span class="eyebrow">编辑入口</span>
+        <h2>登录后编辑署名页</h2>
+        <p>用自己的 GitHub 账号登录，写下简介，选出希望读者先看到的插件。</p>
+        <a class="btn btn-primary" :href="auth.getLoginUrl('/me/profile')">使用 GitHub 登录 ↗</a>
+      </div>
+      <aside class="profile-colophon" aria-label="公开资料说明">
+        <h3>公开主页的构成</h3>
+        <dl><div><dt>简介</dt><dd>最多 2,000 字，支持轻量 Markdown</dd></div>
+          <div><dt>背景</dt><dd>上传图片或填写 HTTPS 图片地址</dd></div>
+          <div><dt>作品选</dt><dd>最多 6 个插件，可附推荐理由</dd></div></dl>
+      </aside>
+    </section>
+    <section v-else-if="error" class="profile-error" role="status">
+      <h2>档案暂时无法读取</h2>
+      <p>{{ error }}</p>
+      <button class="btn" @click="loadPage">重新加载</button>
+    </section>
+    <div v-else class="profile-layout">
+      <form class="profile-card" @submit.prevent="saveProfile">
+        <header class="card-head">
+          <span class="section-number">主栏</span>
           <div>
-            <span class="kicker">EDIT</span>
-            <h2>资料</h2>
-            <p>这些资料会展示在公开主页 <code>/author/&lt;id&gt;</code>。</p>
+            <h2>公开资料</h2>
+            <p>让其他人了解你的方向与作品。</p>
           </div>
-          <button
-            class="btn btn-primary btn-sm"
-            :disabled="savingProfile || loading"
-            @click="saveProfile"
-          >{{ savingProfile ? '保存中…' : '保存资料' }}</button>
-        </div>
-
+          <RouterLink
+            v-if="profile"
+            :to="`/author/${encodeURIComponent(profile.author_id)}`"
+            class="preview-link"
+            target="_blank"
+            rel="noopener"
+            >预览 ↗</RouterLink
+          >
+        </header>
         <div class="profile-block">
-          <div class="profile-block-head">
-            <span class="profile-block-label">个人简介 (Bio)</span>
-            <small>不超过 2000 字，支持轻量 markdown</small>
-          </div>
-          <BioEditor v-model="bioDraft" :disabled="savingProfile || loading" />
+          <h3>个人简介</h3>
+          <p class="field-note">支持轻量 Markdown，最多 2000 字。</p>
+          <BioEditor v-model="bioDraft" :disabled="savingProfile" />
         </div>
-
         <div class="profile-block">
-          <div class="profile-block-head">
-            <span class="profile-block-label">个人空间背景图</span>
-            <small>仅支持 https 直链 · 留空使用默认渐变</small>
-          </div>
-          <BackgroundUploader v-model="backgroundDraft" :disabled="savingProfile || loading" />
-        </div>
-      </section>
-
-      <!-- 右：置顶作品 -->
-      <section class="profile-card">
-        <div class="profile-card-head">
-          <div>
-            <span class="kicker">PINNED</span>
-            <h2>置顶作品</h2>
-            <p>最多 6 件，会优先展示在你的公开主页。可以为每件作品写一句话推荐理由。</p>
-          </div>
-        </div>
-
-        <div class="profile-block">
-          <PinnedPluginEditor
-            :pins="pins"
-            :available-plugins="plugins"
-            :busy="pinsBusy"
-            @add="addPin"
-            @update-reason="resetPinReason"
-            @remove="removePin"
+          <h3>档案背景</h3>
+          <p class="field-note">上传一张图片，或粘贴 HTTPS 图片地址。</p>
+          <BackgroundUploader
+            v-model="backgroundDraft"
+            :disabled="savingProfile"
+            @busy-change="uploadingBackground = $event"
           />
         </div>
+        <footer class="profile-actions">
+          <small>简介与链接修改后请保存；图片上传后立即生效。</small
+          ><button
+            type="submit"
+            class="btn btn-primary"
+            :disabled="savingProfile || uploadingBackground"
+          >
+            {{ savingProfile ? '正在保存…' : '保存资料' }}
+          </button>
+        </footer>
+      </form>
+      <section class="profile-card pinned-card">
+        <header class="card-head">
+          <span class="section-number">副栏</span>
+          <div>
+            <h2>代表作品</h2>
+            <p>挑选最多 6 个插件，写下你的推荐理由。</p>
+          </div>
+        </header>
+        <PinnedPluginEditor
+          :pins="pins"
+          :available-plugins="plugins"
+          :busy="pinsBusy"
+          @add="addPin"
+          @update-reason="resetPinReason"
+          @remove="removePin"
+        />
+        <p class="pin-note">代表作品的变更会立即保存。</p>
       </section>
     </div>
   </div>
 </template>
-
 <style scoped>
 .profile-page {
-  width: min(var(--shell-max), 100%);
-  margin: 0 auto;
-  padding: var(--space-7) var(--space-7) var(--space-16);
   display: grid;
-  gap: var(--space-7);
+  gap: 28px;
 }
-@media (max-width: 768px) {
-  .profile-page { padding: var(--space-5) var(--space-4) var(--space-12); }
+.profile-heading {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end;
+  gap: 20px; padding-bottom: 24px; border-bottom: 1px solid var(--ink-700);
 }
-
-.profile-empty {
-  display: grid; gap: var(--space-4); place-items: center;
-  padding: var(--space-12) 0;
+.profile-running {
+  grid-column: 1 / -1; display: flex; gap: 12px; align-items: center;
+  padding: 8px 0; border-top: 3px double var(--ink-700); border-bottom: 1px solid var(--line);
+  font-size: 11px; letter-spacing: .08em;
 }
-
-/* HERO */
-.profile-hero {
-  position: relative; overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--blue-700) 0%, var(--blue-500) 60%, #5fb8ff 110%);
-  color: #fff;
-  padding: var(--space-7);
-  box-shadow: var(--shadow-poster);
-}
-.profile-hero-bg {
-  position: absolute; inset: 0;
-  background: var(--halftone);
-  opacity: 0.18; mix-blend-mode: screen;
-  pointer-events: none;
-}
-.profile-hero-inner {
-  position: relative; z-index: 1;
-  display: flex; justify-content: space-between; align-items: center;
-  gap: var(--space-5); flex-wrap: wrap;
-}
-.profile-hero .kicker {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
-  font-size: 12px; color: rgba(255,255,255,0.92);
-}
-.profile-hero .kicker::before { content: ""; width: 22px; height: 2px; background: var(--lemon); }
-.profile-hero h1 {
-  margin: 6px 0 8px;
-  font-family: var(--font-display); font-weight: 900;
-  font-size: clamp(28px, 3.4vw, 40px);
-  line-height: 1.05;
-}
-.profile-hero p { margin: 0; opacity: 0.92; max-width: 56ch; font-size: 14.5px; }
-.profile-hero-actions { display: flex; gap: 8px; }
-.profile-hero-actions .btn {
-  background: rgba(255,255,255,0.92);
-  color: var(--blue-700);
-  border-color: transparent;
-}
-.profile-hero-actions .btn:hover {
-  background: #fff; color: var(--ink-900);
-  transform: translate(-1px, -1px);
-  box-shadow: var(--shadow-poster-soft);
-}
-.profile-hero-actions .btn-ghost {
-  background: transparent; color: rgba(255,255,255,0.92);
-  border-color: rgba(255,255,255,0.4);
-}
-.profile-hero-actions .btn-ghost:hover {
-  background: rgba(255,255,255,0.16); color: #fff;
-  border-color: rgba(255,255,255,0.6);
-}
-
-/* LAYOUT */
+.profile-running b, .eyebrow { color: var(--blue-700); }
+.profile-running span { color: var(--ink-500); }
+.eyebrow { font: 11px/1.5 var(--font-mono); letter-spacing: .12em; }
+.profile-heading h1 { font: 800 clamp(42px, 5.8vw, 78px)/1.15 var(--font-editorial); letter-spacing: -.055em; margin: 0 0 12px; }
+.profile-heading p { margin: 0; color: var(--ink-700); line-height: 1.8; }
+.profile-heading p span { margin-left: 6px; font: 12px var(--font-mono); color: var(--ink-500); }
 .profile-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: var(--space-5);
-  align-items: flex-start;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 1fr);
+  gap: 24px;
+  align-items: start;
 }
-@media (max-width: 1023px) {
-  .profile-layout { grid-template-columns: 1fr; }
-}
-
 .profile-card {
+  border-top: 2px solid var(--ink-700);
+  border-bottom: 1px solid var(--line);
   background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: var(--space-5);
-  display: grid; gap: var(--space-5);
+  padding: 26px;
+  min-width: 0;
 }
-
-.profile-card-head {
-  display: flex; justify-content: space-between; align-items: flex-end;
-  gap: var(--space-3); flex-wrap: wrap;
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
 }
-.profile-card-head .kicker {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
-  font-size: 11px; color: var(--blue-700);
+.section-number {
+  color: var(--blue-600);
+  font: 13px var(--font-mono);
+  padding-top: 3px;
+  white-space: nowrap;
 }
-.profile-card-head .kicker::before { content: ""; width: 16px; height: 2px; background: var(--coral); }
-.profile-card-head h2 {
-  margin: 6px 0 4px;
-  font-family: var(--font-display); font-weight: 900;
-  font-size: 20px; line-height: 1.15;
-  color: var(--ink-900);
+.card-head h2 {
+  font: 800 24px/1.25 var(--font-editorial);
+  margin: 0 0 7px;
 }
-.profile-card-head p {
+.card-head p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-500);
   margin: 0;
-  color: var(--ink-500); font-size: 12.5px;
 }
-.profile-card-head code {
-  background: var(--surface-soft); padding: 1px 5px;
-  border-radius: var(--radius-xs);
-  font-family: var(--font-mono); font-size: 11.5px;
-  color: var(--ink-700);
+.preview-link {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--blue-600);
+  font-size: 12px;
 }
-
 .profile-block {
-  display: grid; gap: 8px;
+  margin-top: 28px;
 }
-.profile-block-head {
-  display: flex; align-items: baseline; justify-content: space-between;
-  gap: var(--space-3); flex-wrap: wrap;
+.profile-block h3 {
+  font-size: 14px;
+  margin: 0 0 7px;
 }
-.profile-block-label {
-  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
-  font-size: 11.5px; color: var(--ink-700);
-  text-transform: uppercase;
+.field-note,
+.pin-note {
+  color: var(--ink-500);
+  font-size: 12px;
+  line-height: 1.7;
 }
-.profile-block-head small {
-  font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
+.field-note {
+  margin: 0 0 14px;
 }
-
-[data-anim] { animation: fade-up var(--dur-slow) var(--ease-emphasized) both; }
-[data-anim="enter-1"] { animation-delay: 60ms; }
-[data-anim="enter-2"] { animation-delay: 160ms; }
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
+.pin-note {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+  margin: 24px 0 0;
 }
-@media (prefers-reduced-motion: reduce) {
-  [data-anim] { animation: none; }
+.profile-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+  margin-top: 28px;
+}
+.profile-actions small {
+  color: var(--ink-500);
+  font-size: 12px;
+}
+.access-panel { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(230px, .85fr); gap: clamp(24px, 6vw, 80px); border-bottom: 1px solid var(--line-strong); padding-block: 16px 32px; }
+.profile-entry { align-self: center; }
+.profile-entry h2 { margin: 12px 0; font: 800 clamp(25px, 2.8vw, 38px)/1.3 var(--font-editorial); }
+.profile-entry p { max-width: 36em; margin: 0 0 24px; line-height: 1.85; color: var(--ink-700); }
+.profile-colophon { padding: 20px; border-top: 2px solid var(--ink-700); background: var(--surface); }
+.profile-colophon h3 { margin: 0 0 16px; font: 800 19px/1.3 var(--font-editorial); }
+.profile-colophon dl { margin: 0; }
+.profile-colophon dl div { display: grid; grid-template-columns: 3.5em 1fr; gap: 12px; border-top: 1px solid var(--line); padding: 11px 0; font-size: 12px; }
+.profile-colophon dt { color: var(--blue-700); }
+.profile-colophon dd { margin: 0; color: var(--ink-700); line-height: 1.55; }
+.profile-error {
+  border: 1px solid var(--danger);
+  padding: 24px;
+  background: var(--danger-soft);
+  color: var(--danger-ink);
+}
+.profile-error h2 {
+  font-size: 18px;
+}
+.profile-error p {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 980px) {
+  .profile-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .profile-heading {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+  .profile-running { width: 100%; }
+  .access-panel { grid-template-columns: 1fr; }
+  .profile-card {
+    padding: 20px;
+  }
+  .profile-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

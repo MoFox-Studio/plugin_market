@@ -1,27 +1,34 @@
-import { ref } from 'vue'
-import { defineStore } from 'pinia'
-import api from '@/api'
-import type { BulkAction, BulkActionItemResult, BulkActionResult } from '@/types'
+import { ref, watch } from 'vue';
+import { defineStore } from 'pinia';
+import api from '@/api';
+import { useAuthStore } from './auth';
+import type {
+  BulkAction,
+  BulkActionItemResult,
+  BulkActionResult,
+} from '@/types';
 
 interface AdminFilters {
-  query: string
-  status: string
-  trustLevel: string
-  owner: string
-  category: string
-  tag: string
-  pendingOnly: boolean
-  action: string
+  query: string;
+  status: string;
+  trustLevel: string;
+  owner: string;
+  category: string;
+  tag: string;
+  pendingOnly: boolean;
+  action: string;
 }
 
 interface AdminPagination {
-  page: number
-  pageSize: number
-  total: number
+  page: number;
+  pageSize: number;
+  total: number;
 }
 
 export const useAdminStore = defineStore('admin', () => {
-  const selectedIds = ref<string[]>([])
+  const auth = useAuthStore();
+  let generation = 0;
+  const selectedIds = ref<string[]>([]);
   const filters = ref<AdminFilters>({
     query: '',
     status: '',
@@ -31,38 +38,41 @@ export const useAdminStore = defineStore('admin', () => {
     tag: '',
     pendingOnly: false,
     action: '',
-  })
+  });
   const pagination = ref<AdminPagination>({
     page: 1,
     pageSize: 20,
     total: 0,
-  })
-  const bulkPending = ref(false)
-  const bulkAction = ref<BulkAction | null>(null)
-  const bulkReason = ref('')
-  const bulkResults = ref<BulkActionItemResult[]>([])
+  });
+  const bulkPending = ref(false);
+  const bulkAction = ref<BulkAction | null>(null);
+  const bulkReason = ref('');
+  const bulkResults = ref<BulkActionItemResult[]>([]);
 
   function toggleSelection(pluginId: string): void {
     if (selectedIds.value.includes(pluginId)) {
-      selectedIds.value = selectedIds.value.filter((item) => item !== pluginId)
-      return
+      selectedIds.value = selectedIds.value.filter((item) => item !== pluginId);
+      return;
     }
-    selectedIds.value = [...selectedIds.value, pluginId]
+    selectedIds.value = [...selectedIds.value, pluginId];
   }
 
   function setSelection(pluginIds: string[]): void {
-    selectedIds.value = Array.from(new Set(pluginIds.filter(Boolean)))
+    selectedIds.value = Array.from(new Set(pluginIds.filter(Boolean)));
   }
 
   function clearSelection(): void {
-    selectedIds.value = []
+    selectedIds.value = [];
   }
 
-  function setFilter<K extends keyof AdminFilters>(key: K, value: AdminFilters[K]): void {
+  function setFilter<K extends keyof AdminFilters>(
+    key: K,
+    value: AdminFilters[K],
+  ): void {
     filters.value = {
       ...filters.value,
       [key]: value,
-    }
+    };
   }
 
   function resetFilters(): void {
@@ -75,37 +85,54 @@ export const useAdminStore = defineStore('admin', () => {
       tag: '',
       pendingOnly: false,
       action: '',
-    }
+    };
   }
 
   function setPagination(partial: Partial<AdminPagination>): void {
     pagination.value = {
       ...pagination.value,
       ...partial,
-    }
+    };
   }
 
-  async function applyBulk(action: BulkAction, params?: Record<string, unknown>): Promise<BulkActionResult> {
-    bulkPending.value = true
-    bulkAction.value = action
+  async function applyBulk(
+    action: BulkAction,
+    params?: Record<string, unknown>,
+  ): Promise<BulkActionResult> {
+    const id = ++generation;
+    bulkPending.value = true;
+    bulkAction.value = action;
     try {
       const result = await api.admin.bulkApply({
         plugin_ids: selectedIds.value,
         action,
         params: params || {},
-      })
-      bulkResults.value = result.results || []
-      return result
+      });
+      if (id === generation) bulkResults.value = result.results || [];
+      return result;
     } finally {
-      bulkPending.value = false
+      if (id === generation) bulkPending.value = false;
     }
   }
 
   function clearBulkState(): void {
-    bulkAction.value = null
-    bulkReason.value = ''
-    bulkResults.value = []
+    ++generation;
+    bulkPending.value = false;
+    bulkAction.value = null;
+    bulkReason.value = '';
+    bulkResults.value = [];
   }
+
+  watch(
+    () => auth.viewer?.author_id,
+    () => {
+      clearSelection();
+      clearBulkState();
+      resetFilters();
+      pagination.value = { page: 1, pageSize: 20, total: 0 };
+    },
+    { flush: 'sync' },
+  );
 
   return {
     selectedIds,
@@ -123,5 +150,5 @@ export const useAdminStore = defineStore('admin', () => {
     setPagination,
     applyBulk,
     clearBulkState,
-  }
-})
+  };
+});
