@@ -3,7 +3,6 @@ import { computed, inject } from 'vue';
 import { routeLocationKey } from 'vue-router';
 import { SHEET_HEIGHT, useSurveyWorld } from '@/composables/useSurveyWorld';
 import plates from '@/assets/survey-plates.svg?no-inline';
-import miniatures from '@/assets/survey-miniatures.svg?no-inline';
 import { surveyMiniatures } from '@/composables/surveyMiniatures';
 
 const route = inject(routeLocationKey, null);
@@ -48,9 +47,9 @@ const marks = computed(() => sheets.value.map((sheet, i) => {
       <g v-for="mark in marks" :key="mark.sheet" :transform="`translate(0 ${mark.top})`">
         <use class="survey-discovery" :href="`${plates}#${mark.symbol}`" :x="mark.x - 110" :y="mark.y - 58" width="220" height="116" :data-map-x="mark.x" :data-map-y="mark.sheet * SHEET_HEIGHT + mark.y" />
         <g v-for="site in mark.miniatures" :key="site.id" :transform="`translate(${site.x} ${site.y})`">
-          <use class="survey-miniature" :href="`${miniatures}#${site.id}`" width="120" height="77" />
-          <path d="M2 67v8h12m96-69h8v8" fill="none" stroke="currentColor" stroke-width=".8"/>
-          <text x="90" y="76" text-anchor="end" fill="currentColor" font-family="monospace" font-size="6" letter-spacing="1.2">FIG. {{ site.number }}</text>
+          <use class="survey-miniature" :href="site.source" width="176" height="132" />
+          <path d="M3 113v12h12m146-118h12v12" fill="none" stroke="currentColor" stroke-width=".8"/>
+          <text x="157" y="131" text-anchor="end" fill="currentColor" font-family="monospace" font-size="6" letter-spacing="1.2">FIG. {{ site.number }}</text>
         </g>
         <g :transform="`translate(${mark.east} ${mark.north})`">
           <path d="M-53 0h106m-104-6v12m9-8v4m9-4v4m9-6v8m9-6v4m9-4v4m9-8v12m9-8v4m9-4v4m9-6v8m9-6v4m9-4v4" stroke="currentColor" stroke-width="0.9" />
@@ -62,6 +61,7 @@ const marks = computed(() => sheets.value.map((sheet, i) => {
 </template>
 <style scoped>
 .survey-ink-window {
+  --impression-shadow: var(--ink-900);
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -79,5 +79,8 @@ const marks = computed(() => sheets.value.map((sheet, i) => {
 }
 :global(.market-pointer-reveal[data-surface='paper'] .survey-ink-window) { opacity: .19; }
 :global(.market-pointer-reveal[data-surface='control'] .survey-ink-window) { visibility: hidden; }
-:global(:root[data-theme='dark'] .survey-ink-window) { color: var(--blue-500); }
+:global(:root[data-theme='dark'] .survey-ink-window) {
+  --impression-shadow: var(--paper);
+  color: var(--blue-500);
+}
 </style>

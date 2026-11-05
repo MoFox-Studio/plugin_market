@@ -1,16 +1,31 @@
 <script setup lang="ts">
-import { ref, useId } from 'vue';
+import { computed, onBeforeUnmount, ref, useId } from 'vue';
 import ImpressionArt from './ImpressionArt.vue';
 import { impressions, type Impression } from '@/composables/rareImpressions';
 import { useMarketPointerReveal } from '@/composables/useMarketPointerReveal';
+import { lockBodyScroll } from '@/composables/bodyScrollLock';
 const titleId = useId();
-defineProps<{ print: Impression }>();
+const descriptionId = useId();
+const props = defineProps<{ print: Impression }>();
+const plateNumber = computed(() => String(impressions.indexOf(props.print) + 1).padStart(2, '0'));
 const dialog = ref<HTMLDialogElement>(),
   opener = ref<HTMLButtonElement>(),
   field = ref<HTMLElement>();
+let releaseScroll: (() => void) | undefined;
+function open() {
+  if (!dialog.value || dialog.value.open) return;
+  releaseScroll = lockBodyScroll();
+  dialog.value.showModal();
+}
 function close() {
   dialog.value?.close();
 }
+function afterClose() {
+  releaseScroll?.();
+  releaseScroll = undefined;
+  opener.value?.focus({ preventScroll: true });
+}
+onBeforeUnmount(() => releaseScroll?.());
 useMarketPointerReveal((pointer) => {
   const zone = field.value;
   if (!zone) return;
@@ -36,7 +51,7 @@ useMarketPointerReveal((pointer) => {
       type="button"
       aria-label="翻看藏印"
       aria-haspopup="dialog"
-      @click="dialog?.showModal()"
+      @click="open"
     >
       <span
         ref="field"
@@ -57,19 +72,33 @@ useMarketPointerReveal((pointer) => {
       ref="dialog"
       class="print-drawer"
       :aria-labelledby="titleId"
-      @close="opener?.focus({ preventScroll: true })"
+      :aria-describedby="descriptionId"
+      @close="afterClose"
       @click.self="close"
     >
       <div class="print-sheet">
         <header>
-        <span>MOFOX GAZETTE · {{ print.collection }}</span
+        <span>MOFOX GAZETTE <span class="print-series"> / THE HIDDEN ATLAS</span></span
           ><button type="button" aria-label="合上图版" autofocus @click="close">
             合上 ×
           </button>
         </header>
-      <h2 :id="titleId">{{ print.name }}</h2>
-      <p>{{ print.caption }}</p>
-      <ImpressionArt class="collector-print" :print="print" />
+        <div class="print-spread">
+          <figure class="print-artwork">
+            <div class="plate-registration" aria-hidden="true"><span>FIG. {{ plateNumber }}</span><span>PRIVATE IMPRESSION</span></div>
+            <ImpressionArt class="collector-print" :print="print" />
+            <figcaption>{{ print.detail }}</figcaption>
+          </figure>
+          <div class="print-editorial">
+            <span class="print-volume">EX LIBRIS <b>{{ plateNumber }}</b></span>
+            <span class="print-collection">{{ print.collection }}</span>
+            <h2 :id="titleId">{{ print.name }}</h2>
+            <p class="print-latin">{{ print.caption }}</p>
+            <div class="print-rule" aria-hidden="true">✦</div>
+            <p :id="descriptionId" class="print-description">{{ print.description }}</p>
+            <span class="print-signature">The hidden atlas</span>
+          </div>
+        </div>
       </div>
     </dialog>
   </div>
@@ -158,7 +187,7 @@ useMarketPointerReveal((pointer) => {
   }
 }
 .print-drawer {
-  width: min(420px, calc(100% - 32px));
+  width: min(980px, calc(100% - 32px));
   max-height: calc(100dvh - 32px);
   margin: auto;
   padding: 0;
@@ -188,17 +217,92 @@ useMarketPointerReveal((pointer) => {
   color: var(--ink-900);
 }
 .print-sheet h2 {
-  margin: 16px 0 4px;
-  font: 800 30px/1.25 var(--font-editorial);
+  margin: 10px 0;
+  font: 800 clamp(27px, 3vw, 38px)/1.3 var(--font-editorial);
 }
-.print-sheet p {
+.print-latin {
   margin: 0;
   color: var(--ink-700);
   font: italic 16px/1.4 var(--font-reading);
 }
-.print-sheet .collector-print {
+.collector-print {
   display: block;
   width: 100%;
-  margin-top: 10px;
+  aspect-ratio: 4 / 3;
+  max-height: min(54dvh, 460px);
+  overflow: visible;
+}
+.print-spread {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  margin-top: 22px;
+}
+.print-artwork {
+  margin: 0;
+  padding-right: 26px;
+  min-width: 0;
+}
+.plate-registration {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink-500);
+  font: 9px/1.6 var(--font-mono);
+  letter-spacing: 1.5px;
+}
+.print-artwork figcaption {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  color: var(--ink-500);
+  text-align: center;
+  font: 11px/1.7 var(--font-reading);
+  letter-spacing: 1px;
+}
+.print-editorial {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 8px 0 14px 25px;
+  border-left: 1px solid var(--line);
+}
+.print-volume {
+  color: var(--ink-500);
+  font: 9px/1.3 var(--font-mono);
+  letter-spacing: 2px;
+  margin-bottom: 22px;
+}
+.print-volume b {
+  font: italic 32px/1 var(--font-reading);
+  margin-left: 8px;
+  color: var(--blue-700);
+}
+.print-collection {
+  color: var(--blue-700);
+  font: 11px/1.4 var(--font-reading);
+  letter-spacing: 3px;
+}
+.print-rule {
+  margin: 18px 0 9px;
+  color: var(--blue-700);
+}
+.print-description {
+  margin: 0;
+  font: 13px/1.95 var(--font-reading);
+  color: var(--ink-500);
+}
+.print-signature {
+  margin-top: 20px;
+  font: 27px/1.4 var(--font-script);
+  color: var(--blue-700);
+}
+@media (max-width: 700px) {
+  .print-spread { grid-template-columns: minmax(0, 1fr); margin-top: 14px; }
+  .print-artwork { padding: 0; }
+  .print-editorial { padding: 16px 0 0; border: 0; }
+  .print-volume, .print-signature, .print-rule { display: none; }
+  .print-sheet h2 { margin: 5px 0; font-size: 27px; }
+  .print-description { margin-top: 10px; }
+  .print-series { display: none; }
 }
 </style>
