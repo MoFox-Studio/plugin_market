@@ -1,437 +1,290 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useSkillsStore } from '@/stores/skills'
-import VolKickerBar from '@/components/VolKickerBar.vue'
-
-const router = useRouter()
-const store = useSkillsStore()
-
-const search = ref('')
-const sort = ref('updated')
-const viewMode = ref<'grid' | 'list'>('grid')
-
-const totalPages = computed(() => Math.max(1, Math.ceil(store.total / store.pageSize)))
-
-const presetSorts = [
-  { label: '最近更新', value: 'updated' },
-  { label: '最多下载', value: 'downloads' },
-  { label: '评分最高', value: 'rating' },
-]
-
-function doSearch() {
-  store.setFilter({ search: search.value, sort: sort.value })
+import MarketSelect from '@/components/MarketSelect.vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import api from '@/api';
+import { useAuthStore } from '@/stores/auth';
+import { categoryLabel, formatNumber, formatRelative } from '@/utils/format';
+import type { Skill } from '@/types';
+import CatalogFrame from '@/components/catalog/CatalogFrame.vue';
+import CatalogMasthead from '@/components/catalog/CatalogMasthead.vue';
+import CatalogListing from '@/components/catalog/CatalogListing.vue';
+import CategoryIndex from '@/components/catalog/CategoryIndex.vue';
+import AppIcon from '@/components/AppIcon.vue';
+import CatalogState from '@/components/catalog/CatalogState.vue';
+import { useCatalogResource } from '@/components/catalog/useCatalogResource';
+const route = useRoute(),
+  router = useRouter(),
+  auth = useAuthStore(),
+  search = ref('');
+const results = useCatalogResource(() => ({ items: [] as Skill[], total: 0, loadedPage: 0 }));
+const initialLoading = computed(() => results.loading && !results.data.loadedPage);
+const categories = useCatalogResource<string[]>(() => []),
+  tags = useCatalogResource<string[]>(() => []);
+const value = (key: string, fallback = '') =>
+  typeof route.query[key] === 'string'
+    ? (route.query[key] as string)
+    : fallback;
+const query = computed(() => value('q', value('search')).trim()),
+  category = computed(() => value('category')),
+  tag = computed(() => value('tag'));
+const sort = computed(() =>
+  ['updated', 'created', 'downloads', 'name'].includes(value('sort'))
+    ? value('sort')
+    : 'updated',
+);
+const view = computed(() => (value('view') === 'list' ? 'list' : 'grid'));
+const page = computed(() => {
+  const n = Number(value('page', '1'));
+  return Number.isSafeInteger(n) && n > 0 ? n : 1;
+});
+const pageSize = 24,
+  totalPages = computed(() =>
+    Math.max(1, Math.ceil(results.data.total / pageSize)),
+  );
+const filtered = computed(() => !!(query.value || category.value || tag.value));
+function filter(partial: Record<string, string>) {
+  const next = { ...route.query, ...partial };
+  delete next.search;
+  for (const [key, val] of Object.entries(next)) if (!val) delete next[key];
+  void router.push({ name: 'skills', query: next });
 }
-
-function setSort(s: string) {
-  sort.value = s
-  store.setFilter({ sort: s })
+function clear() {
+  void router.push({
+    name: 'skills',
+    query: view.value === 'list' ? { view: 'list' } : {},
+  });
 }
-
-function setCategory(c: string) {
-  store.setFilter({ category: c })
+async function load() {
+  const params = {
+      search: query.value,
+      category: category.value,
+      tag: tag.value,
+      sort: sort.value,
+      page: page.value,
+      page_size: pageSize,
+    },
+    key = route.fullPath;
+  await results.load(async () => ({ ...await api.skills.list(params), loadedPage: params.page }));
+  if (key === route.fullPath && !results.loading && !results.error && page.value > totalPages.value)
+    void router.replace({
+      query: { ...route.query, page: String(totalPages.value) },
+    });
 }
-
-function setTag(t: string) {
-  store.setFilter({ tag: t })
-}
-
-function clearFilters() {
-  search.value = ''
-  store.setFilter({ search: '', category: '', tag: '', sort: 'updated' })
-}
-
-function goToSkill(skillId: string) {
-  router.push({ name: 'skill', params: { id: skillId } })
-}
-
-function goPage(p: number) {
-  if (p < 1 || p > totalPages.value) return
-  store.setPage(p)
-  window.scrollTo({ top: 0, behavior: 'smooth' })
-}
-
+watch(
+  [() => auth.viewer?.author_id, query, category, tag, sort, page],
+  ([viewer], previous) => {
+    if (viewer !== previous?.[0]) results.reset();
+    search.value = query.value;
+    void load();
+  },
+  { immediate: true },
+);
 onMounted(() => {
-  store.loadSkills()
-  store.loadCategories()
-  store.loadTags()
-})
+  void categories.load(api.skills.categories);
+  void tags.load(api.skills.tags);
+});
 </script>
-
 <template>
-  <VolKickerBar :page-label="'SKILLS'" :count="store.total" />
+  <CatalogFrame class="archive-page">
+    <CatalogMasthead
+      title="技能总目"
 
-  <div class="browse-page">
-    <aside class="browse-side">
-      <div class="browse-side-section">
-        <h4>排序</h4>
-        <ul>
-          <li v-for="s in presetSorts" :key="s.value">
-            <button type="button" :class="{ active: sort === s.value }" @click="setSort(s.value)">{{ s.label }}</button>
-          </li>
-        </ul>
-      </div>
-
-      <div class="browse-side-section" v-if="store.categories.length">
-        <h4>分类</h4>
-        <ul>
-          <li><button type="button" :class="{ active: !store.category }" @click="setCategory('')">全部分类</button></li>
-          <li v-for="c in store.categories" :key="c">
-            <button type="button" :class="{ active: store.category === c }" @click="setCategory(c)">{{ c }}</button>
-          </li>
-        </ul>
-      </div>
-
-      <div class="browse-side-section" v-if="store.tags.length">
-        <h4>热门标签</h4>
-        <ul>
-          <li><button type="button" :class="{ active: !store.tag }" @click="setTag('')">全部标签</button></li>
-          <li v-for="t in store.tags" :key="t">
-            <button type="button" :class="{ active: store.tag === t }" @click="setTag(t)">#{{ t }}</button>
-          </li>
-        </ul>
-      </div>
-    </aside>
-
-    <main class="browse-main">
-      <div class="browse-crumb">
-        <router-link to="/" class="browse-crumb-link">推荐</router-link>
-        <span class="browse-crumb-sep">/</span>
-        <span class="browse-crumb-text">Skill 市场</span>
-      </div>
-
-      <header class="browse-head">
-        <div class="browse-head-titles">
-          <h1>全部 Skill</h1>
-          <p>发现和分享 AI 技能模块——让 MoFox 变得更聪明</p>
-        </div>
-        <div class="browse-head-count">
-          <strong>{{ store.total }}</strong>
-          <small>个结果</small>
-        </div>
-      </header>
-
-      <div class="browse-toolbar">
-        <div class="browse-toolbar-left">
-          <div class="skills-search">
-            <input
-              v-model="search"
-              type="text"
-              placeholder="搜索 Skill…"
-              @keyup.enter="doSearch"
-            >
-            <button class="btn btn-primary btn-sm" @click="doSearch">搜索</button>
-          </div>
-        </div>
-        <div class="browse-toolbar-right">
-          <div class="chip-group">
-            <button type="button" :class="['chip', { active: viewMode === 'grid' }]" @click="viewMode = 'grid'" aria-label="网格视图">网格</button>
-            <button type="button" :class="['chip', { active: viewMode === 'list' }]" @click="viewMode = 'list'" aria-label="列表视图">列表</button>
-          </div>
-          <button v-if="store.search || store.category || store.tag" type="button" class="btn btn-ghost btn-sm" @click="clearFilters">清除筛选</button>
-        </div>
-      </div>
-
-      <div v-if="store.loading" class="grid">
-        <div v-for="i in 9" :key="i" class="card skeleton" style="height: 120px"></div>
-      </div>
-      <div v-else-if="!store.skills.length" class="skills-empty">
-        <p>还没有 Skill，快来发布第一个吧！</p>
-      </div>
-      <template v-else>
-        <div :class="['skills-grid', { 'skills-grid-list': viewMode === 'list' }]">
-          <article
-            v-for="skill in store.skills"
-            :key="skill.skill_id"
-            class="skill-card"
-            @click="goToSkill(skill.skill_id)"
+      description="查阅社区技能、使用说明与可获取的技能包。"
+    >
+        <div class="query-console">
+          <form
+            class="catalog-search"
+            role="search"
+            @submit.prevent="filter({ q: search.trim(), page: '1' })"
           >
-            <div class="skill-card-icon">
-              <img v-if="skill.icon_url" :src="skill.icon_url" :alt="skill.display_name">
-              <span v-else>{{ skill.display_name[0]?.toUpperCase() || '?' }}</span>
+            <AppIcon name="search" /><input
+              v-model="search"
+              type="search"
+              placeholder="搜索技能名称、描述或用途…"
+              aria-label="搜索 Skills"
+            /><button class="btn btn-primary" type="submit">检索技能 ↗</button>
+          </form>
+          <div class="catalog-toolbar">
+            <div class="catalog-controls">
+              <label v-if="tags.data.length"
+                >标签<MarketSelect
+                  :value="tag"
+                  @change="
+                    filter({
+                      tag: ($event.target as HTMLSelectElement).value,
+                      page: '1',
+                    })
+                  "
+                >
+                  <option value="">全部标签</option>
+                  <option v-for="t in tags.data" :key="t">{{ t }}</option>
+                </MarketSelect></label
+              ><button
+                v-if="filtered"
+                class="btn btn-ghost btn-sm"
+                @click="clear"
+              >
+                清除筛选 ×
+              </button>
             </div>
-            <div class="skill-card-body">
-              <h3>{{ skill.display_name }}</h3>
-              <p class="skill-card-desc">{{ skill.description.length > 200 ? skill.description.slice(0, 200) + '…' : skill.description }}</p>
-              <div class="skill-card-meta">
-                <span class="skill-card-author">{{ skill.owner_display_name || skill.owner_login || skill.owner_id }}</span>
-                <span v-if="skill.latest_version" class="skill-card-version">v{{ skill.latest_version }}</span>
-                <span class="skill-card-stat">⭐ {{ skill.rating_avg?.toFixed(1) || '-' }}</span>
-                <span class="skill-card-stat">⬇ {{ skill.download_count }}</span>
+            <div class="catalog-controls">
+              <label
+                >排序<MarketSelect
+                  :value="sort"
+                  @change="
+                    filter({
+                      sort: ($event.target as HTMLSelectElement).value,
+                      page: '1',
+                    })
+                  "
+                >
+                  <option value="updated">最近更新</option>
+                  <option value="downloads">下载最多</option>
+                  <option value="created">最新发布</option>
+                  <option value="name">名称排序</option>
+                </MarketSelect></label
+              >
+              <div class="catalog-segment">
+                <button
+                  :class="{ active: view === 'grid' }"
+                  :aria-pressed="view === 'grid'"
+                  @click="filter({ view: 'grid' })"
+                >
+                  网格</button
+                ><button
+                  :class="{ active: view === 'list' }"
+                  :aria-pressed="view === 'list'"
+                  @click="filter({ view: 'list' })"
+                >
+                  列表
+                </button>
               </div>
             </div>
-          </article>
+          </div>
+
+          <div v-if="filtered" class="query-selection" aria-label="已选条件">
+            <span>当前条件</span
+            ><button v-if="query" @click="filter({ q: '', page: '1' })">
+              关键词 / {{ query }} <b>×</b></button
+            ><button
+              v-if="category"
+              :aria-label="`移除分类 ${categoryLabel(category)}`"
+              @click="filter({ category: '', page: '1' })"
+            >
+              {{ categoryLabel(category) }} <b>×</b></button
+            ><button v-if="tag" @click="filter({ tag: '', page: '1' })">
+              #{{ tag }} <b>×</b>
+            </button>
+          </div>
         </div>
-
-        <nav v-if="totalPages > 1" class="pagination">
-          <button type="button" class="page-btn" :disabled="store.page <= 1" @click="goPage(store.page - 1)">上一页</button>
-          <span class="page-ellipsis">{{ store.page }} / {{ totalPages }}</span>
-          <button type="button" class="page-btn" :disabled="store.page >= totalPages" @click="goPage(store.page + 1)">下一页</button>
+    </CatalogMasthead>
+    <div class="catalog-workspace">
+      <aside class="catalog-filter-rail">
+        <CategoryIndex
+          :loading="categories.loading"
+          :categories="categories.data"
+          :model-value="category"
+          @update:model-value="filter({ category: $event, page: '1' })"
+        />
+        <div
+          v-if="categories.error || tags.error"
+          class="workspace-filter-error"
+          role="status"
+        >
+          筛选索引暂未同步。<button
+            class="catalog-link"
+            @click="
+              categories.load(api.skills.categories);
+              tags.load(api.skills.tags);
+            "
+          >
+            重新加载
+          </button>
+        </div>
+        <div class="workspace-guide">
+          <span>检索说明</span>
+          <p>
+            分类与关键词可以组合使用。已选条件会保留在链接里，方便继续探索与分享。
+          </p>
+          <router-link to="/browse">探索插件目录 ↗</router-link>
+        </div>
+      </aside>
+      <section class="catalog-results" aria-label="技能检索结果" :aria-busy="results.loading">
+        <div class="workspace-result-head">
+          <div>
+            <span class="edition-index-label">本版目录</span>
+            <h2>
+              {{ category ? categoryLabel(category) : '全部技能'
+              }}<small>{{ initialLoading || results.error ? '—' : results.data.total }} 项</small>
+            </h2>
+          </div>
+          <p class="catalog-caption" aria-live="polite">
+            {{
+              results.loading
+                ? initialLoading ? '正在同步档案…' : '正在更新检索结果…'
+                : results.error
+                  ? '检索未完成'
+                  : '第 ' + page + ' 页 / 共 ' + totalPages + ' 页'
+            }}
+          </p>
+        </div>
+        <CatalogState
+          :loading="initialLoading"
+          :error="results.error"
+          :empty="!results.data.items.length"
+          cards
+          title="没有找到匹配的 Skill"
+          message="试试其他关键词或分类，也可以发布自己的技能模块。"
+          @retry="load"
+          ><template #empty-action
+            ><button v-if="filtered" class="btn" @click="clear">清除筛选</button
+            ><router-link v-else class="btn" to="/me"
+              >前往工作台 ↗</router-link
+            ></template
+          >
+          <div class="catalog-grid edition-index" :class="{ 'list-view': view === 'list' }">
+            <CatalogListing
+              v-for="(skill, index) in results.data.items"
+              :key="skill.skill_id"
+              :to="{ name: 'skill', params: { id: skill.skill_id } }"
+              :number="(results.data.loadedPage - 1) * pageSize + index + 1"
+              :lead="index === 0 && view === 'grid'"
+              :compact="view === 'list'"
+              :title="skill.display_name"
+              :description="skill.description"
+              :author="skill.owner_display_name || skill.owner_login || skill.owner_id"
+              :icon="skill.icon_url"
+              :version="skill.latest_version" :categories="skill.categories" :tags="skill.tags"
+              :labels="(skill.categories || []).slice(0, 2).map(categoryLabel)"
+            >
+              <span v-market-tooltip="'下载次数'"><AppIcon name="download" :size="13" />{{ formatNumber(skill.download_count) }}</span>
+              <span v-if="skill.rating_count">★ {{ Number(skill.rating_avg || 0).toFixed(1) }}</span>
+              <time :datetime="skill.updated_at">{{ formatRelative(skill.updated_at) }}</time>
+            </CatalogListing>
+          </div></CatalogState
+        >
+        <nav
+          v-if="!results.error && totalPages > 1"
+          class="catalog-pagination"
+          aria-label="Skills 分页"
+        >
+          <button
+            class="btn btn-sm"
+            :disabled="results.loading || page <= 1"
+            @click="filter({ page: String(page - 1) })"
+          >
+            上一页</button
+            ><span class="catalog-caption">{{ results.data.loadedPage || page }} / {{ totalPages }}</span
+          ><button
+            class="btn btn-sm"
+            :disabled="results.loading || page >= totalPages"
+            @click="filter({ page: String(page + 1) })"
+          >
+            下一页
+          </button>
         </nav>
-      </template>
-    </main>
-  </div>
+      </section>
+    </div>
+  </CatalogFrame>
 </template>
-
-<style scoped>
-.browse-page {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: var(--space-7);
-  width: min(var(--shell-max), 100%);
-  margin: 0 auto;
-  padding: var(--space-6) var(--space-7) var(--space-16);
-  align-items: flex-start;
-}
-
-@media (max-width: 1023px) {
-  .browse-page { grid-template-columns: 1fr; padding: var(--space-5) var(--space-4) var(--space-12); }
-}
-
-.browse-side {
-  position: sticky;
-  top: calc(var(--topbar-h) + var(--kicker-h) + var(--space-5));
-  align-self: flex-start;
-  display: grid; gap: var(--space-5);
-  padding: var(--space-5);
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-md);
-  max-height: calc(100vh - var(--topbar-h) - var(--kicker-h) - var(--space-7));
-  overflow-y: auto;
-  scrollbar-width: thin;
-  animation: fade-up var(--dur-slow) var(--ease-emphasized) both;
-}
-@media (max-width: 1023px) {
-  .browse-side { position: static; max-height: none; }
-}
-
-.browse-side-section { display: grid; gap: 6px; }
-.browse-side-section + .browse-side-section {
-  padding-top: var(--space-4);
-  border-top: 1px dashed var(--line);
-}
-.browse-side-section h4 {
-  margin: 0 0 4px;
-  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
-  font-size: 11px; color: var(--ink-500);
-  text-transform: uppercase;
-}
-.browse-side-section ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
-.browse-side-section li button {
-  width: 100%; text-align: left;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  color: var(--ink-700);
-  position: relative;
-  transition: background var(--dur-fast), color var(--dur-fast);
-}
-.browse-side-section li button:hover { background: var(--surface-hover); color: var(--ink-900); }
-.browse-side-section li button.active {
-  background: var(--blue-100); color: var(--blue-700); font-weight: 700;
-  padding-left: 14px;
-}
-.browse-side-section li button.active::before {
-  content: ""; position: absolute;
-  left: 0; top: 50%; transform: translateY(-50%);
-  width: 3px; height: 16px; border-radius: 2px;
-  background: var(--blue-500);
-}
-
-.browse-main {
-  min-width: 0;
-  display: grid; gap: var(--space-4);
-  animation: fade-up var(--dur-slow) var(--ease-emphasized) both;
-}
-
-.browse-crumb {
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono); font-size: 11.5px;
-  color: var(--ink-500); letter-spacing: 0.04em;
-}
-.browse-crumb-link { color: var(--blue-700); font-weight: 700; }
-.browse-crumb-sep  { color: var(--ink-300); }
-.browse-crumb-text { color: var(--ink-500); }
-
-.browse-head {
-  display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4);
-  flex-wrap: wrap;
-}
-.browse-head-titles h1 {
-  margin: 0;
-  font-family: var(--font-display); font-weight: 900;
-  font-size: clamp(28px, 3vw, 36px);
-  line-height: 1.1;
-  color: var(--ink-900);
-}
-.browse-head-titles p {
-  margin: 4px 0 0;
-  color: var(--ink-500); font-size: 13.5px;
-}
-.browse-head-count {
-  display: flex; align-items: baseline; gap: 6px;
-}
-.browse-head-count strong {
-  font-family: var(--font-brand);
-  letter-spacing: 0.04em;
-  font-size: 36px;
-  color: var(--ink-900);
-  line-height: 1;
-}
-.browse-head-count small {
-  font-family: var(--font-mono); font-size: 11px;
-  color: var(--ink-500); letter-spacing: 0.06em;
-}
-
-.browse-toolbar {
-  display: flex; justify-content: space-between; align-items: center; gap: var(--space-3);
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-md);
-}
-.browse-toolbar-left, .browse-toolbar-right {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-}
-
-.skills-search {
-  display: flex; gap: 8px; align-items: center;
-  flex: 1; min-width: 240px;
-}
-.skills-search input {
-  flex: 1; min-width: 0;
-  padding: 6px 12px;
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  background: var(--surface);
-}
-.skills-search input:focus { outline: none; border-color: var(--blue-500); box-shadow: var(--ring); }
-
-.chip {
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
-  background: var(--surface-soft);
-  font-size: 12px; font-weight: 600;
-  color: var(--ink-700);
-  cursor: pointer;
-  transition: all var(--dur-fast);
-}
-.chip:hover { background: var(--blue-50); border-color: var(--blue-300); }
-.chip.active { background: var(--blue-500); color: #fff; border-color: var(--blue-500); }
-.chip-group {
-  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
-}
-
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .browse-side, .browse-main { animation: none; }
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-  padding: var(--space-6) 0 var(--space-4);
-}
-.page-btn {
-  min-width: 36px;
-  padding: 6px 12px;
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-700);
-  cursor: pointer;
-  transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
-}
-.page-btn:hover:not(:disabled):not(.active) {
-  background: var(--surface-hover);
-  border-color: var(--ink-300);
-  color: var(--ink-900);
-}
-.page-btn.active {
-  background: var(--blue-600, #2563eb);
-  border-color: var(--blue-600, #2563eb);
-  color: #fff;
-  cursor: default;
-}
-.page-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.page-ellipsis {
-  padding: 0 4px;
-  font-size: 14px;
-  color: var(--ink-400);
-  user-select: none;
-}
-
-/* Skills grid */
-.skills-empty { text-align: center; padding: var(--space-12) 0; color: var(--ink-500); }
-
-.skills-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-4);
-}
-.skills-grid-list { grid-template-columns: 1fr; }
-
-.skill-card {
-  display: grid; grid-template-columns: auto 1fr; gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--dur-fast);
-}
-.skill-card:hover {
-  border-color: var(--blue-300);
-  box-shadow: var(--shadow-card);
-  transform: translateY(-2px);
-}
-
-.skill-card-icon {
-  width: 48px; height: 48px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--coral), var(--lemon));
-  display: grid; place-items: center;
-  font-family: var(--font-display); font-weight: 800; font-size: 20px;
-  color: var(--ink-900);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.skill-card-icon img { width: 100%; height: 100%; object-fit: cover; }
-
-.skill-card-body { display: grid; gap: 4px; min-width: 0; }
-.skill-card-body h3 {
-  margin: 0;
-  font-family: var(--font-display); font-weight: 800;
-  font-size: 16px; line-height: 1.2;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.skill-card-desc {
-  margin: 0;
-  font-size: 13px; color: var(--ink-600);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.5;
-}
-.skill-card-meta {
-  display: flex; gap: 12px; flex-wrap: wrap;
-  font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-500);
-  margin-top: 4px;
-}
-.skill-card-author { font-weight: 600; }
-.skill-card-version { color: var(--blue-600); }
-.skill-card-stat { opacity: 0.8; }
-</style>

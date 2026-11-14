@@ -1,40 +1,61 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
-import api from '@/api'
-import { formatNumber, formatRelative, formatDate, formatUptime, statusText } from '@/utils/format'
-import type { SystemInfo, DashboardData, ActivityDay, Plugin } from '@/types'
-import EmptyState from '@/components/EmptyState.vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
+import api from '@/api';
+import {
+  formatNumber,
+  formatRelative,
+  formatDate,
+  formatUptime,
+  statusText,
+} from '@/utils/format';
+import type { SystemInfo, DashboardData, Plugin } from '@/types';
+import PageSkeleton from '@/components/PageSkeleton.vue';
+import EmptyState from '@/components/EmptyState.vue';
 
-const system = ref<SystemInfo | null>(null)
-const dashboard = ref<DashboardData | null>(null)
-const pendingPlugins = ref<Plugin[]>([])
-const loading = ref(true)
+const system = ref<SystemInfo | null>(null);
+const dashboard = ref<DashboardData | null>(null);
+const pendingPlugins = ref<Plugin[]>([]);
+const loading = ref(true);
+const error = ref('');
+let requestId = 0;
 
 async function loadAll() {
-  loading.value = true
+  const current = ++requestId;
+  loading.value = true;
+  error.value = '';
   try {
     const [sys, dash, pluginResult] = await Promise.all([
       api.get<SystemInfo>('/api/v1/admin/system'),
       api.get<DashboardData>('/api/v1/admin/dashboard'),
       api.get<{ items: Plugin[] }>('/api/v1/admin/plugins'),
-    ])
-    system.value = sys
-    dashboard.value = dash
+    ]);
+    if (current !== requestId) return;
+    system.value = sys;
+    dashboard.value = dash;
     pendingPlugins.value = (pluginResult.items || [])
       .filter((p) => p.status === 'pending_review')
-      .slice(0, 8)
+      .slice(0, 8);
+  } catch (e) {
+    if (current === requestId)
+      error.value = (e as Error).message || '无法读取仪表盘';
   } finally {
-    loading.value = false
+    if (current === requestId) loading.value = false;
   }
 }
 
 const activityMax = computed(() => {
-  const peaks = (dashboard.value?.activity || []).flatMap((d) => [d.plugins_created, d.comments_created, d.ratings_created])
-  return Math.max(1, ...peaks)
-})
+  const peaks = (dashboard.value?.activity || []).flatMap((d) => [
+    d.plugins_created,
+    d.comments_created,
+    d.ratings_created,
+  ]);
+  return Math.max(1, ...peaks);
+});
 
 function barHeight(value: number): string {
-  return Math.max(6, Math.round((value || 0) / activityMax.value * 88)) + 'px'
+  return (
+    Math.max(0, Math.round(((value || 0) / activityMax.value) * 88)) + 'px'
+  );
 }
 
 const pluginBreakdown = computed(() =>
@@ -42,111 +63,153 @@ const pluginBreakdown = computed(() =>
     .filter(([, v]) => Number(v) > 0)
     .map(([key, value]) => ({ key, value: Number(value) }))
     .sort((a, b) => b.value - a.value),
-)
+);
 
 const versionBreakdown = computed(() =>
   Object.entries(dashboard.value?.version_status_breakdown || {})
     .filter(([, v]) => Number(v) > 0)
     .map(([key, value]) => ({ key, value: Number(value) }))
     .sort((a, b) => b.value - a.value),
-)
+);
 
-onMounted(loadAll)
+onMounted(loadAll);
+onBeforeUnmount(() => {
+  requestId++;
+});
 </script>
 
 <template>
-  <div v-if="loading" class="dashboard-loading">加载中…</div>
+  <PageSkeleton v-if="loading" type="detail" />
+  <div v-else-if="error" class="admin-error" role="alert">
+    <p>{{ error }}</p>
+    <button class="btn" @click="loadAll">重新加载</button>
+  </div>
 
   <div v-else class="dashboard-view">
-    <!-- HERO -->
-    <section v-if="system" class="dash-hero" data-anim="enter-1">
-      <div class="dash-hero-bg" aria-hidden="true"></div>
-      <div class="dash-hero-inner">
-        <div class="dash-hero-left">
-          <span class="kicker">CONTROL ROOM</span>
-          <h1>仪表盘</h1>
-          <p>市场概况一眼可见。需要做事请直接进入插件治理 / 版本治理 / 公告管理等左侧入口。</p>
-        </div>
-        <div class="dash-hero-pills">
-          <span class="pill">{{ system.environment }}</span>
-          <span class="pill">运行 {{ formatUptime(system.uptime_seconds) }}</span>
-          <span class="pill">OAuth {{ system.github_oauth_configured ? '已接通' : '未配置' }}</span>
-          <span class="pill">Webhook {{ system.github_webhook_configured ? '在线' : '未配置' }}</span>
-        </div>
+    <section v-if="system && dashboard" class="dash-hero">
+      <div>
+        <h1 class="desk-title">市场运行总览</h1>
+        <p>值班简报 · 市场活动、审核队列与服务记录</p>
       </div>
+      <RouterLink :to="{ name: 'admin-plugins' }" class="dash-assignment">
+        <span>待审核插件</span><strong>{{ formatNumber(dashboard.stats.pending_plugins) }}</strong>
+        <small>前往插件治理 ↗</small>
+      </RouterLink>
     </section>
 
-    <!-- 5 大数据 -->
-    <section v-if="dashboard" class="dash-metrics" data-anim="enter-2">
+    <section v-if="dashboard" class="dash-metrics">
       <article class="dash-metric">
-        <span class="kicker-mini">PLUGINS</span>
+        <span class="kicker-mini">插件</span>
         <strong>{{ formatNumber(dashboard.stats.plugins_total) }}</strong>
         <small>{{ dashboard.stats.pending_plugins }} 待审核</small>
       </article>
       <article class="dash-metric">
-        <span class="kicker-mini">VERSIONS</span>
+        <span class="kicker-mini">版本</span>
         <strong>{{ formatNumber(dashboard.stats.versions_total) }}</strong>
         <small>{{ dashboard.stats.pending_versions }} 待审核</small>
       </article>
       <article class="dash-metric">
-        <span class="kicker-mini">ENGAGEMENT</span>
-        <strong>{{ formatNumber(dashboard.stats.comments_total) }} / {{ formatNumber(dashboard.stats.ratings_total) }}</strong>
+        <span class="kicker-mini">互动</span>
+        <strong
+          >{{ formatNumber(dashboard.stats.comments_total) }} /
+          {{ formatNumber(dashboard.stats.ratings_total) }}</strong
+        >
         <small>评论 / 评分</small>
       </article>
       <article class="dash-metric">
-        <span class="kicker-mini">REACH</span>
-        <strong>{{ formatNumber(dashboard.stats.likes_total) }} / {{ formatNumber(dashboard.stats.downloads_total) }}</strong>
+        <span class="kicker-mini">使用</span>
+        <strong
+          >{{ formatNumber(dashboard.stats.likes_total) }} /
+          {{ formatNumber(dashboard.stats.downloads_total) }}</strong
+        >
         <small>订阅 / 下载</small>
       </article>
       <article class="dash-metric">
-        <span class="kicker-mini">ECOSYSTEM</span>
-        <strong>{{ formatNumber(dashboard.stats.authors_total) }} / {{ formatNumber(dashboard.stats.webhooks_total) }}</strong>
+        <span class="kicker-mini">社区</span>
+        <strong
+          >{{ formatNumber(dashboard.stats.authors_total) }} /
+          {{ formatNumber(dashboard.stats.webhooks_total) }}</strong
+        >
         <small>作者 / Webhook</small>
       </article>
     </section>
 
     <!-- 主区：活动 + pending -->
-    <section v-if="dashboard" class="dash-main" data-anim="enter-3">
+    <section v-if="dashboard" class="dash-main">
       <article class="dash-card dash-activity">
         <header class="dash-card-head">
           <div>
-            <span class="kicker-mini">7 DAYS · 市场动态</span>
             <h2>最近 7 天活动</h2>
           </div>
           <div class="dash-activity-legend">
-            <span><i class="dot dot-plugin" aria-hidden="true"></i>新增插件</span>
+            <span
+              ><i class="dot dot-plugin" aria-hidden="true"></i>新增插件</span
+            >
             <span><i class="dot dot-comment" aria-hidden="true"></i>评论</span>
             <span><i class="dot dot-rating" aria-hidden="true"></i>评分</span>
           </div>
         </header>
 
         <div class="dash-activity-chart">
-          <div v-for="day in (dashboard.activity || [])" :key="day.date" class="dash-activity-day">
+          <div
+            v-for="day in dashboard.activity || []"
+            :key="day.date"
+            class="dash-activity-day"
+          >
             <div class="bars">
-              <span class="bar plugin" :style="{ height: barHeight(day.plugins_created) }" :title="`新增插件 ${day.plugins_created || 0}`"></span>
-              <span class="bar comment" :style="{ height: barHeight(day.comments_created) }" :title="`评论 ${day.comments_created || 0}`"></span>
-              <span class="bar rating" :style="{ height: barHeight(day.ratings_created) }" :title="`评分 ${day.ratings_created || 0}`"></span>
+              <span
+                class="bar plugin"
+                :style="{ height: barHeight(day.plugins_created) }"
+                v-market-tooltip="`新增插件 ${day.plugins_created || 0}`"
+                tabindex="0"
+                :aria-label="`新增插件 ${day.plugins_created || 0}`"
+              ></span>
+              <span
+                class="bar comment"
+                :style="{ height: barHeight(day.comments_created) }"
+                v-market-tooltip="`评论 ${day.comments_created || 0}`"
+                tabindex="0"
+                :aria-label="`评论 ${day.comments_created || 0}`"
+              ></span>
+              <span
+                class="bar rating"
+                :style="{ height: barHeight(day.ratings_created) }"
+                v-market-tooltip="`评分 ${day.ratings_created || 0}`"
+                tabindex="0"
+                :aria-label="`评分 ${day.ratings_created || 0}`"
+              ></span>
             </div>
             <strong>{{ day.date ? day.date.slice(5) : '--' }}</strong>
-            <small>{{ (day.plugins_created || 0) + (day.comments_created || 0) + (day.ratings_created || 0) }} 动态</small>
+            <small
+              >{{
+                (day.plugins_created || 0) +
+                (day.comments_created || 0) +
+                (day.ratings_created || 0)
+              }}
+              动态</small
+            >
           </div>
         </div>
 
         <div class="dash-breakdown-row">
           <div>
-            <span class="kicker-mini">PLUGIN STATUS</span>
+            <span class="kicker-mini">插件状态</span>
             <ul>
               <li v-for="item in pluginBreakdown" :key="item.key">
-                <span :class="['badge', `status-${item.key}`]">{{ statusText(item.key) }}</span>
+                <span :class="['badge', `status-${item.key}`]">{{
+                  statusText(item.key)
+                }}</span>
                 <b>{{ item.value }}</b>
               </li>
             </ul>
           </div>
           <div>
-            <span class="kicker-mini">VERSION STATUS</span>
+            <span class="kicker-mini">版本状态</span>
             <ul>
               <li v-for="item in versionBreakdown" :key="item.key">
-                <span :class="['badge', `status-${item.key}`]">{{ statusText(item.key) }}</span>
+                <span :class="['badge', `status-${item.key}`]">{{
+                  statusText(item.key)
+                }}</span>
                 <b>{{ item.value }}</b>
               </li>
             </ul>
@@ -157,25 +220,30 @@ onMounted(loadAll)
       <article class="dash-card dash-pending">
         <header class="dash-card-head">
           <div>
-            <span class="kicker-mini">PENDING REVIEW</span>
             <h2>待审核插件</h2>
           </div>
-          <router-link class="btn btn-sm" :to="{ name: 'admin-plugins' }">前往插件治理 →</router-link>
         </header>
 
         <div v-if="pendingPlugins.length" class="dash-pending-list">
-          <article v-for="p in pendingPlugins" :key="p.plugin_id" class="dash-pending-item">
+          <article
+            v-for="p in pendingPlugins"
+            :key="p.plugin_id"
+            class="dash-pending-item"
+          >
             <div class="dash-pending-icon" aria-hidden="true">
-              <img v-if="p.icon_url" :src="p.icon_url" :alt="p.display_name">
-              <template v-else>{{ p.display_name[0]?.toUpperCase() || '?' }}</template>
+              <img v-if="p.icon_url" :src="p.icon_url" :alt="p.display_name" />
+              <template v-else>{{
+                p.display_name[0]?.toUpperCase() || '?'
+              }}</template>
             </div>
             <div class="dash-pending-info">
               <strong>{{ p.display_name }}</strong>
-              <small>{{ p.plugin_id }} · @{{ p.owner_login || p.owner_id }}</small>
+              <small
+                >{{ p.plugin_id }} · @{{ p.owner_login || p.owner_id }}</small
+              >
               <p>{{ p.summary }}</p>
             </div>
             <div class="dash-pending-meta">
-              <span class="badge status-pending_review">待审核</span>
               <small>{{ formatRelative(p.updated_at) }}</small>
             </div>
           </article>
@@ -185,26 +253,34 @@ onMounted(loadAll)
     </section>
 
     <!-- 底部服务条 -->
-    <section v-if="system" class="dash-system" data-anim="enter-4">
+    <section v-if="system" class="dash-system" aria-label="服务记录">
+      <h2>服务记录</h2>
       <div>
-        <span class="kicker-mini">STATUS</span>
-        <strong>{{ system.status === 'ok' ? '✓ Healthy' : '⚠ ' + system.status }}</strong>
+        <span class="kicker-mini">服务健康</span>
+        <strong>{{
+          system.status === 'ok' ? '正常' : '⚠ ' + system.status
+        }}</strong>
       </div>
       <div>
-        <span class="kicker-mini">DATABASE</span>
+        <span class="kicker-mini">数据库</span>
         <strong>{{ system.database }}</strong>
         <small>{{ system.database_path || '内存数据库' }}</small>
       </div>
       <div>
-        <span class="kicker-mini">REVIEW MODE</span>
+        <span class="kicker-mini">审核模式</span>
         <strong>{{ system.review_required ? '人工审核' : '快速发布' }}</strong>
-        <small>最近审核 {{ formatRelative(system.stats.latest_review_at) }}</small>
+        <small
+          >最近审核 {{ formatRelative(system.stats.latest_review_at) }}</small
+        >
       </div>
       <div>
-        <span class="kicker-mini">STARTED AT</span>
+        <span class="kicker-mini">启动时间</span>
         <strong>{{ formatDate(system.started_at) }}</strong>
         <small>已运行 {{ formatUptime(system.uptime_seconds) }}</small>
       </div>
+      <div><span class="kicker-mini">运行环境</span><strong>{{ system.environment }}</strong></div>
+      <div><span class="kicker-mini">GitHub OAuth</span><strong>{{ system.github_oauth_configured ? '已接通' : '未配置' }}</strong></div>
+      <div><span class="kicker-mini">GitHub Webhook</span><strong>{{ system.github_webhook_configured ? '在线' : '未配置' }}</strong></div>
     </section>
   </div>
 </template>
@@ -212,281 +288,274 @@ onMounted(loadAll)
 <style scoped>
 .dashboard-view {
   display: grid;
-  gap: var(--space-6);
+  gap: 20px;
 }
-
-.dashboard-loading {
-  text-align: center;
-  padding: var(--space-12);
-  color: var(--ink-500);
-  font-family: var(--font-mono);
-}
-
-/* === HERO === */
 .dash-hero {
-  position: relative; overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--blue-700) 0%, var(--blue-500) 60%, #5fb8ff 100%);
-  color: #fff;
-  padding: var(--space-6) var(--space-7);
-  box-shadow: var(--shadow-poster);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: clamp(16px, 2.6vw, 32px) 0;
+  border-top: 3px double var(--ink-700);
 }
-.dash-hero-bg {
-  position: absolute; inset: 0;
-  background: var(--halftone);
-  opacity: 0.18;
-  mix-blend-mode: screen;
-  pointer-events: none;
+.dash-hero p {
+  margin: 10px 0 0;
+  color: var(--ink-500);
+  font-size: 13px;
 }
-.dash-hero-inner {
-  position: relative; z-index: 1;
-  display: flex; justify-content: space-between; align-items: center;
-  gap: var(--space-5); flex-wrap: wrap;
+.dash-assignment {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  align-items: baseline;
+  padding-left: 18px;
+  border-left: 2px solid var(--blue-600);
+  color: var(--ink-700);
+  font-size: 13px;
 }
-.dash-hero-left .kicker {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
-  font-size: 12px; color: rgba(255,255,255,0.92);
+.dash-assignment strong {
+  grid-row: span 2;
+  font: 650 clamp(30px, 4vw, 48px)/1 var(--font-editorial);
+  color: var(--blue-700);
 }
-.dash-hero-left .kicker::before { content: ""; width: 22px; height: 2px; background: var(--lemon); }
-.dash-hero-left h1 {
-  margin: 6px 0 6px;
-  font-family: var(--font-display); font-weight: 900;
-  font-size: clamp(28px, 3.4vw, 36px);
-  line-height: 1.05;
-}
-.dash-hero-left p {
-  margin: 0;
-  opacity: 0.92;
-  max-width: 56ch;
-  font-size: 14px;
-}
-.dash-hero-pills { display: flex; gap: 8px; flex-wrap: wrap; }
-.dash-hero-pills .pill {
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  background: rgba(255,255,255,0.16);
-  color: #fff;
-  font-size: 12px; font-weight: 600;
-  font-family: var(--font-mono);
-}
-
-/* === Metrics === */
+.dash-assignment small { color: var(--blue-700); }
+.dash-assignment:hover small { text-decoration: underline; }
+.kicker-mini { font: 12px var(--font-sans); color: var(--ink-500); }
 .dash-metrics {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--space-3);
-}
-@media (max-width: 1024px) {
-  .dash-metrics { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 480px) {
-  .dash-metrics { grid-template-columns: 1fr; }
-}
-
-.dash-metric {
-  display: grid; gap: 2px;
-  padding: var(--space-4);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-block: 1px solid var(--ink-700);
   background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.dash-metric {
+  display: grid;
+  gap: 9px;
+  padding: 22px 18px;
+  border-right: 1px solid var(--line);
+}
+.dash-metric:last-child {
+  border: 0;
 }
 .dash-metric strong {
-  font-family: var(--font-brand); letter-spacing: var(--letter-bebas);
-  font-size: 28px; color: var(--ink-900); line-height: 1;
-  margin-top: 4px;
-}
-.dash-metric small {
-  font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-500);
-}
-
-.kicker-mini {
-  font-family: var(--font-brand); letter-spacing: var(--letter-kicker);
-  font-size: 11px; color: var(--ink-500); text-transform: uppercase;
-}
-
-/* === Main grid === */
-.dash-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: var(--space-3);
-}
-@media (max-width: 1280px) {
-  .dash-main { grid-template-columns: 1fr; }
-}
-
-.dash-card {
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: var(--space-5);
-  display: grid; gap: var(--space-4);
-}
-.dash-card-head {
-  display: flex; justify-content: space-between; align-items: flex-end;
-  gap: var(--space-3); flex-wrap: wrap;
-}
-.dash-card-head h2 {
-  margin: 4px 0 0;
-  font-family: var(--font-display); font-weight: 900;
-  font-size: 20px; line-height: 1.15;
+  font: 650 clamp(22px, 2.4vw, 32px)/1.15 var(--font-editorial);
+  overflow-wrap: anywhere;
   color: var(--ink-900);
 }
-
-/* === Activity chart === */
-.dash-activity-legend {
-  display: flex; gap: 14px; flex-wrap: wrap;
-  font-family: var(--font-mono); font-size: 11px;
+.dash-metric small {
+  font-size: 11px;
   color: var(--ink-500);
 }
-.dash-activity-legend span { display: inline-flex; align-items: center; gap: 4px; }
-.dash-activity-legend .dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  display: inline-block;
+.dash-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 20px;
 }
-.dash-activity-legend .dot-plugin  { background: var(--blue-500); }
-.dash-activity-legend .dot-comment { background: var(--coral); }
-.dash-activity-legend .dot-rating  { background: var(--lemon); }
-
+.dash-card {
+  min-width: 0;
+  padding: 18px 0;
+  border-top: 3px double var(--ink-700);
+}
+.dash-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.dash-card-head h2 {
+  font: 650 21px var(--font-editorial);
+  margin: 0;
+}
+.dash-activity-legend {
+  display: flex;
+  gap: 10px;
+  color: var(--ink-500);
+  font-size: 10px;
+}
+.dash-activity-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  display: block;
+}
+.dot-plugin,
+.bar.plugin {
+  background: var(--blue-500);
+}
+.dot-comment,
+.bar.comment {
+  background: var(--coral);
+}
+.dot-rating,
+.bar.rating {
+  background: var(--mint);
+}
 .dash-activity-chart {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: var(--space-2);
-  align-items: end;
-  padding: var(--space-3) 0;
-  border-top: 1px dashed var(--line);
-  border-bottom: 1px dashed var(--line);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 0;
+  border-block: 1px solid var(--line);
+  overflow-x: auto;
 }
 .dash-activity-day {
   display: grid;
-  grid-template-rows: 88px auto auto;
-  align-items: end; justify-items: center;
-  gap: 4px;
-  font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-500);
-}
-.dash-activity-day strong {
-  font-size: 11px; color: var(--ink-700); font-weight: 700;
-  margin-top: 4px;
+  gap: 7px;
+  justify-items: center;
+  font: 10px var(--font-mono);
+  color: var(--ink-500);
 }
 .dash-activity-day .bars {
-  display: flex; gap: 2px;
-  align-items: flex-end;
   height: 88px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
 }
-.dash-activity-day .bar {
+.bar {
   width: 7px;
-  border-radius: 2px 2px 0 0;
-  transition: opacity var(--dur-fast);
 }
-.dash-activity-day .bar:hover { opacity: 0.85; }
-.dash-activity-day .bar.plugin  { background: var(--blue-500); }
-.dash-activity-day .bar.comment { background: var(--coral); }
-.dash-activity-day .bar.rating  { background: var(--lemon); }
-
+.dash-activity-day strong {
+  color: var(--ink-900);
+}
 .dash-breakdown-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
+  gap: 24px;
+  margin-top: 24px;
 }
-@media (max-width: 600px) { .dash-breakdown-row { grid-template-columns: 1fr; } }
-.dash-breakdown-row > div { display: grid; gap: 6px; }
 .dash-breakdown-row ul {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; gap: 4px;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
 }
 .dash-breakdown-row li {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 4px 0;
-  border-bottom: 1px dashed var(--line);
-  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
 }
-.dash-breakdown-row li:last-child { border-bottom: none; }
-.dash-breakdown-row li b {
-  font-family: var(--font-brand); letter-spacing: var(--letter-bebas);
-  color: var(--ink-900);
-  font-size: 16px;
+.dash-pending-list {
+  display: grid;
 }
-
-/* === Pending list === */
-.dash-pending-list { display: grid; gap: 8px; }
 .dash-pending-item {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: var(--space-3);
-  padding: 10px 12px;
-  background: var(--surface-soft);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-md);
-  align-items: center;
-  transition: border-color var(--dur-fast), background var(--dur-fast);
-}
-.dash-pending-item:hover {
-  border-color: var(--lemon);
-  background: var(--surface);
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 15px 0;
+  border-top: 1px solid var(--line);
 }
 .dash-pending-icon {
-  width: 36px; height: 36px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--blue-500), var(--blue-700));
-  color: var(--ink-on-blue);
-  display: grid; place-items: center;
-  font-family: var(--font-display); font-weight: 800; font-size: 14px;
-  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  color: var(--blue-500);
   overflow: hidden;
+  border-radius: 3px;
 }
-.dash-pending-icon img { width: 100%; height: 100%; object-fit: cover; }
-.dash-pending-info { display: grid; gap: 2px; min-width: 0; }
+.dash-pending-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.dash-pending-info {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
 .dash-pending-info strong {
-  font-size: 13.5px; font-weight: 700; color: var(--ink-900);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 13px;
 }
-.dash-pending-info small {
-  font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.dash-pending-info small,
+.dash-pending-meta small {
+  font: 10px var(--font-mono);
+  color: var(--ink-500);
+  overflow-wrap: anywhere;
 }
 .dash-pending-info p {
-  margin: 4px 0 0;
-  font-size: 12px; color: var(--ink-700);
-  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+  margin: 0;
+  color: var(--ink-500);
+  font-size: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.dash-pending-meta { display: grid; gap: 4px; text-align: right; }
-.dash-pending-meta small { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-500); }
-
-/* === System bottom strip === */
+.dash-pending-meta {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
 .dash-system {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0;
-  padding: var(--space-4) 0;
-  border-top: 2px solid var(--ink-900);
-  border-bottom: 2px solid var(--ink-900);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid var(--line);
+  padding: 20px 0;
 }
-@media (max-width: 768px) { .dash-system { grid-template-columns: repeat(2, 1fr); gap: var(--space-3); padding: var(--space-3) var(--space-3); } }
+.dash-system h2 { grid-column: 1/-1; }
 .dash-system > div {
-  padding: 0 var(--space-5);
-  border-right: 1px dashed var(--line);
-  display: grid; gap: 2px;
+  display: grid;
+  gap: 7px;
+  padding: 8px 12px;
+  border-right: 1px solid var(--line);
+  min-width: 0;
 }
-.dash-system > div:last-child { border-right: none; }
+.dash-system > div:last-child {
+  border: 0;
+}
 .dash-system strong {
-  font-family: var(--font-display); font-weight: 700;
-  font-size: 14px; color: var(--ink-900);
-  margin-top: 4px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .dash-system small {
-  font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);
+  font: 10px var(--font-mono);
+  color: var(--ink-500);
+  overflow-wrap: anywhere;
 }
-
-[data-anim] { animation: fade-up var(--dur-slow) var(--ease-emphasized) both; }
-[data-anim="enter-1"] { animation-delay: 60ms; }
-[data-anim="enter-2"] { animation-delay: 140ms; }
-[data-anim="enter-3"] { animation-delay: 200ms; }
-[data-anim="enter-4"] { animation-delay: 260ms; }
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
+@media (max-width: 1100px) {
+  .dash-main {
+    grid-template-columns: 1fr;
+  }
+  .dash-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .dash-metric {
+    border-bottom: 1px solid var(--line);
+  }
 }
-@media (prefers-reduced-motion: reduce) {
-  [data-anim] { animation: none; }
+@media (max-width: 600px) {
+  .dash-metrics,
+  .dash-system {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dash-hero,
+  .dash-card {
+    padding: 12px 0;
+  }
+  .dash-hero { grid-template-columns: 1fr; }
+  .dash-assignment { justify-self: start; }
+  .dash-system {
+    gap: 20px;
+  }
+  .dash-pending-item {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+  .dash-pending-meta {
+    grid-column: 2;
+    display: flex;
+  }
+  .dash-breakdown-row {
+    gap: 15px;
+  }
 }
 </style>

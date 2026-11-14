@@ -99,6 +99,7 @@ export const CATEGORY_LABELS: Readonly<Record<string, string>> = Object.freeze({
   tool: '实用工具',
   tools: '工具合集',
   utility: '实用增强',
+  vision: '图像视觉',
 })
 
 export const EDITABLE_PLUGIN_CATEGORIES = Object.freeze([

@@ -1,0 +1,63 @@
+@font-face {
+  font-family: 'Pinyon Script';
+  src: url('@fontsource/pinyon-script/files/pinyon-script-latin-400-normal.woff2')
+    format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('@fontsource/playfair-display/files/playfair-display-latin-800-normal.woff2')
+    format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'MoFox Editorial SC';
+  src: url('./fonts/mofox-editorial-sc-800.woff2') format('woff2');
+  font-weight: 800;
+  font-display: swap;
+}
+/* The press voice is reserved for titles. Reading text and controls keep their UI type. */
+#main-content > .page-wrap {
+  width: min(100%, 1420px);
+  margin-inline: auto;
+  padding: clamp(22px, 3vw, 42px) clamp(20px, 3.2vw, 56px) 48px;
+}
+.market-stage main h1,
+.market-stage .section-head h2,
+.market-stage .recommendation-head h2 {
+  font-family: var(--font-editorial);
+  font-weight: 800;
+}
+.market-footer {
+  border-top: 3px double var(--ink-500);
+}
+.footer-identity strong {
+  font: 800 25px/1.1 var(--font-editorial);
+}
+.header-location .running-title {
+  display: inline-block;
+  font: 400 22px/1 var(--font-script);
+  color: var(--blue-700);
+  border-right: 1px solid var(--line-strong);
+  padding-right: 14px;
+  margin-right: 14px;
+  vertical-align: middle;
+}
+.footer-signature {
+  margin-inline-start: 8px;
+  font: 400 25px/1 var(--font-script);
+  color: var(--blue-700);
+}
+.market-stage .recommendation-head {
+  padding-block-start: 14px;
+  border-block-start: 3px double var(--ink-500);
+}
+@media (max-width: 600px) {
+  .footer-signature {
+    display: none;
+  }
+}

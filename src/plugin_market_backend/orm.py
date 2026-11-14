@@ -155,6 +155,33 @@ class PluginLikeORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class RecommendationPreferenceORM(Base):
+    """Explicit recommendation controls; no browsing history or inferred identity."""
+
+    __tablename__ = "recommendation_preferences"
+
+    author_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), primary_key=True)
+    personalization_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    categories: Mapped[list[str]] = mapped_column(JSON, default=list)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class RecommendationFeedbackORM(Base):
+    """Expiring explicit exclusions and category reductions, isolated by author."""
+
+    __tablename__ = "recommendation_feedback"
+    __table_args__ = (Index("idx_recommendation_feedback_expiry", "expires_at"),)
+
+    author_id: Mapped[str] = mapped_column(ForeignKey("authors.author_id"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(24), primary_key=True)
+    target: Mapped[str] = mapped_column(String(120), primary_key=True)
+    reason: Mapped[str] = mapped_column(String(24))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=False)
+
+
 class AuthorFollowORM(Base):
     """Follow relationship between a viewer and a plugin author."""
 

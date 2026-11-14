@@ -15,7 +15,8 @@ from plugin_market_backend.config import get_settings
 SUBSCRIPTIONS_REVISION = "0005_subscriptions_and_tokens"
 SKILL_MARKET_REVISION = "0006_skill_market"
 SKILL_README_REVISION = "0007_skill_readme_markdown"
-HEAD_REVISION = SKILL_README_REVISION
+RECOMMENDATIONS_REVISION = "0008_recommendation_preferences"
+HEAD_REVISION = RECOMMENDATIONS_REVISION
 REVISION_ORDER = {
     "0001_initial": 1,
     "0002_github_sessions": 2,
@@ -24,6 +25,7 @@ REVISION_ORDER = {
     SUBSCRIPTIONS_REVISION: 5,
     SKILL_MARKET_REVISION: 6,
     SKILL_README_REVISION: 7,
+    RECOMMENDATIONS_REVISION: 8,
 }
 
 
@@ -96,6 +98,11 @@ def _physical_revision(sync_conn) -> str | None:
         skill_columns = {item["name"] for item in inspector.get_columns("skills")}
         if "readme_markdown" in skill_columns:
             revision = SKILL_README_REVISION
+
+    if revision == SKILL_README_REVISION and {
+        "recommendation_preferences", "recommendation_feedback"
+    }.issubset(tables):
+        revision = RECOMMENDATIONS_REVISION
 
     return revision
 

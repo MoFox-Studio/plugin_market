@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" role="img" aria-labelledby="lycoris-title lycoris-desc">
+  <title id="lycoris-title">彼岸花 · 植物铜版图</title>
+  <desc id="lycoris-desc">四朵朝向各异的彼岸花与一枚初开的花苞，从同一无叶花茎顶端伸展。每朵花的六枚细长花被片向后翻卷，弧形长花丝末端悬着花药。右侧附花被片与花药的细部图，右下角署名 design by Lycoris radiata。</desc>
+  <defs>
+    <pattern id="lycoris-petal-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)">
+      <path d="M0 0V5" fill="none" stroke="currentColor" stroke-width=".45" opacity=".5"/>
+    </pattern>
+    <symbol id="lycoris-radiata" viewBox="0 0 640 480">
+      <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <!-- A single naked scape. The papery spathe is at the pedicel junction. -->
+        <path d="M220 427c17-35 32-73 38-109 4-23 7-39 8-56m-39 165c15-36 28-72 34-110 4-23 7-39 8-54" stroke-width="1.7"/>
+        <path d="M227 413c11-27 21-58 28-89m5-17 4-23m-31 113 8-20m1-11 8-24" stroke-width=".55"/>
+        <path d="M265 266c-19-24-37-48-81-84m84 82c5-36 12-76 10-123m-8 121c24-30 58-58 96-85m-98 85c2-10 4-20 5-29m-2 28c27-44 52-93 74-143" stroke-width="1.45"/>
+        <path d="M263 258c-19-21-38-44-69-68m76 60c5-31 10-65 10-90m-4 93c25-27 51-49 80-69m-75 62c20-35 40-72 60-116" stroke-width=".5"/>
+        <path d="M265 267c-9-10-18-15-32-18 9-2 23 3 34 12 1-13-2-23-8-34 13 8 17 19 13 32 12-9 22-13 36-13-11 6-20 13-36 19Z" fill="url(#lycoris-petal-hatch)" stroke-width="1.15"/>
+        <path d="m241 251 20 10m3-23 4 17m13 4 16-9" stroke-width=".5"/>
+
+        <!-- The small, oblique bud retains a folded perianth. -->
+        <g transform="translate(345 118)">
+          <path d="M0 4c-1-19 2-40 10-58 4-9 10-17 15-16 4 1 1 13-3 23C16-29 8-10 0 4Z" fill="url(#lycoris-petal-hatch)" stroke-width="1.45"/>
+          <path d="M2-4c7-20 16-38 21-56M4-10c0-23 5-43 13-55m-4 39 10-21M-1 3c-7-14-15-22-24-25 11-1 22 9 25 21" stroke-width=".8"/>
+          <path d="M1 0c15-20 29-33 44-38 7-2 11 0 14 3" stroke-width=".7"/><ellipse cx="59" cy="-35" rx="3.4" ry=".95" transform="rotate(23 59 -35)" fill="currentColor" stroke="none"/>
+        </g>
+
+        <!-- Upper flower, seen almost face-on. Its tepals turn away from the throat. -->
+        <g transform="translate(278 141)">
+          <g fill="url(#lycoris-petal-hatch)" stroke-width="1.35">
+            <path d="M0 2c-18-13-26-32-29-51-3-17 0-29 7-30 7 0 9 8 6 13-2 4-5 7-9 7 6-6 9-11 5-13-5-1-6 8-4 19C-20-32-12-14 0 2Z"/>
+            <path d="M-1 0c-2-21 4-38 15-52 9-11 19-16 25-11 6 6 2 15-5 18-4 2-8 2-11 0 8 0 14-5 13-9-2-5-10 0-17 8C8-32 2-15-1 0Z"/>
+            <path d="M1 0c16-17 34-29 53-31 12-1 22 4 20 12-2 7-11 9-17 6 9 0 13-4 10-8-3-4-11-4-18-1C32-16 15-9 1 0Z"/>
+            <path d="M2 2c22-2 40 3 49 14 8 9 6 20-1 22-7 2-12-3-12-9 5 6 10 6 11 2 3-8-5-15-13-19C25 7 11 5 2 2Z"/>
+            <path d="M-1 2c-7 15-17 27-31 30-11 2-18-3-17-10 1-6 7-8 12-6-6 2-9 5-5 8 7 4 18-1 25-9L-1 2Z"/>
+            <path d="M-2 0c-19 0-36-6-48-17-10-9-15-18-9-23 5-5 12-1 13 4-6-4-11-3-9 2 5 12 24 22 53 34Z"/>
+          </g>
+          <g stroke-width=".5"><path d="M-6-10c-12-18-17-36-18-52M3-11c3-16 10-28 23-39M12-6c16-11 34-19 48-18M14 5c16 3 28 10 32 20M-9 14c-9 8-17 12-26 11M-14-6c-15-5-27-12-36-21"/></g>
+          <g stroke-width=".85">
+            <path d="M0 0c-23-28-37-59-40-87"/>
+            <path d="M0 0c-13-35-13-68-5-93"/>
+            <path d="M0 0c2-33 12-61 32-81"/>
+            <path d="M1 0c18-33 41-59 69-68"/>
+            <path d="M1 1c30-24 57-36 86-33"/>
+            <path d="M1 2c33-9 62-9 86 2"/>
+            <path d="M0 1c9-33 28-65 55-87" stroke-width="1.05"/>
+          </g>
+          <g fill="currentColor" stroke="none"><ellipse cx="-40" cy="-87" rx="3.8" ry="1.1" transform="rotate(-69 -40 -87)"/><ellipse cx="-5" cy="-93" rx="3.6" ry="1.1" transform="rotate(-46 -5 -93)"/><ellipse cx="32" cy="-81" rx="3.7" ry="1.05" transform="rotate(-35 32 -81)"/><ellipse cx="70" cy="-68" rx="3.9" ry="1.1" transform="rotate(-14 70 -68)"/><ellipse cx="87" cy="-32" rx="3.8" ry="1.05" transform="rotate(11 87 -32)"/><ellipse cx="87" cy="4" rx="3.6" ry="1.05" transform="rotate(31 87 4)"/><circle cx="55" cy="-86" r="1.4"/></g>
+        </g>
+
+        <!-- Left flower in profile: the long filaments reach outward into open paper. -->
+        <g transform="translate(184 182)">
+          <g fill="url(#lycoris-petal-hatch)" stroke-width="1.45">
+            <path d="M2 1c-2-18-13-36-26-45-12-8-23-8-26-2-3 6 2 12 7 12-5-4-5-8-1-9 8-3 19 5 25 13C-11-18-4-8 2 1Z"/>
+            <path d="M0-1c-18-7-39-10-55-6-13 3-22 10-19 16 3 6 11 5 16 0-8 2-12 1-10-3 5-9 33-10 68-7Z"/>
+            <path d="M1 1c-18 5-36 19-43 33-5 12-4 22 3 22 5 0 8-6 6-11-1 6-4 9-6 5-4-8 4-21 12-28C-17 13-8 7 1 1Z"/>
+            <path d="M3 2c7 14 8 31 2 44-5 12-13 17-18 13-5-4-1-11 4-12-4 5-3 10 1 7C2 48 5 25 3 2Z"/>
+            <path d="M2 0c8-11 20-17 32-14 10 3 15 10 11 15-4 5-10 2-12-1 6 1 10 1 9-3-2-7-13-8-22-5L2 0Z"/>
+            <path d="M2-2c7-20 6-37-1-49-6-11-15-16-19-12-5 4-1 11 4 12-5-6-3-9 0-6 10 8 16 31 16 55Z"/>
+          </g>
+          <g stroke-width=".55"><path d="M-4-7c-10-18-21-29-34-34M-14-2c-16-2-35-2-49 3M-9 10c-17 12-26 26-27 36M4 16c0 16-3 29-11 37M12-6c9-5 17-6 25-2M3-15c2-18-3-33-12-41"/></g>
+          <g stroke-width=".85"><path d="M0 0c-29-14-65-21-95-12M0 0c-35-26-58-52-69-76M0 0c-34-18-62-34-84-57M0 0c-32 0-63 9-86 26M0 1c-30 13-50 33-59 55M1 1c-12 22-16 43-13 67M0 0c-30-8-63-7-95-1"/><path d="M-92-1h-4" stroke-width="1.2"/></g>
+          <g fill="currentColor" stroke="none"><ellipse cx="-95" cy="-12" rx="4" ry="1.1" transform="rotate(-13 -95 -12)"/><ellipse cx="-69" cy="-76" rx="3.6" ry="1.05" transform="rotate(43 -69 -76)"/><ellipse cx="-84" cy="-57" rx="3.8" ry="1.05" transform="rotate(25 -84 -57)"/><ellipse cx="-86" cy="26" rx="3.7" ry="1.05" transform="rotate(-38 -86 26)"/><ellipse cx="-59" cy="55" rx="3.8" ry="1.05" transform="rotate(-64 -59 55)"/><ellipse cx="-12" cy="68" rx="3.8" ry="1.05" transform="rotate(-81 -12 68)"/></g>
+        </g>
+
+        <!-- The right flower is tilted toward the viewer, not a rotated copy. -->
+        <g transform="translate(366 177)">
+          <g fill="url(#lycoris-petal-hatch)" stroke-width="1.45">
+            <path d="M0 0c1-21 9-39 22-50 10-9 20-10 24-3 3 7-2 13-8 13 6-5 6-9 2-10-8-1-17 8-23 17C10-22 5-9 0 0Z"/>
+            <path d="M1-1c17-14 37-18 53-13 12 4 16 12 12 17-4 5-11 3-14-2 7 2 11 1 8-3-7-9-31-9-59 1Z"/>
+            <path d="M2 1c21 4 38 15 45 30 5 10 4 19-2 21-7 2-11-3-10-9 4 7 9 7 9 2 0-11-19-30-42-44Z"/>
+            <path d="M0 2c9 21 7 41-3 54-8 10-18 13-22 7-4-6 1-13 7-13-6 5-6 10-2 10 9-2 17-15 19-28C2 21 1 10 0 2Z"/>
+            <path d="M-1 1c-17 14-35 21-50 18-13-2-20-9-16-15 3-6 11-5 15 0-7-2-11-1-9 3 6 9 30 7 60-6Z"/>
+            <path d="M-1-1c-19-11-30-27-32-43-1-12 3-21 10-20 5 1 6 8 3 13 1-7-2-10-5-6-6 9 3 32 24 56Z"/>
+          </g>
+          <g stroke-width=".55"><path d="M4-12c7-19 16-33 30-41M12-4c17-8 34-10 45-5M13 8c14 10 26 21 30 33M1 17c1 20-5 35-16 42M-14 10c-18 7-34 6-44 0M-10-11c-13-17-20-32-18-43"/></g>
+          <g stroke-width=".85"><path d="M0 0c18-27 43-48 75-55M1 0c31-24 64-36 98-33M2 1c41-10 75-7 104 5M1 2c37 6 66 24 85 49M0 2c25 17 43 45 48 72M0 2c10 29 11 56 2 78"/><path d="M0 0c34-17 71-22 112-15" stroke-width="1.05"/></g>
+          <g fill="currentColor" stroke="none"><ellipse cx="75" cy="-55" rx="3.9" ry="1.05" transform="rotate(-11 75 -55)"/><ellipse cx="99" cy="-33" rx="3.9" ry="1.1" transform="rotate(10 99 -33)"/><ellipse cx="106" cy="6" rx="4" ry="1.1" transform="rotate(26 106 6)"/><ellipse cx="86" cy="51" rx="3.8" ry="1.05" transform="rotate(49 86 51)"/><ellipse cx="48" cy="74" rx="3.8" ry="1.05" transform="rotate(76 48 74)"/><ellipse cx="2" cy="80" rx="3.8" ry="1.05" transform="rotate(-76 2 80)"/><circle cx="112" cy="-15" r="1.4"/></g>
+        </g>
+
+        <!-- Lower floret is deliberately foreshortened, with an open throat. -->
+        <g transform="translate(273 233)">
+          <g fill="url(#lycoris-petal-hatch)" stroke-width="1.5">
+            <path d="M-1-1c-13-12-26-17-39-13-12 3-18 11-14 16 4 5 10 2 12-3-6 4-10 4-8 0 6-9 21-10 49 0Z"/>
+            <path d="M0-2c-6-16-7-31 1-42 6-10 16-12 20-7 4 6 0 13-6 15 4-6 5-10 1-11-8-1-14 12-16 45Z"/>
+            <path d="M1-1c14-16 31-23 44-19 10 3 15 11 10 16-4 5-11 3-13-2 6 3 10 1 8-3-6-9-26-5-49 8Z"/>
+            <path d="M2 1c17 9 28 24 29 41 1 11-4 20-11 18-6-1-7-9-3-14-1 7 2 11 5 7 7-9-3-29-20-52Z"/>
+            <path d="M0 2c-2 21-11 37-25 44-12 6-23 4-24-3-1-6 6-10 12-8-7 3-9 7-4 8 12 2 28-12 41-41Z"/>
+            <path d="M-1 1c-20 5-35 2-46-7-8-7-9-16-3-18 5-2 10 2 10 7-4-5-8-5-8-1 1 10 17 16 47 19Z"/>
+          </g>
+          <g stroke-width=".55"><path d="M-10-5c-14-7-25-8-35-3M0-14c0-16 5-27 12-31M10-7c15-9 28-10 37-6M10 13c12 14 17 29 13 39M-8 19c-10 15-21 22-32 20M-13-1c-15-2-25-6-31-13"/></g>
+          <g stroke-width=".85"><path d="M0 0c-24 8-44 22-57 43M0 1c-12 23-14 45-8 68M0 2c4 28 15 50 33 65M1 1c22 25 45 40 71 43M1 0c30 11 57 11 81 2M1-1c24-6 45-19 61-39"/><path d="M0 1c12 26 32 49 56 61" stroke-width="1.05"/></g>
+          <g fill="currentColor" stroke="none"><ellipse cx="-57" cy="43" rx="3.7" ry="1.1" transform="rotate(-59 -57 43)"/><ellipse cx="-8" cy="69" rx="3.7" ry="1.05" transform="rotate(77 -8 69)"/><ellipse cx="33" cy="67" rx="3.8" ry="1.1" transform="rotate(41 33 67)"/><ellipse cx="72" cy="44" rx="3.8" ry="1.1" transform="rotate(10 72 44)"/><ellipse cx="82" cy="2" rx="3.7" ry="1.05" transform="rotate(-25 82 2)"/><ellipse cx="62" cy="-40" rx="3.7" ry="1.05" transform="rotate(-51 62 -40)"/><circle cx="56" cy="62" r="1.4"/></g>
+          <path d="M-3-2q3-4 6 0l-1 5h-3Z" stroke-width="1"/>
+        </g>
+
+        <!-- Detached morphological details have their own breathing space. -->
+        <g transform="translate(451 378)">
+          <path d="M-12 24c11-18 17-39 13-58-3-16-13-27-22-22-8 5-5 17 3 21-7-8-7-15-2-16 8-2 14 9 15 21 2 18-2 36-7 54Z" fill="url(#lycoris-petal-hatch)" stroke-width="1.4"/>
+          <path d="M-9 14c6-18 8-33 4-48m-2 5-9-10m10 18-8-9m8 17-5-6" stroke-width=".6"/>
+          <path d="M37 26c9-19 13-40 10-59m-3 4c-5-5-6-12-3-16 3-5 8-4 10 2 3 6 2 11-2 16m-4-14c-1 5 0 10 3 14" stroke-width="1.2"/>
+          <path d="M-39 37H71m-110-4v7m110-7v7" stroke-width=".55" opacity=".6"/>
+        </g>
+        <path d="M145 333v66m-4-66h8m-8 66h8m-6-50h4m-4 17h4m-4 16h4M146 314h21m-31 107h45M505 196h28l16-17" stroke-width=".6" opacity=".6"/>
+        <circle cx="505" cy="196" r="1.7" stroke-width=".6" opacity=".6"/>
+      </g>
+      <g fill="currentColor" font-family="Georgia, 'Times New Roman', serif">
+        <text x="69" y="41" font-size="12" letter-spacing="2.4">LYCORIS RADIATA</text>
+        <text x="69" y="57" font-size="8.5" letter-spacing="1.2" opacity=".7">AMARYLLIDACEAE · BOTANICAL STUDIES</text>
+        <text x="433" y="433" font-size="10" font-style="italic">a. perianth</text>
+        <text x="493" y="433" font-size="10" font-style="italic">b. stamen</text>
+        <text x="559" y="176" font-size="11" font-style="italic">a.</text>
+        <text x="569" y="464" text-anchor="end" font-size="17" font-style="italic">design by Lycoris radiata</text>
+      </g>
+    </symbol>
+  </defs>
+  <use href="#lycoris-radiata" width="640" height="480"/>
+</svg>
