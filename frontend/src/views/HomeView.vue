@@ -235,8 +235,12 @@ function date(value: string) {
             发布，再到创作者工作台管理作品和版本。
           </p>
           <nav aria-label="创作者入口">
-            <router-link to="/me" aria-label="发布插件：进入创作者工作台"
-              >发布插件 · 进入工作台 ↗</router-link
+            <a
+              href="https://docs.mofox.chat/docs/development/plugin_develop/contributing-to-market.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="提交插件：打开插件市场投稿文档"
+              >提交插件 · 查看文档 ↗</a
             ><a
               href="https://github.com/MoFox-Studio"
               target="_blank"

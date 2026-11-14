@@ -330,17 +330,6 @@ function recordVersion(version: string) {
     .post(`${path()}/install-record?version=${encodeURIComponent(version)}`)
     .catch(() => {});
 }
-async function copyCommand() {
-  if (!plugin.value) return;
-  try {
-    await navigator.clipboard.writeText(
-      `mofox plugin install ${plugin.value.plugin_id}@${selectedVersion.value}`,
-    );
-    toast.show('安装命令已复制', 'ok');
-  } catch {
-    toast.show('复制失败，请选中命令手动复制', 'error');
-  }
-}
 function revealChapter() {
   activeTab.value = pluginChapter(route.hash);
   if (!route.hash.startsWith('#comment-')) return;
@@ -394,7 +383,7 @@ onBeforeUnmount(() => {
             versions.loading
               ? '正在确认所选版本…'
               : selectedVersion
-                ? `当前查看 v${selectedVersion}，下载和安装命令均对应此版本。`
+                ? `当前查看 v${selectedVersion}，下载对应此版本。`
                 : `指定版本 v${requestedVersion} 暂不可获取，请重试版本信息或选择其他版本。`
           }}
           <router-link
@@ -560,7 +549,7 @@ onBeforeUnmount(() => {
                 <span>{{ versions.data.length }} 个版本</span>
               </div>
               <p class="catalog-muted">
-                检查兼容信息，选择适合当前环境的版本。安装命令与获取操作始终对应所选版本。
+                检查兼容信息，选择适合当前环境的版本。下载始终对应所选版本。
               </p>
               <CatalogState
                 :loading="versions.loading"
@@ -774,15 +763,6 @@ onBeforeUnmount(() => {
                         ? '已订阅更新 ✓'
                         : '订阅更新 ＋'
                   }}
-                </button>
-              </div>
-              <div v-if="selectedVersion" class="install-command">
-                <code
-                  >mofox plugin install {{ plugin.plugin_id }}@{{
-                    selectedVersion
-                  }}</code
-                ><button @click="copyCommand" aria-label="复制安装命令">
-                  复制
                 </button>
               </div>
               <a
@@ -1048,35 +1028,6 @@ onBeforeUnmount(() => {
 }
 .comment-replies {
   margin-left: 46px;
-}
-.install-command {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  margin-top: 10px;
-  background: var(--surface-soft);
-  border: 1px solid var(--line);
-  border-inline-start: 2px solid var(--blue-500);
-  font-size: 12px;
-}
-.install-command code {
-  min-width: 0;
-  flex: 1;
-  overflow-wrap: anywhere;
-  background: none;
-  padding: 0;
-  white-space: normal;
-  line-height: 1.8;
-}
-.install-command button {
-  min-height: 34px;
-  min-width: 40px;
-  padding-inline: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--blue-600);
-  flex: none;
 }
 .external-links {
   display: flex;
