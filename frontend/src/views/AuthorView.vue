@@ -71,6 +71,7 @@ const pageTotals = computed(() =>
   ),
 );
 const pinned = computed(() => pins.data.filter((item) => item.plugin));
+const hasPinnedReasons = computed(() => pinned.value.some((item) => item.pinned_reason));
 let epoch = 0;
 function loadProfile() {
   const id = props.id;
@@ -257,7 +258,7 @@ onBeforeUnmount(() => {
         @retry="loadPins"
         ><div class="author-pins">
           <article v-for="(pin, index) in pinned" :key="pin.plugin_id" class="pin-entry">
-            <p v-if="pin.pinned_reason" class="pin-note"><span>荐语</span>{{ pin.pinned_reason }}</p>
+            <p v-if="hasPinnedReasons" class="pin-note" :class="{ 'is-empty': !pin.pinned_reason }"><span>荐语</span><span class="pin-note-copy" :title="pin.pinned_reason || undefined">{{ pin.pinned_reason }}</span></p>
             <PluginCard v-if="pin.plugin" :plugin="pin.plugin" :number="index + 1" /><span
               class="catalog-caption"
               >精选于 {{ formatRelative(pin.pinned_at) }}</span
@@ -343,23 +344,27 @@ onBeforeUnmount(() => {
 .portrait-image.has-cover { background-position: center; background-size: cover; }
 .portrait-avatar { width: 52%; aspect-ratio: 1; display: grid; place-items: center; color: var(--blue-700); background: var(--surface); outline: 6px solid var(--surface); font: 800 clamp(40px, 6vw, 82px)/1 var(--font-editorial); }
 .portrait-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.portrait-plate figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 9px 0; font-size: 11px; color: var(--ink-500); overflow-wrap: anywhere; }
+.portrait-plate figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 9px 0; font-size: 12px; line-height: 1.6; color: var(--ink-500); overflow-wrap: anywhere; }
 .portrait-copy { min-width: 0; }
 .portrait-section { margin: 0 0 10px; font-size: 12px; color: var(--blue-700); letter-spacing: .15em; }
 .portrait-copy h1 { margin: 0; font: 800 clamp(38px, 5.3vw, 74px)/1.15 var(--font-editorial); color: var(--ink-900); overflow-wrap: anywhere; }
 .portrait-bio { margin: 22px 0; }
-.portrait-bio>span, .pin-note>span { display: block; font-size: 11px; color: var(--blue-700); margin-bottom: 6px; }
+.portrait-bio>span, .pin-note>span:first-child { display: block; font-size: 12px; line-height: 1.6; color: var(--blue-700); margin-bottom: 6px; }
 .portrait-bio p { margin: 0; max-width: 56ch; font: 400 clamp(16px, 1.55vw, 20px)/1.85 var(--font-reading); white-space: pre-line; overflow-wrap: anywhere; }
 .author-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; font-size: 12px; }
 .author-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 26px; padding: 8px 0 18px; border-bottom: 1px solid var(--line); }
-.author-stats>div { display: flex; align-items: baseline; gap: 8px; }
+.author-stats>div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; min-width: 0; max-width: 100%; }
 .author-stats strong { font: 700 21px/1.2 var(--font-editorial); }
-.author-stats span, .pin-entry>.catalog-caption { font-size: 11px; color: var(--ink-500); }
+.author-stats span, .pin-entry>.catalog-caption { font-size: 12px; line-height: 1.6; color: var(--ink-500); overflow-wrap: anywhere; }
 .author-pins { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 20px 32px; }
-.pin-entry { min-width: 0; }
-.pin-note { margin: 0; padding: 10px 14px; border-left: 2px solid var(--blue-500); background: var(--surface-soft); font: 400 15px/1.7 var(--font-reading); overflow-wrap: anywhere; }
+.pin-entry { display: flex; flex-direction: column; min-width: 0; }
+.pin-entry :deep(.edition-entry) { flex: 1; }
+.pin-note { min-height: 96px; box-sizing: border-box; margin: 0; padding: 10px 14px; border-left: 2px solid var(--blue-500); background: var(--surface-soft); font: 400 15px/1.7 var(--font-reading); overflow-wrap: anywhere; }
+.pin-note.is-empty { visibility: hidden; }
+.pin-note-copy { display: block; }
 .pin-entry>.catalog-caption { display: block; margin-top: 8px; }
 .author-edition :deep(.catalog-section-heading h2) { font: 800 clamp(23px, 2.5vw, 34px)/1.3 var(--font-editorial); }
+.author-edition :deep(.catalog-caption) { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 @media(max-width: 680px) {
   .portrait-spread { grid-template-columns: 1fr; gap: 16px; }
   .portrait-image { max-height: 220px; }

@@ -16,10 +16,10 @@
     })();
   </script>
   <style>
-    html { background: #fafbff; color: #0b1220; }
-    html[data-theme="dark"] { background: #0a1220; color: #e6edf6; }
+    html { background: var(--paper, #ffffff); color: var(--ink-900, #0b1220); }
+    html[data-theme="dark"] { background: var(--paper, #101722); color: var(--ink-900, #e3e9f2); }
     #boot-screen {
-      --paper: #fafbff; --ink: #162c42; --blue: #166997; --line: #a7bacd; --muted: #465970;
+      --paper: #ffffff; --ink: #162c42; --blue: #166997; --line: #a7bacd; --muted: #465970;
       position: fixed; inset: 0; z-index: 10000; isolation: isolate;
       display: grid; place-items: center; overflow: auto; overscroll-behavior: contain; padding: clamp(20px, 5vw, 64px);
       box-sizing: border-box; background: var(--paper); color: var(--ink);
@@ -70,7 +70,8 @@
     .boot-track::after { display: block; content: ""; width: 36%; height: 100%; background: var(--blue); animation: boot-sweep 1.4s ease-in-out infinite; }
     #boot-status { margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
     #boot-retry { margin: 12px 0 0; padding: 9px 18px; border: 1px solid var(--blue); background: var(--paper); color: var(--blue); font: inherit; cursor: pointer; }
-    #boot-retry:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+    #boot-skip { margin: 10px 0 0; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+    #boot-skip:focus-visible, #boot-retry:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
     #boot-screen[data-phase="leaving"] { animation: boot-leave .2s ease-in both; }
     #boot-screen[data-phase="failed"] *, #boot-screen[data-phase="failed"] ::after { animation: none; }
     html[data-reduced-motion="reduce"] #boot-screen,
@@ -117,6 +118,7 @@
         <div class="boot-rule"></div><div class="boot-track"></div>
       </div>
       <p id="boot-status" role="status" aria-live="polite" aria-atomic="true">正在准备插件市场</p>
+      <button id="boot-skip" type="button" onclick="if (window.__mofoxBoot) window.__mofoxBoot.skipRequested = true; window.dispatchEvent(new Event('mofox:skip-intro')); this.disabled = true;">跳过开场动画</button>
       <button id="boot-retry" type="button" hidden onclick="location.reload()">重新加载</button>
       <noscript><p>请启用 JavaScript 以使用插件市场。</p></noscript>
     </div>

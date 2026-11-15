@@ -83,11 +83,13 @@ async function logout() {
     </form>
     <div class="header-actions">
       <button
-        class="icon-button"
+        class="header-theme icon-button"
         :aria-label="dark ? '切换浅色主题' : '切换深色主题'"
+        :title="dark ? '切换到浅色模式' : '切换到深色模式'"
         @click="toggleTheme"
       >
         <AppIcon :name="dark ? 'sun' : 'moon'" />
+        <span>{{ dark ? '浅色' : '深色' }}</span>
       </button>
       <span
         v-if="auth.loading && !auth.loaded"
@@ -117,3 +119,26 @@ async function logout() {
     </div>
   </header>
 </template>
+<style scoped>
+.header-theme {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  min-width: 70px;
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-900);
+  font: 500 12px/1.4 var(--font-sans);
+  white-space: nowrap;
+}
+.header-theme:focus-visible {
+  outline: 2px solid var(--blue-500);
+  outline-offset: 3px;
+}
+</style>

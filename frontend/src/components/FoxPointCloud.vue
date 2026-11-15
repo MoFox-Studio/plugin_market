@@ -1,3 +1,75 @@
+<script lang="ts">
+type ThreeModule = typeof import('three');
+interface LogoPoints {
+  positions: Float32Array;
+  colors: Float32Array;
+  alphas: Float32Array;
+}
+
+// Source pixels and their linear colors are immutable. Reuse the two original
+// sampling densities across route visits instead of decoding and sampling the
+// same logo for every WebGL scene.
+let logoImage: Promise<HTMLImageElement> | null = null;
+const pointCache = new Map<number, LogoPoints>();
+function loadLogo(): Promise<HTMLImageElement> {
+  if (!logoImage) {
+    logoImage = new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => {
+        image.onload = image.onerror = null;
+        resolve(image);
+      };
+      image.onerror = () => {
+        image.onload = image.onerror = null;
+        reject(new Error('Logo unavailable'));
+      };
+      image.src = '/logo.png';
+    }).catch((error) => {
+      logoImage = null;
+      throw error;
+    });
+  }
+  return logoImage;
+}
+function logoPoints(image: HTMLImageElement, width: number, T: ThreeModule): LogoPoints {
+  const cached = pointCache.get(width);
+  if (cached) return cached;
+  const sample = document.createElement('canvas');
+  sample.width = width;
+  sample.height = Math.round((width * image.naturalHeight) / image.naturalWidth);
+  const context = sample.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('Logo sampling unavailable');
+  context.drawImage(image, 0, 0, sample.width, sample.height);
+  const pixels = context.getImageData(0, 0, sample.width, sample.height).data;
+  const positions: number[] = [], colors: number[] = [], alphas: number[] = [];
+  const color = new T.Color();
+  for (let y = 0; y < sample.height; y++) {
+    for (let x = 0; x < sample.width; x++) {
+      const i = (y * sample.width + x) * 4;
+      const alpha = pixels[i + 3] / 255;
+      if (alpha < 0.05) continue;
+      const r = pixels[i] / 255, g = pixels[i + 1] / 255, b = pixels[i + 2] / 255;
+      const luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
+      positions.push(
+        (x / (sample.width - 1) - 0.5) * 4.2,
+        ((0.5 - y / (sample.height - 1)) * 4.2 * sample.height) / sample.width,
+        (0.5 - luminance) * 0.08,
+      );
+      color.setRGB(r, g, b, T.SRGBColorSpace);
+      colors.push(color.r, color.g, color.b);
+      alphas.push(alpha);
+    }
+  }
+  sample.width = sample.height = 0;
+  const points = {
+    positions: new Float32Array(positions),
+    colors: new Float32Array(colors),
+    alphas: new Float32Array(alphas),
+  };
+  pointCache.set(width, points);
+  return points;
+}
+</script>
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import FoxMark from './FoxMark.vue';
@@ -19,7 +91,6 @@ onMounted(() => {
   let frame = 0;
   let render: ((time: number) => void) | null = null;
   let releaseScene = () => {};
-  let cancelImage = () => {};
 
   function stop() {
     cancelAnimationFrame(frame);
@@ -43,81 +114,18 @@ onMounted(() => {
     playing.value = true;
     if (!frame) frame = requestAnimationFrame(tick);
   }
-  function loadLogo(): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      function clear() {
-        image.onload = null;
-        image.onerror = null;
-        cancelImage = () => {};
-      }
-      image.onload = () => {
-        clear();
-        resolve(image);
-      };
-      image.onerror = () => {
-        clear();
-        reject(new Error('Logo unavailable'));
-      };
-      cancelImage = () => {
-        clear();
-        image.src = '';
-        reject(new Error('Logo loading cancelled'));
-      };
-      image.src = '/logo.png';
-    });
-  }
   async function initialize() {
     if (initializing || render || failed || !canAnimate()) return;
     initializing = true;
     try {
-      const image = await loadLogo();
-      if (!canAnimate()) return;
-      const T = await import('three');
+      // Network fetches are independent; start both without serializing them.
+      const [image, T] = await Promise.all([loadLogo(), import('three')]);
       if (!canAnimate()) return;
 
       // Every particle comes from the original PNG's alpha and RGB pixels.
       // No hand-drawn outline, replacement palette or generated fox geometry.
-      const sample = document.createElement('canvas');
       const width = window.innerWidth < 760 ? 88 : 128;
-      sample.width = width;
-      sample.height = Math.round(
-        (width * image.naturalHeight) / image.naturalWidth,
-      );
-      const context = sample.getContext('2d', { willReadFrequently: true });
-      if (!context) return;
-      context.drawImage(image, 0, 0, sample.width, sample.height);
-      const pixels = context.getImageData(
-        0,
-        0,
-        sample.width,
-        sample.height,
-      ).data;
-      const positions: number[] = [],
-        colors: number[] = [],
-        alphas: number[] = [];
-      const color = new T.Color();
-      for (let y = 0; y < sample.height; y++) {
-        for (let x = 0; x < sample.width; x++) {
-          const i = (y * sample.width + x) * 4;
-          const alpha = pixels[i + 3] / 255;
-          if (alpha < 0.05) continue;
-          const r = pixels[i] / 255,
-            g = pixels[i + 1] / 255,
-            b = pixels[i + 2] / 255;
-          const luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
-          positions.push(
-            (x / (sample.width - 1) - 0.5) * 4.2,
-            ((0.5 - y / (sample.height - 1)) * 4.2 * sample.height) /
-              sample.width,
-            (0.5 - luminance) * 0.08,
-          );
-          color.setRGB(r, g, b, T.SRGBColorSpace);
-          colors.push(color.r, color.g, color.b);
-          alphas.push(alpha);
-        }
-      }
-      sample.width = sample.height = 0;
+      const { positions, colors, alphas } = logoPoints(image, width, T);
       if (!positions.length) return;
 
       const renderer = new T.WebGLRenderer({
@@ -188,20 +196,32 @@ onMounted(() => {
       };
       geometry.setAttribute(
         'position',
-        new T.Float32BufferAttribute(positions, 3),
+        new T.BufferAttribute(positions, 3),
       );
-      geometry.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
+      geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
       geometry.setAttribute(
         'sourceAlpha',
-        new T.Float32BufferAttribute(alphas, 1),
+        new T.BufferAttribute(alphas, 1),
       );
       scene.add(new T.Points(geometry, material));
       root.appendChild(renderer.domElement);
       renderer.domElement.addEventListener('webglcontextlost', lost);
+      let resizePending = true;
+      let renderedWidth = 0, renderedHeight = 0;
       function resize() {
+        // ResizeObserver can fire repeatedly with the same content size. The
+        // next normal animation frame applies one resize and performs one draw.
+        resizePending = true;
+      }
+      function applyResize() {
+        if (!resizePending) return;
+        resizePending = false;
         if (disposed || released) return;
         const w = Math.max(1, root.clientWidth),
           h = Math.max(1, root.clientHeight);
+        if (w === renderedWidth && h === renderedHeight) return;
+        renderedWidth = w;
+        renderedHeight = h;
         const scale = (Math.min(w, h) * 0.82) / 4.2;
         renderer.setSize(w, h);
         camera.left = -w / (2 * scale);
@@ -209,14 +229,13 @@ onMounted(() => {
         camera.top = h / (2 * scale);
         camera.bottom = -h / (2 * scale);
         camera.updateProjectionMatrix();
-        renderer.render(scene, camera);
       }
       if (typeof ResizeObserver !== 'undefined') {
         resizeObserver = new ResizeObserver(resize);
         resizeObserver.observe(root);
       } else window.addEventListener('resize', resize);
-      resize();
       render = (time) => {
+        applyResize();
         material.uniforms.time.value = time * 0.001;
         renderer.render(scene, camera);
       };
@@ -270,7 +289,6 @@ onMounted(() => {
   document.addEventListener('visibilitychange', visibility);
   syncMotion();
   cleanup = () => {
-    cancelImage();
     stop();
     releaseScene();
     intersection?.disconnect();

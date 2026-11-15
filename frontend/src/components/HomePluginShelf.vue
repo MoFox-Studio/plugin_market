@@ -99,7 +99,7 @@ const entries = computed(() => {
 }
 .plugin-shelf header > span {
   color: var(--blue-700);
-  font: 600 10px/1 var(--font-mono);
+  font: 600 12px/1.4 var(--font-mono);
   letter-spacing: 0.15em;
 }
 .plugin-shelf h2 {
@@ -161,9 +161,7 @@ const entries = computed(() => {
 }
 .sample-title strong,
 .sample-title small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .sample-title strong {
   color: var(--ink-900);
@@ -171,10 +169,11 @@ const entries = computed(() => {
 }
 .sample-title small {
   color: var(--ink-500);
-  font: italic 12px/1.35 var(--font-reading);
+  font: italic 12px/1.6 var(--font-reading);
 }
 .sample-tools {
   display: flex;
+  flex-shrink: 0;
   border-left: 1px solid var(--line);
   padding-left: 4px;
 }
@@ -187,7 +186,7 @@ const entries = computed(() => {
   min-width: 44px;
   min-height: 44px;
   color: var(--blue-700);
-  font: 600 11px/1.3 var(--font-sans);
+  font: 600 12px/1.5 var(--font-sans);
 }
 .sample-tools a:hover,
 .sample-tools a:focus-visible {

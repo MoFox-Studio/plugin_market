@@ -1,4 +1,4 @@
-import { SHEET_HEIGHT, WORLD_WIDTH } from './useSurveyWorld';
+import { SHEET_HEIGHT, WORLD_WIDTH } from './surveyCoordinates';
 
 const STEP = 16;
 const INTERVAL = 0.035;
@@ -6,7 +6,7 @@ const COLUMNS = WORLD_WIDTH / STEP;
 const ROWS = SHEET_HEIGHT / STEP;
 type Point = [number, number];
 interface Vertex { point: Point; neighbors: number[] }
-interface Contours { minor: string; major: string }
+export interface Contours { minor: string; major: string }
 const cache = new Map<number, Contours>();
 
 function lattice(x: number, y: number) {

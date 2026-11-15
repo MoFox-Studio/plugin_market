@@ -1,16 +1,51 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue';
+import { onBeforeUnmount, ref, shallowRef, useId, watch } from 'vue';
 import { SHEET_HEIGHT, useSurveyWorld } from '@/composables/useSurveyWorld';
-import { surveyContours } from '@/composables/surveyContours';
+import { surveyGeometry } from '@/composables/surveyGeometry';
+import type { Contours } from '@/composables/surveyContours';
+import { useMarketPointerReveal } from '@/composables/useMarketPointerReveal';
 
-const { sheets, viewBox, dimensions } = useSurveyWorld();
+const baseStrip = ref<SVGSVGElement | null>(null);
+const revealStrip = ref<SVGSVGElement | null>(null);
+const revealWindow = ref<HTMLElement | null>(null);
+let worldPosition = { x: 0, y: 0 };
+let lensOrigin = { x: 0, y: 0 };
+function paintRevealPosition() {
+  if (revealStrip.value) revealStrip.value.style.transform = `translate3d(${worldPosition.x - lensOrigin.x}px, ${worldPosition.y - lensOrigin.y}px, 0)`;
+}
+const { sheets, viewBox, dimensions } = useSurveyWorld((position) => {
+  worldPosition = position;
+  if (baseStrip.value) baseStrip.value.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+  paintRevealPosition();
+});
+useMarketPointerReveal((pointer) => {
+  const element = revealWindow.value;
+  if (!element) return;
+  element.style.setProperty('--market-pointer-active', pointer.active ? '1' : '0');
+  if (!pointer.active) return;
+  element.style.setProperty('--market-pointer-radius', `${pointer.radius}px`);
+  const x = pointer.x - 112, y = pointer.y - 112;
+  if (x !== lensOrigin.x || y !== lensOrigin.y) {
+    lensOrigin = { x, y };
+    element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    paintRevealPosition();
+  }
+});
 const id = 'terrain-' + useId();
-const geometry = computed(() => sheets.value.map(index => ({ index, ...surveyContours(index) })));
+const geometry = shallowRef<Array<Contours & { index: number }>>([]);
+const loader = surveyGeometry.subscribe(() => {
+  geometry.value = sheets.value.flatMap(index => {
+    const contours = surveyGeometry.get(index);
+    return contours ? [{ index, ...contours }] : [];
+  });
+});
+watch(sheets, indices => loader.setSheets(indices), { immediate: true });
+onBeforeUnmount(loader.dispose);
 </script>
 <template>
   <div class="contour-field" aria-hidden="true">
-    <div v-for="layer in ['base', 'reveal']" :key="layer" :class="`terrain-${layer}`">
-      <svg class="terrain-strip" :viewBox="viewBox" :style="dimensions" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round">
+    <div v-for="layer in ['base', 'reveal']" :key="layer" :ref="el => { if (layer === 'reveal') revealWindow = el as HTMLElement; }" :class="`terrain-${layer}`">
+      <svg :ref="el => { if (layer === 'base') baseStrip = el as SVGSVGElement; else revealStrip = el as SVGSVGElement; }" class="terrain-strip" :viewBox="viewBox" :style="dimensions" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round">
         <defs v-if="layer === 'base'">
           <g v-for="sheet in geometry" :id="`${id}-${sheet.index}`" :key="sheet.index">
             <path :d="sheet.minor" stroke-width="0.72" opacity="0.58" vector-effect="non-scaling-stroke" />
@@ -43,7 +78,8 @@ const geometry = computed(() => sheets.value.map(index => ({ index, ...surveyCon
   top: 0;
   left: 0;
   max-width: none;
-  transform: translate3d(var(--survey-sheet-x, 0px), var(--survey-sheet-y, 0px), 0);
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
 }
 .terrain-base {
   opacity: 0.23;
@@ -56,10 +92,16 @@ const geometry = computed(() => sheets.value.map(index => ({ index, ...surveyCon
   );
 }
 .terrain-reveal {
+  inset: auto;
+  top: 0;
+  left: 0;
+  width: 224px;
+  height: 224px;
+  contain: strict;
   opacity: calc(var(--market-pointer-active, 0) * 0.2);
   mask-image: radial-gradient(
     circle var(--market-pointer-radius, 110px) at
-      var(--market-pointer-x, -200px) var(--market-pointer-y, -200px),
+      112px 112px,
     black 20%,
     transparent 100%
   );

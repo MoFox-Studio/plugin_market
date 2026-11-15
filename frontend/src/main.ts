@@ -6,6 +6,7 @@ import './assets/tokens.css';
 import './assets/main.css';
 import './assets/redesign.css';
 import './assets/editorial.css';
+import './assets/docs-reading.css';
 import { failBoot, finishBoot } from './composables/useLoadingState';
 import { installMarketTooltip } from './directives/marketTooltip';
 

@@ -36,6 +36,7 @@ useMarketPointerReveal((pointer) => {
     if (x >= 0 && y >= 0 && x < bounds.width && y < bounds.height) {
       zone.style.setProperty('--seal-x', x + 'px');
       zone.style.setProperty('--seal-y', y + 'px');
+      zone.style.setProperty('--seal-radius', pointer.radius + 'px');
       zone.classList.add('is-revealing');
       return;
     }
@@ -160,7 +161,7 @@ useMarketPointerReveal((pointer) => {
 }
 .is-revealing .secret-ink {
   clip-path: circle(
-    calc(var(--market-pointer-radius, 110px) * 1.5) at var(--seal-x)
+    calc(var(--seal-radius, 110px) * 1.5) at var(--seal-x)
       var(--seal-y)
   );
 }

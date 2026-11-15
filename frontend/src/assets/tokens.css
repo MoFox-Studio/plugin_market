@@ -11,36 +11,36 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  /* paper / surface — 注意：底色不是纯白，是带 0.8% 蓝偏的暖白 */
-  --paper: #fafbff;
-  --paper-grain: #f0f4fc;
+  /* paper / surface — 白色底纸与清晰的阅读层级 */
+  --paper: #ffffff;
+  --paper-grain: #ffffff;
   --surface: #ffffff;
-  --surface-soft: #f3f7ff;
-  --surface-hover: #eef3fc;
+  --surface-soft: #f0f2f6;
+  --surface-hover: #e1e6ed;
   --surface-elevated: #ffffff;
 
   /* divider */
-  --line: #dbe3f0;
-  --line-soft: #e6ecf5;
-  --line-strong: #c4cfde;
+  --line: #cbd2dc;
+  --line-soft: #dde2e9;
+  --line-strong: #aeb9c8;
 
   /* ink */
-  --ink-900: #0b1220;
-  --ink-700: #1f2a3a;
-  --ink-500: #5a6677;
-  --ink-300: #94a3b8;
-  --ink-200: #b6c1d2;
+  --ink-900: #2c3e50;
+  --ink-700: #3a5169;
+  --ink-500: #4d5e73;
+  --ink-300: #566578;
+  --ink-200: #566578;
   --ink-on-blue: #ffffff;
 
   /* blue (主色) */
-  --blue-50: #f1f8fe;
-  --blue-100: #e8f7fe;
-  --blue-200: #bfe5fb;
-  --blue-300: #7ed0f7;
-  --blue-500: #26a8f1;
-  --blue-600: #0f87cf;
-  --blue-700: #0a5fa0;
-  --blue-900: #072e4e;
+  --blue-50: #eff4ff;
+  --blue-100: #e5edff;
+  --blue-200: #c7d8fa;
+  --blue-300: #90b6fb;
+  --blue-500: #367bf0;
+  --blue-600: #235fb8;
+  --blue-700: #1f56a8;
+  --blue-900: #173b76;
 
   /* 节奏色：使用克制 */
   --coral: #ff5a5f;
@@ -85,15 +85,15 @@
     12px;
 
   /* 字体 */
-  --font-reading: Georgia, 'Noto Serif CJK SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  --font-reading: var(--font-sans);
   --font-editorial:
     'Playfair Display', 'MoFox Editorial SC', 'Noto Serif CJK SC', 'Songti SC',
     'STSong', 'SimSun', Georgia, serif;
   --font-script:
     'Pinyon Script', 'Snell Roundhand', 'Baskerville', Georgia, cursive;
   --font-sans:
-    'Noto Sans SC', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
+    'Noto Sans SC', 'Helvetica Neue', Arial, 'PingFang SC',
+    'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display:
     'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-brand: 'Inter', 'Noto Sans SC', sans-serif;
@@ -108,14 +108,14 @@
   --fs-h2: 20px;
   --fs-h3: 16px;
   --fs-lg: 16px;
-  --fs-base: 14px;
-  --fs-sm: 12.5px;
-  --fs-xs: 11.5px;
-  --fs-mini: 10.5px;
+  --fs-base: 16px;
+  --fs-sm: 14px;
+  --fs-xs: 12px;
+  --fs-mini: 12px;
 
   --lh-tight: 1.12;
   --lh-snug: 1.32;
-  --lh-base: 1.55;
+  --lh-base: 1.6;
   --lh-loose: 1.72;
 
   --letter-tight: -0.012em;
@@ -278,37 +278,37 @@
 }
 
 /* =============================================================
-   Dark mode — 深空蓝（不是 GitHub 黑）
+   Dark mode — 文档站的中性暗色；文字与图层保持清晰层级
    ============================================================= */
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --paper: #0a1220;
-  --paper-grain: #0e1729;
-  --surface: #13203a;
-  --surface-soft: #0f1a30;
-  --surface-hover: #192848;
-  --surface-elevated: #18253f;
+  --paper: #1b1b1f;
+  --paper-grain: #202127;
+  --surface: #202127;
+  --surface-soft: #25262d;
+  --surface-hover: #30313a;
+  --surface-elevated: #282931;
 
-  --line: #243454;
-  --line-soft: #1c2a48;
-  --line-strong: #314870;
+  --line: #40434e;
+  --line-soft: #343640;
+  --line-strong: #656c7a;
 
-  --ink-900: #e6edf6;
-  --ink-700: #c2cee0;
-  --ink-500: #8fa1bb;
-  --ink-300: #5a6c87;
-  --ink-200: #44546f;
-  --ink-on-blue: #0a1220;
+  --ink-900: #eaecef;
+  --ink-700: #c8cdd3;
+  --ink-500: #b3bac4;
+  --ink-300: #a4aebb;
+  --ink-200: #9ca6b3;
+  --ink-on-blue: #1b1b1f;
 
-  --blue-50: #142844;
-  --blue-100: #1a3550;
-  --blue-200: #1f4a7a;
-  --blue-300: #2c6ea8;
-  --blue-500: #5fb8ff;
-  --blue-600: #7ec6ff;
-  --blue-700: #a5d8ff;
-  --blue-900: #dcedff;
+  --blue-50: #1d2a40;
+  --blue-100: #233752;
+  --blue-200: #2b4d77;
+  --blue-300: #3c6b9d;
+  --blue-500: #4a90e2;
+  --blue-600: #8bb9f2;
+  --blue-700: #9ac4ff;
+  --blue-900: #d3e6ff;
 
   --coral: #ff7a7f;
   --botanical-ink: #f1a197;
@@ -342,7 +342,7 @@
   --ring-strong: 0 0 0 3px var(--blue-200);
 
   /* 深色下别名 */
-  --color-fg-inverse: #0a1220;
+  --color-fg-inverse: #1b1b1f;
   --color-brand-halo: rgba(95, 184, 255, 0.18);
   --color-brand-halo-soft: rgba(95, 184, 255, 0.1);
   --color-brand-halo-strong: rgba(95, 184, 255, 0.32);

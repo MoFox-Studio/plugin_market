@@ -128,7 +128,8 @@ const tags = computed(() => [
   display: flex;
   flex-direction: column;
   min-width: 0;
-  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
   padding: 24px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -196,7 +197,8 @@ const tags = computed(() => [
   gap: 5px;
   color: var(--ink-500);
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.6;
 }
 .plugin-card-trust i {
   width: 4px;
@@ -229,27 +231,27 @@ const tags = computed(() => [
   overflow-wrap: anywhere;
 }
 .plugin-card-heading > span {
-  font: 10px var(--font-mono);
+  min-width: 0;
+  max-width: 100%;
+  font: 12px/1.6 var(--font-mono);
   color: var(--ink-500);
+  overflow-wrap: anywhere;
 }
 .plugin-card-author {
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--ink-500);
   margin-top: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .plugin-card-summary {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.8;
   color: var(--ink-500);
-  min-height: 46px;
+  min-height: 3.6em;
+  flex-shrink: 0;
   margin: 17px 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .plugin-card-tags {
   display: flex;
@@ -259,15 +261,14 @@ const tags = computed(() => [
   margin-bottom: 22px;
 }
 .plugin-card-tags span {
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.5;
   padding: 3px 7px;
   border: 1px solid var(--line-soft);
   background: var(--surface-soft);
   color: var(--ink-500);
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .plugin-card-footer {
   margin-top: auto;
@@ -278,7 +279,7 @@ const tags = computed(() => [
   border-top: 1px solid var(--line-soft);
   padding-top: 15px;
   color: var(--ink-500);
-  font: 11px var(--font-mono);
+  font: 12px/1.6 var(--font-mono);
 }
 .plugin-card-footer > span {
   display: inline-flex;
@@ -289,7 +290,7 @@ const tags = computed(() => [
 .plugin-card-footer time {
   margin-left: auto;
   white-space: nowrap;
-  font-size: 10px;
+  font-size: 12px;
 }
 .plugin-card-rating {
   color: var(--warning-ink);

@@ -298,6 +298,8 @@ async function undoFeedback() {
   pointer-events: none;
 }
 .recommendation-card {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--line);
   background: var(--surface);
   min-width: 0;
@@ -313,7 +315,8 @@ async function undoFeedback() {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  font-size: 9px;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--ink-500);
   letter-spacing: 0.04em;
 }
@@ -353,8 +356,18 @@ async function undoFeedback() {
   background: var(--surface-soft);
 }
 .recommendation-card__link {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
   padding: 16px 20px 20px;
+  color: var(--ink-900);
+}
+.recommendation-card__link:hover h3,
+.recommendation-card__link:focus-visible h3 {
+  color: var(--blue-700);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .recommendation-identity {
   display: flex;
@@ -384,28 +397,21 @@ async function undoFeedback() {
   line-height: 1.4;
   letter-spacing: -0.02em;
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .recommendation-identity p {
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--ink-500);
   margin: 4px 0 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .recommendation-summary {
-  color: var(--ink-500);
-  font-size: 12px;
+  color: var(--ink-700);
+  font-size: 14px;
   line-height: 1.8;
   margin: 18px 0;
-  min-height: 44px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .recommendation-reasons {
   display: flex;
@@ -415,21 +421,26 @@ async function undoFeedback() {
   margin-bottom: 20px;
 }
 .recommendation-reasons span {
-  font-size: 9px;
+  font-size: 12px;
+  line-height: 1.6;
   background: var(--blue-50);
   color: var(--blue-700);
   padding: 3px 6px;
+  overflow-wrap: anywhere;
 }
 .recommendation-meta {
   display: flex;
-  gap: 16px;
-  font: 10px var(--font-mono);
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: auto;
+  font: 12px/1.6 var(--font-mono);
   color: var(--ink-500);
 }
 .recommendation-meta > span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  overflow-wrap: anywhere;
 }
 .recommendation-number {
   margin-left: auto;
@@ -437,12 +448,14 @@ async function undoFeedback() {
 }
 .recommendation-compatibility {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 20px;
   border-top: 1px solid var(--line-soft);
-  font: 9px var(--font-mono);
+  font: 12px/1.6 var(--font-mono);
   color: var(--ink-500);
+  overflow-wrap: anywhere;
 }
 .recommendation-state {
   text-align: center;
@@ -463,6 +476,9 @@ async function undoFeedback() {
   display: inline-block;
   margin: 0 20px;
   font-size: 12px;
+  color: var(--blue-700);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .recommendation-error {
   color: var(--danger-ink);
@@ -482,7 +498,8 @@ async function undoFeedback() {
   text-decoration: underline;
 }
 .recommendation-end {
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.7;
   color: var(--ink-500);
   margin: 16px 0 0;
 }

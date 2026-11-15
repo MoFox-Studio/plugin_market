@@ -17,10 +17,11 @@ const BOOT_REVEAL_MS = 200;
 let finishRequested = false;
 let holdTimer: number | undefined;
 let revealTimer: number | undefined;
+let cancelSkip: (() => void) | undefined;
 
 declare global {
   interface Window {
-    __mofoxBoot?: { startedAt: number; stopWatch(): void; fail(): void };
+    __mofoxBoot?: { startedAt: number; skipRequested?: boolean; stopWatch(): void; fail(): void };
   }
 }
 
@@ -68,12 +69,19 @@ export function finishBoot() {
   watch?.stopWatch();
 
   function enterApp() {
+    if (screen?.dataset.phase === 'failed') return;
+    window.clearTimeout(holdTimer);
+    window.clearTimeout(revealTimer);
+    cancelSkip?.();
+    cancelSkip = undefined;
     screen?.remove();
     document.getElementById('app')?.removeAttribute('inert');
     delete window.__mofoxBoot;
     booting.value = false;
   }
-  if (!screen) return enterApp();
+  if (!screen || watch?.skipRequested) return enterApp();
+  window.addEventListener('mofox:skip-intro', enterApp, { once: true });
+  cancelSkip = () => window.removeEventListener('mofox:skip-intro', enterApp);
 
   const plate = screen;
   function reveal() {
@@ -93,6 +101,8 @@ export function finishBoot() {
 
 export function failBoot() {
   if (!booting.value) return;
+  cancelSkip?.();
+  cancelSkip = undefined;
   window.clearTimeout(holdTimer);
   window.clearTimeout(revealTimer);
   const screen = document.getElementById('boot-screen');

@@ -1,12 +1,22 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue';
+import { computed, inject, ref } from 'vue';
 import { routeLocationKey } from 'vue-router';
 import { SHEET_HEIGHT, useSurveyWorld } from '@/composables/useSurveyWorld';
 import plates from '@/assets/survey-plates.svg?no-inline';
 import { surveyMiniatures } from '@/composables/surveyMiniatures';
 
 const route = inject(routeLocationKey, null);
-const { sheets, dimensions, viewBox } = useSurveyWorld();
+const sheetElement = ref<SVGSVGElement | null>(null);
+let worldPosition = { x: 0, y: 0 };
+let lensOrigin = { x: 0, y: 0 };
+function paintPosition() {
+  if (sheetElement.value) sheetElement.value.style.transform = `translate3d(${worldPosition.x - lensOrigin.x}px, ${worldPosition.y - lensOrigin.y}px, 0)`;
+}
+const { sheets, dimensions, viewBox } = useSurveyWorld((position) => {
+  worldPosition = position;
+  paintPosition();
+});
+defineExpose({ setLensPosition(x: number, y: number) { lensOrigin = { x, y }; paintPosition(); } });
 const editions = {
   home: { symbol: 'pass', code: 'RIDGE', x: 1110, y: 285 },
   catalog: { symbol: 'chart', code: 'ATLAS', x: 1050, y: 250 },
@@ -43,7 +53,7 @@ const marks = computed(() => sheets.value.map((sheet, i) => {
 </script>
 <template>
   <div class="survey-ink-window" aria-hidden="true" :data-edition="edition.code">
-    <svg class="survey-ink-sheet" :viewBox="viewBox" :style="dimensions" fill="none">
+    <svg ref="sheetElement" class="survey-ink-sheet" :viewBox="viewBox" :style="dimensions" fill="none">
       <g v-for="mark in marks" :key="mark.sheet" :transform="`translate(0 ${mark.top})`">
         <use class="survey-discovery" :href="`${plates}#${mark.symbol}`" :x="mark.x - 110" :y="mark.y - 58" width="220" height="116" :data-map-x="mark.x" :data-map-y="mark.sheet * SHEET_HEIGHT + mark.y" />
         <g v-for="site in mark.miniatures" :key="site.id" :transform="`translate(${site.x} ${site.y})`">
@@ -66,7 +76,7 @@ const marks = computed(() => sheets.value.map((sheet, i) => {
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-  clip-path: circle(var(--market-pointer-radius, 0px) at var(--market-pointer-x, -200px) var(--market-pointer-y, -200px));
+  clip-path: circle(var(--market-pointer-radius, 0px) at 112px 112px);
   color: var(--blue-700);
   opacity: .66;
 }
@@ -75,7 +85,7 @@ const marks = computed(() => sheets.value.map((sheet, i) => {
   top: 0;
   left: 0;
   max-width: none;
-  transform: translate3d(var(--survey-sheet-x, 0px), var(--survey-sheet-y, 0px), 0);
+  will-change: transform;
 }
 :global(.market-pointer-reveal[data-surface='paper'] .survey-ink-window) { opacity: .19; }
 :global(.market-pointer-reveal[data-surface='control'] .survey-ink-window) { visibility: hidden; }

@@ -1,0 +1,219 @@
+/* Documentation typography for resource browsing and reading surfaces. The
+   Gazette masthead, hero lettering, author portrait and artwork keep their type. */
+.market-shell {
+  --font-art-reading: Georgia, 'Noto Serif CJK SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  --font-docs-reading:
+    'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+}
+
+.market-shell #main-content {
+  font-family: var(--font-docs-reading);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.market-shell .market-stage .page-wrap h1,
+.market-shell .market-stage .catalog-masthead .masthead-title h1,
+.market-shell .market-stage .dossier-lead .lead-text h1,
+.market-shell .market-stage .catalog-frame .catalog-heading h1 {
+  font-family: var(--font-docs-reading);
+  font-size: clamp(28px, 3vw, 32px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+.market-shell .market-stage .page-wrap h2,
+.market-shell .market-stage .catalog-frame .catalog-section-heading h2,
+.market-shell .market-stage .catalog-results .workspace-result-head h2,
+.market-shell .market-stage .catalog-frame .dossier-chapter h2,
+.market-shell .market-stage .discovery-body .section-title h2,
+.market-shell .market-stage .recommendation-section .recommendation-head h2,
+.market-shell .market-stage .category-index .category-index__head h2,
+.market-shell .market-stage .market-topics .market-topics__head h2,
+.market-shell .market-stage .plugin-shelf > header h2 {
+  font-family: var(--font-docs-reading);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+}
+
+.market-shell .market-stage .page-wrap h3,
+.market-shell .market-stage .catalog-frame .catalog-panel h3,
+.market-shell .market-stage .plugin-card .plugin-card-heading h3,
+.market-shell .market-stage .edition-entry .entry-copy h3,
+.market-shell .market-stage .recommendation-card .recommendation-identity h3,
+.market-shell .market-stage .release-list .release-row h3 {
+  font-family: var(--font-docs-reading);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+}
+
+.market-shell .market-stage .edition-entry.is-lead .entry-copy h3 {
+  font-size: 24px;
+  line-height: 1.35;
+}
+
+.market-shell .market-stage .catalog-frame .catalog-section-heading,
+.market-shell .market-stage .catalog-results .workspace-result-head {
+  gap: 16px;
+  margin-block: 32px 20px;
+}
+
+.market-shell .market-stage .catalog-masthead {
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.market-shell .market-stage .catalog-masthead .masthead-title h1 {
+  margin-block: 8px 12px;
+}
+
+.market-shell .market-stage .catalog-frame .catalog-toolbar {
+  row-gap: 12px;
+  column-gap: 20px;
+}
+
+.market-shell .market-stage .catalog-frame .catalog-controls {
+  gap: 8px 12px;
+}
+
+.market-shell .market-stage .plugin-card,
+.market-shell .market-stage .recommendation-section .recommendation-card,
+.market-shell .market-stage .catalog-frame .catalog-panel:not(.dossier-chapter),
+.market-shell .market-stage .me-page .me-card,
+.market-shell .market-stage .profile-page .profile-card,
+.market-shell .market-stage .inbox-page .inbox-panel {
+  border-color: var(--line);
+  border-radius: 8px;
+}
+
+.market-shell .market-stage .catalog-frame .edition-entry {
+  border-bottom-color: var(--line);
+  border-radius: 6px;
+}
+
+/* Override the legacy dossier panel typography in reading sections. */
+.market-shell .market-stage .catalog-frame.dossier-page .catalog-panel h2 {
+  font-family: var(--font-docs-reading);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.market-shell .market-stage .catalog-frame .readme-document .markdown-content {
+  font-family: var(--font-docs-reading);
+  line-height: 1.75;
+}
+
+.market-shell .market-stage .catalog-frame .readme-document .markdown-content :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: 32px 16px;
+  font-family: var(--font-docs-reading);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+.market-shell .market-stage .catalog-frame .readme-document .markdown-content h1 {
+  font-size: 28px;
+}
+
+.market-shell .market-stage .catalog-frame .readme-document .markdown-content h2 {
+  font-size: 24px;
+}
+
+.market-shell .market-stage .catalog-frame .readme-document .markdown-content h3 {
+  font-size: 20px;
+}
+
+.market-shell .market-stage .catalog-frame .readme-document .markdown-content :is(h4, h5, h6) {
+  font-size: 18px;
+}
+
+.market-shell .market-stage .catalog-frame .readme-document .markdown-content :is(p, ul, ol) {
+  margin-block: 16px;
+  color: var(--ink-700);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.market-shell .market-stage .catalog-frame .readme-document .markdown-content li + li {
+  margin-top: 6px;
+}
+
+.market-shell .market-stage .catalog-frame .dossier-navigation__label,
+.market-shell .market-stage .catalog-frame .dossier-navigation__copy strong,
+.market-shell .market-stage .catalog-frame .catalog-tabs button,
+.market-shell .market-stage .catalog-frame .catalog-controls label,
+.market-shell .market-stage .catalog-frame .catalog-segment button,
+.market-shell .navigation-rail .rail-link > span,
+.market-shell .market-stage .market-header .header-search input {
+  font-family: var(--font-docs-reading);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.market-shell .market-stage .catalog-frame .dossier-navigation__copy strong {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.market-shell .market-stage .catalog-frame .catalog-controls label,
+.market-shell .market-stage .catalog-frame .catalog-segment button {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.market-shell .market-stage .catalog-frame .catalog-controls label,
+.market-shell .market-stage .catalog-frame .catalog-segment button:not(.active) {
+  color: var(--ink-700);
+}
+
+.market-shell .navigation-rail .rail-link > span {
+  font-size: 14px;
+}
+
+.market-shell .navigation-rail .rail-link:not(.is-active):not(.router-link-active) > span {
+  color: var(--ink-700);
+}
+
+.market-shell .market-stage .catalog-frame .catalog-search,
+.market-shell .market-stage .catalog-frame .catalog-segment,
+.market-shell .market-stage .catalog-frame .market-select-trigger {
+  border-radius: 6px;
+}
+
+.market-shell .market-stage .catalog-frame .catalog-search input::placeholder,
+.market-shell .market-stage .market-header .header-search input::placeholder {
+  color: var(--ink-500);
+  opacity: 1;
+}
+
+.market-shell .market-stage .catalog-frame .readme-document .document-outline a {
+  font-family: var(--font-docs-reading);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@media (max-width: 620px) {
+  .market-shell .market-stage .catalog-frame .catalog-section-heading,
+  .market-shell .market-stage .catalog-results .workspace-result-head {
+    margin-block: 24px 16px;
+  }
+
+  .market-shell .market-stage .catalog-frame .dossier-navigation__copy strong {
+    font-size: 13px;
+  }
+}
+
+/* Collector plate lettering keeps its original serif voice. */
+.market-shell .proof-byline span,
+.market-shell .print-latin,
+.market-shell .print-volume b,
+.market-shell .print-collection,
+.market-shell .print-artwork figcaption {
+  --font-reading: var(--font-art-reading);
+}

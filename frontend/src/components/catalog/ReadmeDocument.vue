@@ -124,10 +124,11 @@ watch(
   gap: 12px;
   padding: 14px 16px;
   font-size: 12px;
+  line-height: 1.6;
   text-align: left;
 }
 .document-outline small {
-  font: 8px var(--font-mono);
+  font: 12px/1.6 var(--font-mono);
   margin-left: 10px;
   color: var(--ink-500);
 }
@@ -137,9 +138,9 @@ watch(
   padding: 6px 16px 18px;
 }
 .document-outline a {
-  color: var(--blue-600);
+  color: var(--blue-700);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 .document-outline .is-subheading {
@@ -154,7 +155,7 @@ watch(
   padding: 20px;
   border: 1px solid var(--line);
   background: var(--surface-soft);
-  font: 12px/1.95 var(--font-mono);
+  font: 15px/1.85 var(--font-mono);
   color: var(--ink-700);
   tab-size: 2;
 }
@@ -167,6 +168,23 @@ watch(
 .source-heading {
   color: var(--blue-700);
   font-weight: 600;
+}
+.readme-document .markdown-content {
+  font: 400 16px/1.85 var(--font-reading);
+  color: var(--ink-700);
+  overflow-wrap: anywhere;
+}
+.markdown-content :deep(pre) {
+  font: 15px/1.85 var(--font-mono);
+  color: var(--ink-700);
+  background: var(--surface-soft);
+  overflow-x: auto;
+}
+.markdown-content :deep(code) {
+  font-size: 0.95em;
+}
+.markdown-content :deep(pre code) {
+  font: inherit;
 }
 .markdown-content :deep(h1),
 .markdown-content :deep(h2),
@@ -201,7 +219,7 @@ watch(
   text-align: left;
 }
 .markdown-content :deep(a) {
-  color: var(--blue-600);
+  color: var(--blue-700);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
