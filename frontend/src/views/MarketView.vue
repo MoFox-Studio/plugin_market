@@ -90,8 +90,8 @@ async function load() {
   if (tag.value) params.set('tag', tag.value);
   if (trust.value) params.set('trust_level', trust.value);
   const key = route.fullPath;
-  await results.load(async () => ({
-    ...await api.get<{ items: Plugin[]; total: number }>(`/api/v1/plugins?${params}`),
+  await results.load(async (signal) => ({
+    ...await api.get<{ items: Plugin[]; total: number }>(`/api/v1/plugins?${params}`, { signal }),
     loadedPage: requestedPage,
   }));
   if (key === route.fullPath && !results.loading && !results.error && page.value > totalPages.value)

@@ -65,7 +65,7 @@ async function load() {
       page_size: pageSize,
     },
     key = route.fullPath;
-  await results.load(async () => ({ ...await api.skills.list(params), loadedPage: params.page }));
+  await results.load(async (signal) => ({ ...await api.skills.list(params, { signal }), loadedPage: params.page }));
   if (key === route.fullPath && !results.loading && !results.error && page.value > totalPages.value)
     void router.replace({
       query: { ...route.query, page: String(totalPages.value) },
@@ -81,8 +81,8 @@ watch(
   { immediate: true },
 );
 onMounted(() => {
-  void categories.load(api.skills.categories);
-  void tags.load(api.skills.tags);
+  void categories.load((signal) => api.skills.categories({ signal }));
+  void tags.load((signal) => api.skills.tags({ signal }));
 });
 </script>
 <template>
@@ -195,8 +195,8 @@ onMounted(() => {
           筛选索引暂未同步。<button
             class="catalog-link"
             @click="
-              categories.load(api.skills.categories);
-              tags.load(api.skills.tags);
+              categories.load((signal) => api.skills.categories({ signal }));
+              tags.load((signal) => api.skills.tags({ signal }));
             "
           >
             重新加载

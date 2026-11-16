@@ -386,20 +386,29 @@ export const api = {
   },
 
   skills: {
-    list(params?: Record<string, QueryValue>): Promise<SkillListResponse> {
-      return get<SkillListResponse>(withQuery('/api/v1/skills', params));
+    list(
+      params?: Record<string, QueryValue>,
+      options?: RequestOptions,
+    ): Promise<SkillListResponse> {
+      return get<SkillListResponse>(withQuery('/api/v1/skills', params), options);
     },
-    get(skillId: string): Promise<Skill> {
-      return get<Skill>(`/api/v1/skills/${encodeURIComponent(skillId)}`);
+    get(skillId: string, options?: RequestOptions): Promise<Skill> {
+      return get<Skill>(`/api/v1/skills/${encodeURIComponent(skillId)}`, options);
     },
-    versions(skillId: string): Promise<SkillVersionListResponse> {
+    versions(skillId: string, options?: RequestOptions): Promise<SkillVersionListResponse> {
       return get<SkillVersionListResponse>(
         `/api/v1/skills/${encodeURIComponent(skillId)}/versions`,
+        options,
       );
     },
-    version(skillId: string, version: string): Promise<SkillVersion> {
+    version(
+      skillId: string,
+      version: string,
+      options?: RequestOptions,
+    ): Promise<SkillVersion> {
       return get<SkillVersion>(
         `/api/v1/skills/${encodeURIComponent(skillId)}/versions/${encodeURIComponent(version)}`,
+        options,
       );
     },
     downloadUrl(skillId: string, version: string): string {
@@ -408,12 +417,14 @@ export const api = {
     comments(
       skillId: string,
       params?: Record<string, QueryValue>,
+      options?: RequestOptions,
     ): Promise<SkillCommentListResponse> {
       return get<SkillCommentListResponse>(
         withQuery(
           `/api/v1/skills/${encodeURIComponent(skillId)}/comments`,
           params,
         ),
+        options,
       );
     },
     postComment(
@@ -430,9 +441,10 @@ export const api = {
         `/api/v1/skills/${encodeURIComponent(skillId)}/comments/${commentId}`,
       );
     },
-    rating(skillId: string): Promise<SkillRatingInfo> {
+    rating(skillId: string, options?: RequestOptions): Promise<SkillRatingInfo> {
       return get<SkillRatingInfo>(
         `/api/v1/skills/${encodeURIComponent(skillId)}/rating`,
+        options,
       );
     },
     postRating(skillId: string, score: number): Promise<SkillRatingInfo> {
@@ -477,16 +489,16 @@ export const api = {
     delete(skillId: string): Promise<void> {
       return del(`/api/v1/skills/${encodeURIComponent(skillId)}`);
     },
-    my(): Promise<Skill[]> {
-      return get<{ items: Skill[] }>('/api/v1/me/skills').then((r) => r.items);
+    my(options?: RequestOptions): Promise<Skill[]> {
+      return get<{ items: Skill[] }>('/api/v1/me/skills', options).then((r) => r.items);
     },
-    categories(): Promise<string[]> {
-      return get<{ items: string[] }>('/api/v1/skills/categories').then(
+    categories(options?: RequestOptions): Promise<string[]> {
+      return get<{ items: string[] }>('/api/v1/skills/categories', options).then(
         (r) => r.items,
       );
     },
-    tags(): Promise<string[]> {
-      return get<{ items: string[] }>('/api/v1/skills/tags').then(
+    tags(options?: RequestOptions): Promise<string[]> {
+      return get<{ items: string[] }>('/api/v1/skills/tags', options).then(
         (r) => r.items,
       );
     },

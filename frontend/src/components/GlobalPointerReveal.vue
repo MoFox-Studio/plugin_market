@@ -1,10 +1,33 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useMarketPointerReveal } from '@/composables/useMarketPointerReveal';
 import SurveyOverprint from './SurveyOverprint.vue';
 
 const lens = ref<HTMLElement | null>(null);
 const overprint = ref<InstanceType<typeof SurveyOverprint> | null>(null);
+// CSS already hides this artwork on touch/reduced-motion devices. Do not build
+// its external SVG use trees (and fetch every referenced atlas) in that mode.
+const artworkEnabled = ref(false);
+let artworkMedia: MediaQueryList | undefined;
+let artworkPreference: MutationObserver | undefined;
+function syncArtwork() {
+  artworkEnabled.value = Boolean(artworkMedia?.matches) &&
+    document.documentElement.dataset.reducedMotion !== 'reduce';
+}
+onMounted(() => {
+  artworkMedia = window.matchMedia('(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)');
+  syncArtwork();
+  artworkMedia.addEventListener('change', syncArtwork);
+  artworkPreference = new MutationObserver(syncArtwork);
+  artworkPreference.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-reduced-motion'],
+  });
+});
+onBeforeUnmount(() => {
+  artworkMedia?.removeEventListener('change', syncArtwork);
+  artworkPreference?.disconnect();
+});
 useMarketPointerReveal((state) => {
   const element = lens.value;
   if (!element) return;
@@ -18,7 +41,7 @@ useMarketPointerReveal((state) => {
 </script>
 <template>
   <div ref="lens" class="market-pointer-reveal" aria-hidden="true">
-    <SurveyOverprint ref="overprint" />
+    <SurveyOverprint v-if="artworkEnabled" ref="overprint" />
     <div class="market-pointer-reveal__ring" />
   </div>
 </template>

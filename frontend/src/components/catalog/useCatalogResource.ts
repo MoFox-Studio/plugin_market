@@ -10,28 +10,44 @@ export function useCatalogResource<T>(initial: () => T) {
     status: 0,
   });
   let attempt = 0;
-  function reset() {
+  let cancelPending: (() => void) | undefined;
+  function invalidate() {
     attempt++;
+    cancelPending?.();
+    cancelPending = undefined;
+  }
+  function reset() {
+    invalidate();
     state.data = initial();
     state.loading = false;
     state.error = '';
     state.status = 0;
   }
-  async function load(fetcher: () => Promise<T>) {
-    const current = ++attempt;
+  async function load(fetcher: (signal: AbortSignal) => Promise<T>) {
+    invalidate();
+    const current = attempt;
+    const controller = new AbortController();
     state.loading = true;
     state.error = '';
     state.status = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const interrupted = new Promise<never>((_, reject) => {
+      cancelPending = () => {
+        clearTimeout(timer);
+        reject(new DOMException('请求已取消。', 'AbortError'));
+        controller.abort();
+      };
+      // Start before fetcher/API timers, and reject before aborting the transport.
+      // A timeout must remain an error even when abort immediately rejects fetch.
+      timer = setTimeout(() => {
+        reject(new ApiError('请求超时，请重试。', 408, 'REQUEST_TIMEOUT'));
+        controller.abort();
+      }, 12000);
+    });
     try {
       const result = await Promise.race([
-        fetcher(),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error('请求超时，请重试。')),
-            12000,
-          );
-        }),
+        interrupted,
+        fetcher(controller.signal),
       ]);
       if (current === attempt) state.data = result;
     } catch (error) {
@@ -46,12 +62,16 @@ export function useCatalogResource<T>(initial: () => T) {
               ? error.message
               : '暂时无法加载，请重试。';
     } finally {
-      if (timer) clearTimeout(timer);
-      if (current === attempt) state.loading = false;
+      clearTimeout(timer);
+      if (current === attempt) {
+        cancelPending = undefined;
+        state.loading = false;
+      }
     }
   }
   onBeforeUnmount(() => {
-    attempt++;
+    invalidate();
+    state.loading = false;
   });
   return Object.assign(state, { load, reset });
 }
