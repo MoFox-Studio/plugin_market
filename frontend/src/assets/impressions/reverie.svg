@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg">
-  <!-- Receding gate, two crane silhouettes and broken tidal reflections. -->
+  <!-- 隐向远处的鸟居、两只鹤的剪影，以及破碎的潮水倒影。 -->
   <symbol id="torii" viewBox="0 0 640 480">
     <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="438" cy="136" r="65" stroke-width=".7" opacity=".35"/>
@@ -57,7 +57,7 @@
       <path d="M477 363h60m-30 9h50m-88-17h34m-239 77h88" stroke-width=".5" opacity=".4"/>
     </g>
   </symbol>
-  <!-- Open-work pocket watch: engraved bezel, zodiac dial, crown and chain. -->
+  <!-- 镂空怀表：镌刻的表圈、黄道十二宫表盘、表冠与表链。 -->
   <symbol id="pocket-sky" viewBox="0 0 640 480">
     <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
       <g stroke-width="1.3" opacity=".8">
@@ -171,7 +171,7 @@
       <path d="M147 360c-10 14-12 26-6 39 8 18 32 21 49 13m-43-50c-17 18-16 46 7 56m18-15c-17 1-22-11-15-22m16 23 27-9-15 23" stroke-width="1.2" opacity=".75"/>
     </g>
   </symbol>
-<!-- Field-only discoveries retain simple silhouettes at map scale. -->
+<!-- 仅在野外出现的发现物，在地图比例下保留简洁剪影。 -->
   <symbol id="airship" viewBox="0 0 640 480">
     <g fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round">
       <g transform="rotate(-12 320 220)">

@@ -1,4 +1,4 @@
-"""Bounded request/response contracts for the independent recommendation API."""
+"""独立推荐 API 的受限请求与响应契约。"""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class RecommendationInterests(StrictModel):
 
 
 class RecommendationFilters(StrictModel):
-    """Categories match any; tags match all; separate from soft interests."""
+    """分类匹配任意项，标签匹配所有项，独立于软性兴趣偏好。"""
 
     categories: list[Label] = Field(default_factory=list, max_length=10)
     tags: list[Label] = Field(default_factory=list, max_length=10)
@@ -54,18 +54,18 @@ class RecommendationEnvironment(StrictModel):
         if value is None:
             return None
         if not re.fullmatch(r"v?\d+(?:\.\d+){0,3}(?:(?:a|b|rc)\d+|-(?:alpha|beta|rc)[.-]?\d+)?(?:\+[a-zA-Z0-9]+(?:[.-][a-zA-Z0-9]+)*)?", value):
-            raise ValueError("Version must be a numeric release, for example 1.2.0.")
+            raise ValueError("版本必须使用数字版本号，例如 1.2.0。")
         try:
             Version(value)
         except InvalidVersion as exc:
-            raise ValueError("Invalid version.") from exc
+            raise ValueError("版本无效。") from exc
         return value
 
     @field_validator("platform")
     @classmethod
     def platform_format(cls, value: str | None) -> str | None:
         if value is not None and not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,39}", value):
-            raise ValueError("Invalid platform identifier.")
+            raise ValueError("平台标识无效。")
         return value.lower() if value else value
 
 
@@ -83,9 +83,9 @@ class RecommendationRequest(StrictModel):
     @model_validator(mode="after")
     def validate_placement(self) -> RecommendationRequest:
         if self.placement == "detail" and not self.context_plugin_id:
-            raise ValueError("Detail recommendations require context_plugin_id.")
+            raise ValueError("详情页推荐必须提供 context_plugin_id。")
         if self.placement == "home" and self.context_plugin_id:
-            raise ValueError("context_plugin_id is only accepted for detail recommendations.")
+            raise ValueError("仅详情页推荐接受 context_plugin_id。")
         return self
 
 
@@ -141,10 +141,10 @@ class RecommendationFeedback(StrictModel):
         category_action = self.type in {"reduce_category", "restore_category"}
         if category_action:
             if not self.category or self.plugin_id is not None:
-                raise ValueError("Category feedback requires category only.")
+                raise ValueError("分类反馈必须且只能提供 category。")
             self.category = self.category.casefold()
         elif not self.plugin_id or self.category is not None:
-            raise ValueError("Plugin feedback requires plugin_id only.")
+            raise ValueError("插件反馈必须且只能提供 plugin_id。")
         return self
 
 

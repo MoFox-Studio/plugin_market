@@ -6,9 +6,8 @@ interface LogoPoints {
   alphas: Float32Array;
 }
 
-// Source pixels and their linear colors are immutable. Reuse the two original
-// sampling densities across route visits instead of decoding and sampling the
-// same logo for every WebGL scene.
+// 源像素及其线性颜色不可变。跨路由访问复用原有的两种采样密度，
+// 避免为每个 WebGL 场景重复解码和采样同一标志。
 let logoImage: Promise<HTMLImageElement> | null = null;
 const pointCache = new Map<number, LogoPoints>();
 function loadLogo(): Promise<HTMLImageElement> {
@@ -21,7 +20,7 @@ function loadLogo(): Promise<HTMLImageElement> {
       };
       image.onerror = () => {
         image.onload = image.onerror = null;
-        reject(new Error('Logo unavailable'));
+        reject(new Error('标志图像不可用'));
       };
       image.src = '/logo.png';
     }).catch((error) => {
@@ -38,7 +37,7 @@ function logoPoints(image: HTMLImageElement, width: number, T: ThreeModule): Log
   sample.width = width;
   sample.height = Math.round((width * image.naturalHeight) / image.naturalWidth);
   const context = sample.getContext('2d', { willReadFrequently: true });
-  if (!context) throw new Error('Logo sampling unavailable');
+  if (!context) throw new Error('标志图像采样不可用');
   context.drawImage(image, 0, 0, sample.width, sample.height);
   const pixels = context.getImageData(0, 0, sample.width, sample.height).data;
   const positions: number[] = [], colors: number[] = [], alphas: number[] = [];
@@ -118,12 +117,12 @@ onMounted(() => {
     if (initializing || render || failed || !canAnimate()) return;
     initializing = true;
     try {
-      // Network fetches are independent; start both without serializing them.
+      // 两个网络请求互不依赖，应并发启动而非串行执行。
       const [image, T] = await Promise.all([loadLogo(), import('three')]);
       if (!canAnimate()) return;
 
-      // Every particle comes from the original PNG's alpha and RGB pixels.
-      // No hand-drawn outline, replacement palette or generated fox geometry.
+      // 每个粒子都来自原始 PNG 像素的透明度和 RGB 颜色。
+      // 不使用手绘轮廓、替代调色板或生成的狐狸几何模型。
       const width = window.innerWidth < 760 ? 88 : 128;
       const { positions, colors, alphas } = logoPoints(image, width, T);
       if (!positions.length) return;
@@ -209,8 +208,8 @@ onMounted(() => {
       let resizePending = true;
       let renderedWidth = 0, renderedHeight = 0;
       function resize() {
-        // ResizeObserver can fire repeatedly with the same content size. The
-        // next normal animation frame applies one resize and performs one draw.
+        // 内容尺寸相同时，ResizeObserver 也可能重复触发。
+        // 下一次常规动画帧只调整一次尺寸并绘制一次。
         resizePending = true;
       }
       function applyResize() {

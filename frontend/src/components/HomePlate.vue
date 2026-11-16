@@ -8,7 +8,7 @@ const FoxPointCloud = defineAsyncComponent(() => import('./FoxPointCloud.vue'));
   <figure class="home-plate">
     <div class="plate-picture"><FoxPointCloud /></div>
     <figcaption>
-      <span class="plate-index">图版一</span><i lang="en">MoFox in Blue</i>
+      <span class="plate-index">图版一</span><i lang="zh-CN">蓝调 MoFox</i>
       <span class="plate-index">社区图录</span>
     </figcaption>
   </figure>

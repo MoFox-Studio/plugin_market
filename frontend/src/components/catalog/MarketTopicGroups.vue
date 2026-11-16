@@ -11,7 +11,7 @@ const props = withDefaults(
 );
 defineEmits<{ 'update:modelValue': [tag: string] }>();
 
-// These groups organize existing tags; they are never sent to the API as filters.
+// 这些分组仅用于整理现有标签，不会作为筛选条件发送给 API。
 const topics = [
   {
     id: 'conversation',

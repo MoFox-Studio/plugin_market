@@ -192,7 +192,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onKeyup(event: KeyboardEvent): void {
-  // Text changes are handled by input. Refresh only when the caret moves.
+  // 文本变化由 input 事件处理；此处仅在光标移动时刷新。
   if (
     !event.isComposing &&
     ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)

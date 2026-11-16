@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for the plugin market backend."""
+"""插件市场后端的 SQLAlchemy ORM 模型。"""
 
 from __future__ import annotations
 
@@ -12,17 +12,16 @@ from plugin_market_backend.enums import AuthorType, PluginStatus, ReviewAction, 
 
 
 def utc_now() -> datetime:
-    """Return the current UTC datetime."""
-
+    """返回当前 UTC 日期时间。"""
     return datetime.now(timezone.utc)
 
 
 class Base(DeclarativeBase):
-    """Base class for all ORM models."""
+    """所有 ORM 模型的基类。"""
 
 
 class AuthorORM(Base):
-    """Author or organization identity bound to GitHub."""
+    """绑定 GitHub 的作者或组织身份。"""
 
     __tablename__ = "authors"
 
@@ -41,7 +40,7 @@ class AuthorORM(Base):
 
 
 class AuthSessionORM(Base):
-    """Browser session created from GitHub OAuth."""
+    """通过 GitHub OAuth 创建的浏览器会话。"""
 
     __tablename__ = "auth_sessions"
 
@@ -53,7 +52,7 @@ class AuthSessionORM(Base):
 
 
 class OAuthStateORM(Base):
-    """One-time OAuth state value for CSRF protection."""
+    """用于 CSRF 防护的一次性 OAuth state 值。"""
 
     __tablename__ = "oauth_states"
 
@@ -64,7 +63,7 @@ class OAuthStateORM(Base):
 
 
 class PluginORM(Base):
-    """Market plugin record."""
+    """市场插件记录。"""
 
     __tablename__ = "plugins"
     __table_args__ = (
@@ -97,7 +96,7 @@ class PluginORM(Base):
 
 
 class PluginMaintainerORM(Base):
-    """Plugin maintainer mapping."""
+    """插件与维护者的关联记录。"""
 
     __tablename__ = "plugin_maintainers"
     __table_args__ = (UniqueConstraint("plugin_id", "author_id", name="uq_plugin_maintainer"),)
@@ -111,7 +110,7 @@ class PluginMaintainerORM(Base):
 
 
 class PluginVersionORM(Base):
-    """Installable plugin version indexed by the market."""
+    """由市场索引的可安装插件版本。"""
 
     __tablename__ = "plugin_versions"
     __table_args__ = (UniqueConstraint("plugin_id", "version", name="uq_plugin_version"),)
@@ -144,7 +143,7 @@ class PluginVersionORM(Base):
 
 
 class PluginLikeORM(Base):
-    """Like relationship between an author and a plugin."""
+    """作者与插件之间的点赞关系。"""
 
     __tablename__ = "plugin_likes"
     __table_args__ = (UniqueConstraint("plugin_id", "author_id", name="uq_plugin_like"),)
@@ -156,7 +155,7 @@ class PluginLikeORM(Base):
 
 
 class RecommendationPreferenceORM(Base):
-    """Explicit recommendation controls; no browsing history or inferred identity."""
+    """显式推荐设置，不包含浏览历史或推断身份。"""
 
     __tablename__ = "recommendation_preferences"
 
@@ -169,7 +168,7 @@ class RecommendationPreferenceORM(Base):
 
 
 class RecommendationFeedbackORM(Base):
-    """Expiring explicit exclusions and category reductions, isolated by author."""
+    """按作者隔离、有过期时间的显式排除项与分类降权设置。"""
 
     __tablename__ = "recommendation_feedback"
     __table_args__ = (Index("idx_recommendation_feedback_expiry", "expires_at"),)
@@ -183,7 +182,7 @@ class RecommendationFeedbackORM(Base):
 
 
 class AuthorFollowORM(Base):
-    """Follow relationship between a viewer and a plugin author."""
+    """浏览者与插件作者之间的关注关系。"""
 
     __tablename__ = "author_follows"
     __table_args__ = (
@@ -198,7 +197,7 @@ class AuthorFollowORM(Base):
 
 
 class PluginSubscriptionORM(Base):
-    """Subscription relationship between an author and a plugin."""
+    """作者与插件之间的订阅关系。"""
 
     __tablename__ = "plugin_subscriptions"
     __table_args__ = (
@@ -213,7 +212,7 @@ class PluginSubscriptionORM(Base):
 
 
 class AuthorAccessTokenORM(Base):
-    """Single active machine token owned by a market author."""
+    """市场作者持有的唯一有效机器访问令牌。"""
 
     __tablename__ = "author_access_tokens"
 
@@ -229,7 +228,7 @@ class AuthorAccessTokenORM(Base):
 
 
 class PluginRatingORM(Base):
-    """User rating (1-5) for a plugin."""
+    """用户对插件的评分（1 至 5 分）。"""
 
     __tablename__ = "plugin_ratings"
     __table_args__ = (UniqueConstraint("plugin_id", "author_id", name="uq_plugin_rating"),)
@@ -243,7 +242,7 @@ class PluginRatingORM(Base):
 
 
 class PluginCommentORM(Base):
-    """Threaded comment on a plugin."""
+    """插件的嵌套评论。"""
 
     __tablename__ = "plugin_comments"
     __table_args__ = (
@@ -267,7 +266,7 @@ class PluginCommentORM(Base):
 
 
 class ReviewRecordORM(Base):
-    """Persistent audit record for review and governance operations."""
+    """审核与治理操作的持久化审计记录。"""
 
     __tablename__ = "review_records"
 
@@ -283,7 +282,7 @@ class ReviewRecordORM(Base):
 
 
 class WebhookEventORM(Base):
-    """Stored GitHub webhook event for deduplication and audit."""
+    """为去重与审计存储的 GitHub Webhook 事件。"""
 
     __tablename__ = "webhook_events"
 
@@ -297,12 +296,12 @@ class WebhookEventORM(Base):
 
 
 # ---------------------------------------------------------------------------
-# plugin-market-overhaul phase 1 (migration 0004)
+# 插件市场改版第一阶段（迁移 0004）
 # ---------------------------------------------------------------------------
 
 
 class AuthorProfileORM(Base):
-    """Per-author personal-space profile (1:1 with ``authors``)."""
+    """作者的个人空间资料，与 ``authors`` 一一对应。"""
 
     __tablename__ = "author_profiles"
 
@@ -324,7 +323,7 @@ class AuthorProfileORM(Base):
 
 
 class PinnedPluginORM(Base):
-    """Author-curated pin slot pointing at one of their plugins."""
+    """由作者选定、指向其某个插件的置顶条目。"""
 
     __tablename__ = "pinned_plugins"
     __table_args__ = (
@@ -346,7 +345,7 @@ class PinnedPluginORM(Base):
 
 
 class CurationEntryORM(Base):
-    """Operations-managed showcase / featured entry."""
+    """由运营管理的展示或精选条目。"""
 
     __tablename__ = "curation_entries"
     __table_args__ = (Index("idx_curation_enabled_sort", "enabled", "sort_order"),)
@@ -378,7 +377,7 @@ class CurationEntryORM(Base):
 
 
 class AnnouncementORM(Base):
-    """Site-wide announcement (banner or modal)."""
+    """全站公告（横幅或弹窗）。"""
 
     __tablename__ = "announcements"
 
@@ -420,7 +419,7 @@ class AnnouncementORM(Base):
 
 
 class AnnouncementDismissalORM(Base):
-    """Per-viewer dismissal records for announcements."""
+    """按浏览者保存的公告关闭记录。"""
 
     __tablename__ = "announcement_dismissals"
     __table_args__ = (
@@ -446,7 +445,7 @@ class AnnouncementDismissalORM(Base):
 
 
 class InboxMessageORM(Base):
-    """Derived per-recipient inbox message."""
+    """为每个接收者派生的收件箱消息。"""
 
     __tablename__ = "inbox_messages"
     __table_args__ = (
@@ -488,7 +487,7 @@ class InboxMessageORM(Base):
 
 
 class CommentMentionORM(Base):
-    """Normalized record of an ``@<login>`` mention in a comment."""
+    """评论中 ``@<login>`` 提及的规范化记录。"""
 
     __tablename__ = "comment_mentions"
     __table_args__ = (
@@ -517,7 +516,7 @@ class CommentMentionORM(Base):
 
 
 class PluginMetadataChangeORM(Base):
-    """Audit log entry for inline plugin metadata edits."""
+    """插件元数据行内编辑的审计日志条目。"""
 
     __tablename__ = "plugin_metadata_changes"
 
@@ -535,12 +534,12 @@ class PluginMetadataChangeORM(Base):
 
 
 # ---------------------------------------------------------------------------
-# Skill market (migration 0006)
+# 技能市场（迁移 0006）
 # ---------------------------------------------------------------------------
 
 
 class SkillORM(Base):
-    """Market skill record."""
+    """市场技能记录。"""
 
     __tablename__ = "skills"
     __table_args__ = (
@@ -567,7 +566,7 @@ class SkillORM(Base):
 
 
 class SkillVersionORM(Base):
-    """Installable skill version (zip package)."""
+    """可安装的技能版本（ZIP 包）。"""
 
     __tablename__ = "skill_versions"
     __table_args__ = (
@@ -589,7 +588,7 @@ class SkillVersionORM(Base):
 
 
 class SkillLikeORM(Base):
-    """Like relationship between an author and a skill."""
+    """作者与技能之间的点赞关系。"""
 
     __tablename__ = "skill_likes"
     __table_args__ = (UniqueConstraint("skill_id", "author_id", name="uq_skill_like"),)
@@ -601,7 +600,7 @@ class SkillLikeORM(Base):
 
 
 class SkillRatingORM(Base):
-    """User rating (1-5) for a skill."""
+    """用户对技能的评分（1 至 5 分）。"""
 
     __tablename__ = "skill_ratings"
     __table_args__ = (UniqueConstraint("skill_id", "author_id", name="uq_skill_rating"),)
@@ -615,7 +614,7 @@ class SkillRatingORM(Base):
 
 
 class SkillCommentORM(Base):
-    """Threaded comment on a skill."""
+    """技能的嵌套评论。"""
 
     __tablename__ = "skill_comments"
     __table_args__ = (
@@ -639,7 +638,7 @@ class SkillCommentORM(Base):
 
 
 class SkillSubscriptionORM(Base):
-    """Subscription relationship between an author and a skill."""
+    """作者与技能之间的订阅关系。"""
 
     __tablename__ = "skill_subscriptions"
     __table_args__ = (

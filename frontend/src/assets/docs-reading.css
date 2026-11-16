@@ -1,5 +1,5 @@
-/* Documentation typography for resource browsing and reading surfaces. The
-   Gazette masthead, hero lettering, author portrait and artwork keep their type. */
+/* 资源浏览与阅读区域采用文档排版。
+   报刊页眉、主视觉区文字、作者肖像与插图保留原有字体。 */
 .market-shell {
   --font-art-reading: Georgia, 'Noto Serif CJK SC', 'Songti SC', 'STSong', 'SimSun', serif;
   --font-docs-reading:
@@ -96,7 +96,7 @@
   border-radius: 6px;
 }
 
-/* Override the legacy dossier panel typography in reading sections. */
+/* 覆盖阅读区域中旧版档案面板的排版。 */
 .market-shell .market-stage .catalog-frame.dossier-page .catalog-panel h2 {
   font-family: var(--font-docs-reading);
   font-size: 22px;
@@ -209,7 +209,7 @@
   }
 }
 
-/* Collector plate lettering keeps its original serif voice. */
+/* 收藏图版的文字保留原有衬线字体风格。 */
 .market-shell .proof-byline span,
 .market-shell .print-latin,
 .market-shell .print-volume b,

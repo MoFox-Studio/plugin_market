@@ -20,8 +20,8 @@ afterEach(() => {
   document.documentElement.removeAttribute('data-reduced-motion');
 });
 
-describe('pointer artwork follows its existing CSS capability boundary', () => {
-  test.each([false, true])('mounts only for eligible pointer/motion media (%s)', (matches) => {
+describe('指针装饰遵循现有 CSS 能力边界', () => {
+  test.each([false, true])('仅在指针与动态效果媒体条件满足时挂载（%s）', (matches) => {
     const media = { matches, addEventListener: vi.fn(), removeEventListener: vi.fn() };
     const matchMedia = vi.fn(() => media);
     vi.stubGlobal('matchMedia', matchMedia);
@@ -34,7 +34,7 @@ describe('pointer artwork follows its existing CSS capability boundary', () => {
     });
   });
 
-  test('respects an explicit root motion override and restores after it is removed', async () => {
+  test('遵循根元素上显式覆盖的动态效果设置，并在移除覆盖后恢复', async () => {
     document.documentElement.dataset.reducedMotion = 'reduce';
     const media = { matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() };
     vi.stubGlobal('matchMedia', vi.fn(() => media));
@@ -52,7 +52,7 @@ describe('pointer artwork follows its existing CSS capability boundary', () => {
     wrapper.unmount();
   });
 
-  test('restores the same artwork when capabilities change and releases it when disabled', async () => {
+  test('能力变化时恢复相同装饰，并在禁用时释放', async () => {
     const media = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() };
     vi.stubGlobal('matchMedia', vi.fn(() => media));
     const wrapper = mount(GlobalPointerReveal, { global: { stubs: { SurveyOverprint: Artwork } } });

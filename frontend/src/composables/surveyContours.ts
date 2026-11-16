@@ -33,7 +33,7 @@ function elevation(x: number, y: number) {
     + 0.008 * noise(u * 23, v * 23);
 }
 
-// Each cell edge has a unique key shared by its adjacent cell.
+// 每条网格边都有唯一键，相邻网格共享该键。
 const pairs: Record<number, number[]> = {
   1: [3, 0], 2: [0, 1], 3: [3, 1], 4: [1, 2], 6: [0, 2], 7: [3, 2],
   8: [2, 3], 9: [0, 2], 11: [1, 2], 12: [3, 1], 13: [0, 1], 14: [3, 0],
@@ -64,7 +64,7 @@ function paths(graph: Map<number, Vertex>) {
   return result.join('');
 }
 
-/** Marching squares uses document-space samples and one global altitude interval across every seam. */
+/** Marching Squares 算法在文档坐标空间中采样，并在所有拼接处使用统一的全局等高距。 */
 export function surveyContours(sheet: number): Contours {
   const existing = cache.get(sheet);
   if (existing) {

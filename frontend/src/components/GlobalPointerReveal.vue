@@ -5,8 +5,8 @@ import SurveyOverprint from './SurveyOverprint.vue';
 
 const lens = ref<HTMLElement | null>(null);
 const overprint = ref<InstanceType<typeof SurveyOverprint> | null>(null);
-// CSS already hides this artwork on touch/reduced-motion devices. Do not build
-// its external SVG use trees (and fetch every referenced atlas) in that mode.
+// CSS 已在触屏设备或偏好减少动态效果的设备上隐藏此图案。
+// 在这些模式下，不构建外部 SVG use 树，也不获取引用的各个图集。
 const artworkEnabled = ref(false);
 let artworkMedia: MediaQueryList | undefined;
 let artworkPreference: MutationObserver | undefined;
@@ -46,7 +46,7 @@ useMarketPointerReveal((state) => {
   </div>
 </template>
 <style scoped>
-/* Same lens, ring and illustrations; its paint surface fits the largest circle. */
+/* 保留相同的透镜、圆环和插图；绘制区域适配最大的圆形。 */
 .market-pointer-reveal {
   position: fixed;
   top: 0;

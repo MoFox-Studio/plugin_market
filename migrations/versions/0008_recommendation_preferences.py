@@ -1,4 +1,4 @@
-"""Add opt-in recommendation preferences and expiring explicit feedback."""
+"""添加需主动启用的推荐偏好，以及带过期时间的显式反馈。"""
 
 from alembic import op
 import sqlalchemy as sa

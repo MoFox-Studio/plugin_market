@@ -1,4 +1,4 @@
-"""Deployment bootstrap helpers for schema migration hand-off."""
+"""用于衔接数据库结构迁移的部署初始化工具。"""
 
 from __future__ import annotations
 

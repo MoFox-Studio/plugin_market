@@ -1,4 +1,4 @@
-"""Build the optional, self-hosted Chinese display subset (fonttools + brotli)."""
+"""构建可选的自托管中文展示字体子集（fonttools + brotli）。"""
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.request import urlretrieve
@@ -9,7 +9,7 @@ from fontTools.varLib.instancer import instantiateVariableFont
 
 FRONTEND = Path(__file__).resolve().parents[1]
 UPSTREAM = "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notoserifsc/"
-# Only display lettering is bundled. Dynamic names use the local Songti stack.
+# 仅打包展示文案所需字形；动态名称使用本地宋体回退字体栈。
 LETTERING = """拓展边界，让灵感运行。每一个插件都是种新的可能从用途开始值得一试
 精选作品持续生长最近更新由热爱驱动社区创作者下可能你造猜你喜欢还喜欢
 找到你的下一块拼图探索发现市场档案技能资料版本说明使用指南消息中心服务状态

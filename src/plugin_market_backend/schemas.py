@@ -1,4 +1,4 @@
-"""Pydantic schemas for the plugin market API."""
+"""插件市场 API 的 Pydantic 数据模型。"""
 
 from __future__ import annotations
 
@@ -11,15 +11,24 @@ from plugin_market_backend.enums import AuthorType, PluginStatus, ReviewAction, 
 
 
 def _validate_sha256(value: str) -> str:
-    """Validate a sha256 hex string."""
+    """验证 SHA-256 十六进制字符串。
 
+    Args:
+        value: 待校验的校验和。
+
+    Returns:
+        转换为小写的校验和。
+
+    Raises:
+        ValueError: 校验和不是 64 个字符的十六进制字符串。
+    """
     if len(value) != 64 or any(char not in "0123456789abcdefABCDEF" for char in value):
-        raise ValueError("checksum_sha256 must be a 64-character hexadecimal string")
+        raise ValueError("checksum_sha256 必须是 64 个字符的十六进制字符串")
     return value.lower()
 
 
 class Author(BaseModel):
-    """Author identity response."""
+    """作者身份信息响应。"""
 
     author_id: str
     github_user_id: str | None = None
@@ -32,14 +41,14 @@ class Author(BaseModel):
 
 
 class AuthStatus(BaseModel):
-    """Current browser/API authentication state."""
+    """当前浏览器或 API 的认证状态。"""
 
     authenticated: bool
     user: Author | None = None
 
 
 class AuthorFollowState(BaseModel):
-    """Follow toggle state for an author."""
+    """作者的关注开关状态。"""
 
     author_id: str
     following: bool
@@ -47,7 +56,7 @@ class AuthorFollowState(BaseModel):
 
 
 class PluginSubscriptionState(BaseModel):
-    """Subscription toggle state for a plugin."""
+    """插件的订阅开关状态。"""
 
     plugin_id: str
     subscribed: bool
@@ -55,7 +64,7 @@ class PluginSubscriptionState(BaseModel):
 
 
 class AccessTokenStatus(BaseModel):
-    """Metadata describing the single active access token for an author."""
+    """描述作者唯一有效访问令牌的元数据。"""
 
     author_id: str
     has_token: bool
@@ -66,7 +75,7 @@ class AccessTokenStatus(BaseModel):
 
 
 class AccessTokenRotateResponse(BaseModel):
-    """Plaintext token returned only at creation / rotation time."""
+    """仅在创建或轮换时返回的明文令牌。"""
 
     author_id: str
     token: str
@@ -76,7 +85,7 @@ class AccessTokenRotateResponse(BaseModel):
 
 
 class MachineSubscriptionItem(BaseModel):
-    """One subscribed plugin returned to machine clients."""
+    """返回给机器客户端的单个已订阅插件。"""
 
     plugin_id: str
     display_name: str | None = None
@@ -85,7 +94,7 @@ class MachineSubscriptionItem(BaseModel):
 
 
 class MachineSubscriptionListResponse(BaseModel):
-    """Subscribed plugin list returned to machine clients."""
+    """返回给机器客户端的已订阅插件列表。"""
 
     author_id: str
     items: list[MachineSubscriptionItem] = Field(default_factory=list)
@@ -93,7 +102,7 @@ class MachineSubscriptionListResponse(BaseModel):
 
 
 class MySubscriptionItem(BaseModel):
-    """One subscribed plugin in the viewer's subscription list."""
+    """当前用户订阅列表中的单个插件。"""
 
     plugin_id: str
     display_name: str
@@ -109,7 +118,7 @@ class MySubscriptionItem(BaseModel):
 
 
 class MySubscriptionListResponse(BaseModel):
-    """Viewer's subscribed plugin list."""
+    """当前用户的已订阅插件列表。"""
 
     author_id: str
     items: list[MySubscriptionItem] = Field(default_factory=list)
@@ -117,7 +126,7 @@ class MySubscriptionListResponse(BaseModel):
 
 
 class MyFollowItem(BaseModel):
-    """One followed author in the viewer's follow list."""
+    """当前用户关注列表中的单个作者。"""
 
     author_id: str
     github_login: str
@@ -128,7 +137,7 @@ class MyFollowItem(BaseModel):
 
 
 class MyFollowListResponse(BaseModel):
-    """Viewer's followed author list."""
+    """当前用户的已关注作者列表。"""
 
     author_id: str
     items: list[MyFollowItem] = Field(default_factory=list)
@@ -136,7 +145,7 @@ class MyFollowListResponse(BaseModel):
 
 
 class PluginCreate(BaseModel):
-    """Request body for registering a plugin."""
+    """注册插件的请求体。"""
 
     plugin_id: str = Field(min_length=1, pattern=r"^[a-z][a-z0-9_\-]*$")
     display_name: str = Field(min_length=1)
@@ -155,7 +164,7 @@ class PluginCreate(BaseModel):
 
 
 class PluginUpdate(BaseModel):
-    """Request body for updating mutable plugin metadata."""
+    """更新插件可变元数据的请求体。"""
 
     display_name: str | None = Field(default=None, min_length=1)
     summary: str | None = Field(default=None, min_length=1)
@@ -173,7 +182,7 @@ class PluginUpdate(BaseModel):
 
 
 class PluginDependency(BaseModel):
-    """Resolved plugin dependency for detail views."""
+    """供详情视图使用的已解析插件依赖。"""
 
     plugin_id: str
     raw: str
@@ -184,7 +193,7 @@ class PluginDependency(BaseModel):
 
 
 class Plugin(BaseModel):
-    """Market plugin record."""
+    """市场插件记录。"""
 
     plugin_id: str
     display_name: str
@@ -219,7 +228,7 @@ class Plugin(BaseModel):
 
 
 class PluginVersionCreate(BaseModel):
-    """Request body for submitting a plugin version."""
+    """提交插件版本的请求体。"""
 
     version: str = Field(min_length=1)
     release_tag: str = Field(min_length=1)
@@ -239,13 +248,22 @@ class PluginVersionCreate(BaseModel):
     @field_validator("checksum_sha256")
     @classmethod
     def validate_sha256(cls, value: str) -> str:
-        """Require 64-character hex sha256 values."""
+        """要求 SHA-256 校验和为 64 个十六进制字符。
 
+        Args:
+            value: 待校验的校验和。
+
+        Returns:
+            转换为小写的校验和。
+
+        Raises:
+            ValueError: 校验和不是 64 个字符的十六进制字符串。
+        """
         return _validate_sha256(value)
 
 
 class PluginVersion(BaseModel):
-    """Market plugin version record."""
+    """市场插件版本记录。"""
 
     plugin_id: str
     version: str
@@ -270,7 +288,7 @@ class PluginVersion(BaseModel):
 
 
 class VersionSyncRequest(BaseModel):
-    """Request body for updating a version from CLI sync."""
+    """通过 CLI 同步更新版本的请求体。"""
 
     version: str = Field(min_length=1)
     release_tag: str | None = None
@@ -284,13 +302,22 @@ class VersionSyncRequest(BaseModel):
     @field_validator("checksum_sha256")
     @classmethod
     def validate_optional_sha256(cls, value: str | None) -> str | None:
-        """Validate optional sha256 values."""
+        """校验可选的 SHA-256 校验和。
 
+        Args:
+            value: 待校验的校验和，未提供时为 None。
+
+        Returns:
+            转换为小写的校验和；未提供时返回 None。
+
+        Raises:
+            ValueError: 已提供的校验和不是 64 个字符的十六进制字符串。
+        """
         return _validate_sha256(value) if value is not None else None
 
 
 class VersionStatusItem(BaseModel):
-    """Condensed version status returned to CLI."""
+    """返回给 CLI 的精简版本状态。"""
 
     version: str
     status: VersionStatus
@@ -300,7 +327,7 @@ class VersionStatusItem(BaseModel):
 
 
 class PluginStatusResponse(BaseModel):
-    """Plugin status response returned to CLI."""
+    """返回给 CLI 的插件状态响应。"""
 
     plugin_id: str
     plugin_status: PluginStatus
@@ -308,14 +335,14 @@ class PluginStatusResponse(BaseModel):
 
 
 class InstallInfo(BaseModel):
-    """Install metadata returned to clients and CLI."""
+    """返回给客户端和 CLI 的安装元数据。"""
 
     plugin: Plugin
     version: PluginVersion
 
 
 class MarketStats(BaseModel):
-    """Admin stats response."""
+    """管理员统计信息响应。"""
 
     plugins_total: int
     versions_total: int
@@ -335,7 +362,7 @@ class MarketStats(BaseModel):
 
 
 class ReviewRecord(BaseModel):
-    """Audit record for review and sync operations."""
+    """审核与同步操作的审计记录。"""
 
     target_type: str
     target_id: str
@@ -348,40 +375,40 @@ class ReviewRecord(BaseModel):
 
 
 class ReviewDecision(BaseModel):
-    """Admin review request body."""
+    """管理员审核请求体。"""
 
     reason: str | None = None
 
 
 class PluginListResponse(BaseModel):
-    """Paginated plugin list response."""
+    """分页插件列表响应。"""
 
     items: list[Plugin]
     total: int
 
 
 class VersionListResponse(BaseModel):
-    """Plugin version list response."""
+    """插件版本列表响应。"""
 
     items: list[PluginVersion]
     total: int
 
 
 class TaxonomyResponse(BaseModel):
-    """Categories or tags response."""
+    """分类或标签响应。"""
 
     items: list[str]
 
 
 class WebhookResponse(BaseModel):
-    """GitHub webhook intake response."""
+    """接收 GitHub Webhook 的响应。"""
 
     accepted: bool
     event_id: str
 
 
 class PluginReadmeResponse(BaseModel):
-    """Rendered README payload for plugin detail pages."""
+    """供插件详情页使用的已渲染 README 数据。"""
 
     plugin_id: str
     exists: bool
@@ -389,14 +416,14 @@ class PluginReadmeResponse(BaseModel):
 
 
 class PluginDependenciesResponse(BaseModel):
-    """Resolved plugin dependency payload for detail pages."""
+    """供详情页使用的已解析插件依赖数据。"""
 
     plugin_id: str
     items: list[PluginDependency] = Field(default_factory=list)
 
 
 class CommentAuthor(BaseModel):
-    """Compact author block returned with comments."""
+    """随评论返回的精简作者信息。"""
 
     author_id: str
     github_login: str
@@ -406,7 +433,7 @@ class CommentAuthor(BaseModel):
 
 
 class MentionCandidate(BaseModel):
-    """Resolved mention candidate for search and comment rendering."""
+    """供搜索和评论渲染使用的已解析提及候选人。"""
 
     author_id: str
     github_login: str
@@ -415,7 +442,7 @@ class MentionCandidate(BaseModel):
 
 
 class Comment(BaseModel):
-    """User comment on a plugin."""
+    """用户对插件的评论。"""
 
     id: int
     plugin_id: str
@@ -429,27 +456,27 @@ class Comment(BaseModel):
 
 
 class CommentCreate(BaseModel):
-    """Request body for submitting a comment."""
+    """提交评论的请求体。"""
 
     content: str = Field(min_length=1, max_length=4000)
     parent_id: int | None = None
 
 
 class CommentListResponse(BaseModel):
-    """Paginated comment response."""
+    """分页评论响应。"""
 
     items: list[Comment]
     total: int
 
 
 class RatingRequest(BaseModel):
-    """Request body for rating a plugin."""
+    """为插件评分的请求体。"""
 
     score: int = Field(ge=1, le=5)
 
 
 class RatingSummary(BaseModel):
-    """Aggregated rating stats for a plugin."""
+    """插件的评分汇总统计。"""
 
     plugin_id: str
     rating_avg: float
@@ -459,7 +486,7 @@ class RatingSummary(BaseModel):
 
 
 class ActivityPoint(BaseModel):
-    """Daily market activity bucket for the admin dashboard."""
+    """管理仪表盘中的每日市场活动统计。"""
 
     date: str
     plugins_created: int = 0
@@ -470,7 +497,7 @@ class ActivityPoint(BaseModel):
 
 
 class PluginGovernanceSnapshot(BaseModel):
-    """Detailed plugin governance data for admin and owner views."""
+    """供管理员和所有者视图使用的插件治理详细数据。"""
 
     plugin: Plugin
     versions: list[PluginVersion] = Field(default_factory=list)
@@ -478,7 +505,7 @@ class PluginGovernanceSnapshot(BaseModel):
 
 
 class AdminDashboard(BaseModel):
-    """Aggregated admin dashboard payload."""
+    """管理仪表盘的汇总数据。"""
 
     stats: MarketStats
     plugin_status_breakdown: dict[str, int] = Field(default_factory=dict)
@@ -488,7 +515,7 @@ class AdminDashboard(BaseModel):
 
 
 class CommunitySnapshot(BaseModel):
-    """Aggregated community data for the detail view."""
+    """供详情视图使用的社区汇总数据。"""
 
     plugin: Plugin
     rating: RatingSummary
@@ -496,7 +523,7 @@ class CommunitySnapshot(BaseModel):
 
 
 class TrendingItem(BaseModel):
-    """Lightweight trending author or stat entry."""
+    """轻量级热门作者或统计条目。"""
 
     author_id: str
     github_login: str
@@ -512,7 +539,7 @@ class TrendingItem(BaseModel):
 
 
 class TrendingPlugin(BaseModel):
-    """Compact plugin block used as fallback signature for an author."""
+    """用作作者默认代表作的精简插件信息。"""
 
     plugin_id: str
     display_name: str
@@ -522,11 +549,11 @@ class TrendingPlugin(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# plugin-market-overhaul phase 1 (task 2): incremental Pydantic schemas
+# 插件市场改版第一阶段（任务 2）：增量 Pydantic 数据模型
 # ---------------------------------------------------------------------------
 
 
-# Shared literal vocabularies -------------------------------------------------
+# 共享字面量取值 -------------------------------------------------
 
 AudienceLiteral = Literal[
     "all",
@@ -535,13 +562,13 @@ AudienceLiteral = Literal[
     "admins",
     "authors_with_plugin",
 ]
-"""Audience selectors shared by curation entries and announcements."""
+"""精选条目与公告共用的受众选择条件。"""
 
 DisplayModeLiteral = Literal["banner", "modal"]
-"""Announcement presentation modes."""
+"""公告展示方式。"""
 
 SeverityLiteral = Literal["info", "warning", "critical"]
-"""Announcement severity levels."""
+"""公告严重级别。"""
 
 SlotTypeLiteral = Literal[
     "featured_plugin",
@@ -550,10 +577,10 @@ SlotTypeLiteral = Literal[
     "hero",
     "sidebar",
 ]
-"""Curation slot kinds rendered in the home showcase."""
+"""首页展示区中渲染的精选展示位类型。"""
 
 TargetTypeLiteral = Literal["plugin", "author"]
-"""Resource a curation entry references."""
+"""精选条目引用的资源类型。"""
 
 InboxMessageType = Literal[
     "mention",
@@ -564,13 +591,13 @@ InboxMessageType = Literal[
     "plugin_activity",
     "system",
 ]
-"""Inbox message categories."""
+"""收件箱消息类别。"""
 
 InboxMessageStatus = Literal["unread", "read", "revoked"]
-"""Inbox message lifecycle status."""
+"""收件箱消息的生命周期状态。"""
 
 InboxLinkKind = Literal["comment", "plugin", "announcement", "system"]
-"""Where activating an inbox message should navigate."""
+"""打开收件箱消息时的跳转目标。"""
 
 BulkActionLiteral = Literal[
     "publish",
@@ -580,38 +607,56 @@ BulkActionLiteral = Literal[
     "set_trust_level",
     "delete",
 ]
-"""Bulk admin actions accepted by ``POST /api/v1/admin/plugins/bulk``."""
+"""接口 ``POST /api/v1/admin/plugins/bulk`` 接受的管理员批量操作。"""
 
 
-# Field-level helpers ---------------------------------------------------------
+# 字段级辅助函数 ---------------------------------------------------------
 
 
 def _ensure_https(value: HttpUrl | None) -> HttpUrl | None:
-    """Reject non-https URLs for sensitive media references."""
+    """拒绝敏感媒体引用中的非 HTTPS URL。
 
+    Args:
+        value: 待校验的媒体 URL，未提供时为 None。
+
+    Returns:
+        校验通过的原始 URL；未提供时返回 None。
+
+    Raises:
+        ValueError: URL 未使用 https 协议。
+    """
     if value is None:
         return None
     if value.scheme != "https":
-        raise ValueError("URL must use https scheme")
+        raise ValueError("URL 必须使用 https 协议")
     return value
 
 
 def _validate_tag_list(values: list[str]) -> list[str]:
-    """Apply tag-set length and per-tag length constraints."""
+    """校验标签总数和单个标签的长度限制。
 
+    Args:
+        values: 待校验的标签列表。
+
+    Returns:
+        校验通过的原始标签列表。
+
+    Raises:
+        ValueError: 标签超过 10 个，或存在非字符串、长度不在 1 至 40 之间的标签。
+    """
     if len(values) > 10:
-        raise ValueError("at most 10 tags are allowed")
+        raise ValueError("最多允许 10 个标签")
     for tag in values:
         if not isinstance(tag, str) or not (1 <= len(tag) <= 40):
-            raise ValueError("each tag must be between 1 and 40 characters")
+            raise ValueError("每个标签必须包含 1 至 40 个字符")
     return values
 
 
-# Author profile / personal space --------------------------------------------
+# 作者资料与个人空间 --------------------------------------------
 
 
 class AuthorProfile(BaseModel):
-    """Personal-space profile payload returned to the Market frontend."""
+    """返回给市场前端的个人空间资料。"""
 
     author_id: str
     bio: str = Field(default="", max_length=2000)
@@ -621,18 +666,27 @@ class AuthorProfile(BaseModel):
 
 
 class AuthorProfileUpdate(BaseModel):
-    """Partial update payload for ``PUT /api/v1/me/profile``."""
+    """接口 ``PUT /api/v1/me/profile`` 的部分更新请求数据。"""
 
     bio: str | None = Field(default=None, max_length=2000)
-    # Accept https URLs OR an internal /plugin-media/ path (uploaded image),
-    # OR an empty string meaning "clear the current background".
+    # 接受 HTTPS URL 或内部 /plugin-media/ 路径（已上传的图片），
+    # 也接受空字符串，表示清除当前背景。
     background_image_url: str | None = None
 
     @field_validator("background_image_url")
     @classmethod
     def _validate_background(cls, value: str | None) -> str | None:
-        """Allow https URL, internal media path, or empty string (clear)."""
+        """允许 HTTPS URL、内部媒体路径或用于清除背景的空字符串。
 
+        Args:
+            value: 背景图片地址、清除标记，或表示未提供的 None。
+
+        Returns:
+            去除首尾空白的有效地址或空字符串；未提供时返回 None。
+
+        Raises:
+            ValueError: 非空地址既不是 HTTPS URL，也不是内部媒体路径。
+        """
         if value is None:
             return None
         stripped = value.strip()
@@ -644,15 +698,15 @@ class AuthorProfileUpdate(BaseModel):
         if lowered.startswith("https://"):
             return stripped
         raise ValueError(
-            "background_image_url must use https or be an internal /plugin-media/ path."
+            "background_image_url 必须使用 https 或为内部 /plugin-media/ 路径。"
         )
 
 
-# Pinned plugins --------------------------------------------------------------
+# 置顶插件 --------------------------------------------------------------
 
 
 class PinnedPluginItem(BaseModel):
-    """One active pinned-plugin slot for an author."""
+    """作者当前有效的单个置顶插件条目。"""
 
     plugin_id: str
     pinned_reason: str | None = Field(default=None, max_length=200)
@@ -661,28 +715,28 @@ class PinnedPluginItem(BaseModel):
 
 
 class PinCreate(BaseModel):
-    """Request body for ``POST /api/v1/me/pins``."""
+    """接口 ``POST /api/v1/me/pins`` 的请求体。"""
 
     plugin_id: str = Field(min_length=1)
     pinned_reason: str | None = Field(default=None, max_length=200)
 
 
 class PinUpdate(BaseModel):
-    """Request body for ``PUT /api/v1/me/pins/{plugin_id}``."""
+    """接口 ``PUT /api/v1/me/pins/{plugin_id}`` 的请求体。"""
 
     pinned_reason: str | None = Field(default=None, max_length=200)
 
 
-# Inline plugin metadata patch -----------------------------------------------
+# 插件元数据行内更新 -----------------------------------------------
 
 
 class PluginMetadataPatch(BaseModel):
-    """Partial plugin metadata edit (display_name / icon / categories / tags)."""
+    """部分编辑插件元数据（显示名称、图标、分类与标签）。"""
 
     display_name: str | None = Field(default=None, min_length=1, max_length=200)
-    # icon_url accepts an https URL OR an internal /plugin-media/ path produced
-    # by the upload endpoint. Detailed scheme/path validation lives in
-    # ``InlineEditService._validate_icon_url`` so both shapes are accepted.
+    # icon_url 接受 HTTPS URL 或上传接口生成的内部 /plugin-media/ 路径。
+    # 具体协议和路径校验由 ``InlineEditService._validate_icon_url`` 执行，
+    # 因此这里接受这两种形式。
     icon_url: str | None = None
     categories: list[str] | None = None
     tags: list[str] | None = None
@@ -690,18 +744,27 @@ class PluginMetadataPatch(BaseModel):
     @field_validator("tags")
     @classmethod
     def _check_tags(cls, value: list[str] | None) -> list[str] | None:
-        """Cap tag count and bound individual tag lengths."""
+        """限制标签总数和单个标签的长度。
 
+        Args:
+            value: 待校验的标签列表，未提供时为 None。
+
+        Returns:
+            校验通过的原始标签列表；未提供时返回 None。
+
+        Raises:
+            ValueError: 标签超过 10 个，或存在非字符串、长度不在 1 至 40 之间的标签。
+        """
         if value is None:
             return None
         return _validate_tag_list(value)
 
 
-# Inbox -----------------------------------------------------------------------
+# 收件箱 -----------------------------------------------------------------------
 
 
 class InboxMessageSource(BaseModel):
-    """Author who triggered an inbox message (mention / reply / governance)."""
+    """触发收件箱消息的作者（提及、回复或治理操作）。"""
 
     author_id: str
     github_login: str
@@ -710,7 +773,7 @@ class InboxMessageSource(BaseModel):
 
 
 class InboxMessageLink(BaseModel):
-    """Navigation hint for an inbox message."""
+    """收件箱消息的跳转信息。"""
 
     kind: InboxLinkKind
     plugin_id: str | None = None
@@ -719,7 +782,7 @@ class InboxMessageLink(BaseModel):
 
 
 class InboxMessage(BaseModel):
-    """Single inbox message returned to the recipient."""
+    """返回给接收者的单条收件箱消息。"""
 
     id: int
     type: InboxMessageType
@@ -736,23 +799,23 @@ class InboxMessage(BaseModel):
 
 
 class InboxUnreadCount(BaseModel):
-    """Lightweight unread-count response used by the navbar bell."""
+    """供导航栏通知铃使用的轻量未读数响应。"""
 
     count: int = Field(ge=0)
 
 
 class InboxMessageListResponse(BaseModel):
-    """Paginated inbox message response."""
+    """分页收件箱消息响应。"""
 
     items: list[InboxMessage] = Field(default_factory=list)
     total: int = Field(ge=0)
 
 
-# Announcements ---------------------------------------------------------------
+# 公告 ---------------------------------------------------------------
 
 
 class AnnouncementDTO(BaseModel):
-    """Announcement projected for both public and admin consumption."""
+    """供公开页面与管理端使用的公告数据。"""
 
     id: int
     title: str = Field(min_length=1, max_length=200)
@@ -772,7 +835,7 @@ class AnnouncementDTO(BaseModel):
 
 
 class AnnouncementCreate(BaseModel):
-    """Request body for ``POST /api/v1/admin/announcements``."""
+    """接口 ``POST /api/v1/admin/announcements`` 的请求体。"""
 
     title: str = Field(min_length=1, max_length=200)
     body_markdown: str = ""
@@ -787,7 +850,7 @@ class AnnouncementCreate(BaseModel):
 
 
 class AnnouncementUpdate(BaseModel):
-    """Request body for ``PUT /api/v1/admin/announcements/{id}``."""
+    """接口 ``PUT /api/v1/admin/announcements/{id}`` 的请求体。"""
 
     title: str | None = Field(default=None, min_length=1, max_length=200)
     body_markdown: str | None = None
@@ -802,7 +865,7 @@ class AnnouncementUpdate(BaseModel):
 
 
 class AnnouncementDismissResponse(BaseModel):
-    """Result of ``POST /api/v1/announcements/{id}/dismiss``."""
+    """接口 ``POST /api/v1/announcements/{id}/dismiss`` 的结果。"""
 
     announcement_id: int
     dismissed: bool = True
@@ -810,17 +873,17 @@ class AnnouncementDismissResponse(BaseModel):
 
 
 class AnnouncementListResponse(BaseModel):
-    """Paginated announcement list for admin surfaces."""
+    """供管理界面使用的分页公告列表。"""
 
     items: list[AnnouncementDTO] = Field(default_factory=list)
     total: int = Field(ge=0)
 
 
-# Curation entries ------------------------------------------------------------
+# 精选条目 ------------------------------------------------------------
 
 
 class CurationEntryDTO(BaseModel):
-    """Curation entry expanded with referenced plugin / author payloads."""
+    """包含所引用插件或作者详细数据的精选条目。"""
 
     id: int
     slot_type: SlotTypeLiteral
@@ -842,7 +905,7 @@ class CurationEntryDTO(BaseModel):
 
 
 class CurationEntryCreate(BaseModel):
-    """Request body for ``POST /api/v1/admin/curation/entries``."""
+    """接口 ``POST /api/v1/admin/curation/entries`` 的请求体。"""
 
     slot_type: SlotTypeLiteral
     target_type: TargetTypeLiteral
@@ -857,7 +920,7 @@ class CurationEntryCreate(BaseModel):
 
 
 class CurationEntryUpdate(BaseModel):
-    """Request body for ``PUT /api/v1/admin/curation/entries/{id}``."""
+    """接口 ``PUT /api/v1/admin/curation/entries/{id}`` 的请求体。"""
 
     slot_type: SlotTypeLiteral | None = None
     target_type: TargetTypeLiteral | None = None
@@ -872,32 +935,41 @@ class CurationEntryUpdate(BaseModel):
 
 
 class CurationOrderUpdate(BaseModel):
-    """Request body for ``PUT /api/v1/admin/curation/order``."""
+    """接口 ``PUT /api/v1/admin/curation/order`` 的请求体。"""
 
     ids_in_order: list[int] = Field(min_length=1)
 
     @field_validator("ids_in_order")
     @classmethod
     def _unique_ids(cls, value: list[int]) -> list[int]:
-        """Reject duplicate ids in the ordering payload."""
+        """拒绝排序请求数据中的重复 ID。
 
+        Args:
+            value: 按目标顺序排列的条目 ID 列表。
+
+        Returns:
+            不含重复 ID 的原始列表。
+
+        Raises:
+            ValueError: 列表包含重复 ID。
+        """
         if len(set(value)) != len(value):
-            raise ValueError("ids_in_order must not contain duplicates")
+            raise ValueError("ids_in_order 不得包含重复项")
         return value
 
 
 class CurationEntryListResponse(BaseModel):
-    """List payload for admin curation screens."""
+    """供精选管理界面使用的列表数据。"""
 
     items: list[CurationEntryDTO] = Field(default_factory=list)
     total: int = Field(ge=0)
 
 
-# Admin bulk actions ----------------------------------------------------------
+# 管理员批量操作 ----------------------------------------------------------
 
 
 class BulkActionRequest(BaseModel):
-    """Request body for ``POST /api/v1/admin/plugins/bulk``."""
+    """接口 ``POST /api/v1/admin/plugins/bulk`` 的请求体。"""
 
     plugin_ids: list[str] = Field(min_length=1, max_length=100)
     action: BulkActionLiteral
@@ -906,23 +978,32 @@ class BulkActionRequest(BaseModel):
     @field_validator("plugin_ids")
     @classmethod
     def _non_empty_ids(cls, value: list[str]) -> list[str]:
-        """Reject blank plugin ids inside the batch."""
+        """拒绝批量请求中的空白插件 ID。
 
+        Args:
+            value: 待校验的插件 ID 列表。
+
+        Returns:
+            校验通过的原始插件 ID 列表。
+
+        Raises:
+            ValueError: 列表中存在非字符串或去除首尾空白后为空的插件 ID。
+        """
         for plugin_id in value:
             if not isinstance(plugin_id, str) or not plugin_id.strip():
-                raise ValueError("plugin_ids entries must be non-empty strings")
+                raise ValueError("plugin_ids 中的各项必须为非空字符串")
         return value
 
 
 class BulkActionItemError(BaseModel):
-    """Per-row error payload inside a bulk-action response."""
+    """批量操作响应中单个条目的错误信息。"""
 
     code: str
     message: str
 
 
 class BulkActionItemResult(BaseModel):
-    """Result for a single plugin inside a bulk-action response."""
+    """批量操作响应中单个插件的结果。"""
 
     plugin_id: str
     ok: bool
@@ -931,23 +1012,23 @@ class BulkActionItemResult(BaseModel):
 
 
 class BulkActionResult(BaseModel):
-    """Response body for ``POST /api/v1/admin/plugins/bulk`` (HTTP 207)."""
+    """接口 ``POST /api/v1/admin/plugins/bulk`` 的响应体（HTTP 207）。"""
 
     results: list[BulkActionItemResult] = Field(default_factory=list)
 
 
-# Market home aggregate -------------------------------------------------------
+# 市场首页聚合数据 -------------------------------------------------------
 
 
 class CategoryPreviewSection(BaseModel):
-    """A preview bucket for one category including actual total count."""
+    """包含实际总数的单个分类预览数据。"""
 
     items: list[Plugin] = Field(default_factory=list)
     total: int = 0
 
 
 class MarketHome(BaseModel):
-    """Aggregate response for ``GET /api/v1/market/home``."""
+    """接口 ``GET /api/v1/market/home`` 的聚合响应。"""
 
     showcase: list[CurationEntryDTO] = Field(default_factory=list)
     featured_plugins: list[Plugin] = Field(default_factory=list)
@@ -960,12 +1041,12 @@ class MarketHome(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Skill market schemas
+# 技能市场数据模型
 # ---------------------------------------------------------------------------
 
 
 class Skill(BaseModel):
-    """Market skill record (list item / detail)."""
+    """市场技能记录（列表项或详情）。"""
 
     skill_id: str
     display_name: str
@@ -993,7 +1074,7 @@ class Skill(BaseModel):
 
 
 class SkillVersion(BaseModel):
-    """Installable skill version record."""
+    """可安装的技能版本记录。"""
 
     version: str
     package_size: int
@@ -1005,7 +1086,7 @@ class SkillVersion(BaseModel):
 
 
 class SkillCreate(BaseModel):
-    """Request body for publishing a new skill (zip via UploadFile in route)."""
+    """发布新技能的请求体，ZIP 包通过路由中的 UploadFile 上传。"""
 
     skill_id: str = Field(min_length=1)
     version: str = Field(min_length=1)
@@ -1016,7 +1097,7 @@ class SkillCreate(BaseModel):
 
 
 class SkillVersionCreate(BaseModel):
-    """Request body for publishing a new skill version (zip via UploadFile in route)."""
+    """发布技能新版本的请求体，ZIP 包通过路由中的 UploadFile 上传。"""
 
     version: str = Field(min_length=1)
     release_notes: str | None = None
@@ -1024,7 +1105,7 @@ class SkillVersionCreate(BaseModel):
 
 
 class SkillUpdate(BaseModel):
-    """Request body for updating mutable skill metadata."""
+    """更新技能可变元数据的请求体。"""
 
     display_name: str | None = Field(default=None, min_length=1)
     icon_url: str | None = None
@@ -1033,7 +1114,7 @@ class SkillUpdate(BaseModel):
 
 
 class SkillComment(BaseModel):
-    """User comment on a skill."""
+    """用户对技能的评论。"""
 
     id: int
     skill_id: str
@@ -1047,28 +1128,28 @@ class SkillComment(BaseModel):
 
 
 class SkillCommentCreate(BaseModel):
-    """Request body for submitting a comment on a skill."""
+    """提交技能评论的请求体。"""
 
     content: str = Field(min_length=1, max_length=4000)
     parent_id: int | None = None
 
 
 class SkillCommentListResponse(BaseModel):
-    """Paginated skill comment response."""
+    """分页技能评论响应。"""
 
     items: list[SkillComment]
     total: int
 
 
 class SkillListResponse(BaseModel):
-    """Paginated skill list response."""
+    """分页技能列表响应。"""
 
     items: list[Skill]
     total: int
 
 
 class SkillRatingInfo(BaseModel):
-    """Aggregated rating stats for a skill."""
+    """技能的评分汇总统计。"""
 
     skill_id: str
     rating_avg: float
@@ -1078,7 +1159,7 @@ class SkillRatingInfo(BaseModel):
 
 
 class SkillInstallRecord(BaseModel):
-    """Response after recording a skill install / download."""
+    """记录技能安装或下载后的响应。"""
 
     skill_id: str
     version: str
@@ -1086,7 +1167,7 @@ class SkillInstallRecord(BaseModel):
 
 
 class SkillVersionListResponse(BaseModel):
-    """Skill version list response."""
+    """技能版本列表响应。"""
 
     items: list[SkillVersion]
     total: int

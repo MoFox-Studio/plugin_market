@@ -1,4 +1,4 @@
-"""Integration tests for MarketService fan-out hooks (task 18)."""
+"""MarketService 消息分发钩子的集成测试（任务 18）。"""
 
 from __future__ import annotations
 
@@ -40,8 +40,8 @@ def _plugin_payload(plugin_id: str) -> PluginCreate:
     return PluginCreate(
         plugin_id=plugin_id,
         display_name=plugin_id,
-        summary=f"summary for {plugin_id}",
-        description=f"description for {plugin_id}",
+        summary=f"{plugin_id} 的摘要",
+        description=f"{plugin_id} 的说明",
         repository_url=f"https://github.com/MoFox-Studio/{plugin_id}",
         license="MIT",
         categories=["tool"],
@@ -54,7 +54,7 @@ def _version_payload(version: str = "1.0.0") -> PluginVersionCreate:
     return PluginVersionCreate(
         version=version,
         release_tag=f"v{version}",
-        release_title=f"Release {version}",
+        release_title=f"版本 {version}",
         release_url=f"https://github.com/MoFox-Studio/sample/releases/tag/v{version}",
         asset_name=f"sample-{version}.mfp",
         asset_download_url=f"https://github.com/MoFox-Studio/sample/releases/download/v{version}/sample-{version}.mfp",
@@ -94,11 +94,11 @@ async def test_add_comment_rejects_reply_depth_over_one() -> None:
 
         service = MarketService(session)
         await service.register_plugin(_plugin_payload("plug-a"), owner_id="owner")
-        top = await service.add_comment("plug-a", "other", "top", None)
-        reply = await service.add_comment("plug-a", "sender", "reply", top.id)
+        top = await service.add_comment("plug-a", "other", "顶层评论", None)
+        reply = await service.add_comment("plug-a", "sender", "回复评论", top.id)
 
         with pytest.raises(ApiError) as ctx:
-            await service.add_comment("plug-a", "other", "too deep", reply.id)
+            await service.add_comment("plug-a", "other", "回复层级过深", reply.id)
         assert ctx.value.status_code == 400
         assert ctx.value.code == "COMMENT_REPLY_DEPTH_EXCEEDED"
 
@@ -120,7 +120,7 @@ async def test_admin_governance_actions_fan_out_to_owner_and_maintainer() -> Non
             PluginStatus.BLOCKED,
             ReviewAction.BLOCK_PLUGIN,
             "admin",
-            "risk",
+            "存在风险",
         )
         await service.set_version_status(
             "plug-a",
@@ -128,7 +128,7 @@ async def test_admin_governance_actions_fan_out_to_owner_and_maintainer() -> Non
             VersionStatus.BLOCKED,
             ReviewAction.BLOCK_VERSION,
             "admin",
-            "risk",
+            "存在风险",
         )
 
         owner_messages, owner_total = await InboxService(session).list_messages("owner")

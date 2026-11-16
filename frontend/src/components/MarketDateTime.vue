@@ -88,8 +88,8 @@ function monthDays(year: number, month: number) {
       : 31;
 }
 function mondayIndex(year: number, month: number, day = 1) {
-  // UTC is only used for Gregorian weekday arithmetic, never to parse/format a
-  // selected value. Wall-clock fields remain exactly as entered by the user.
+  // UTC 仅用于计算公历日期对应的星期，不用于解析或格式化所选值。
+  // 本地时间字段始终保持用户输入的原值。
   const date = new Date(0);
   date.setUTCFullYear(year, month - 1, day);
   return (date.getUTCDay() + 6) % 7;
@@ -531,7 +531,7 @@ onBeforeUnmount(() => {
         @click.stop
       >
         <header>
-          <span>MOFOX / LOCAL TIME</span
+          <span>MOFOX / 本地时间</span
           ><button
             type="button"
             class="market-date-close"

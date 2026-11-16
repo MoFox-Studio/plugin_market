@@ -7,8 +7,8 @@ const layoutReads = ref(0);
 export const routeError = ref('');
 export const navigationEpoch = ref(0);
 export const routeBusy = computed(() => navigation.value || reads.value > 0);
-// Restoration can depend on content below the fold (README, versions, inbox),
-// without making those requests delay the global loading indicator.
+// 滚动恢复可能依赖首屏下方的内容（README、版本、收件箱），
+// 但这些请求不应延长全局加载指示器的显示时间。
 export const scrollRestorationBusy = computed(
   () => navigation.value || layoutReads.value > 0,
 );
@@ -93,7 +93,7 @@ export function finishBoot() {
     if (reduced) enterApp();
     else revealTimer = window.setTimeout(enterApp, BOOT_REVEAL_MS);
   }
-  // Count the time spent loading the initial route as part of the printed intro.
+  // 将初始路由的加载时间计入印刷风格开场动画的时长。
   const remaining = BOOT_MINIMUM_MS - (performance.now() - (watch?.startedAt ?? 0));
   if (remaining > 0) holdTimer = window.setTimeout(reveal, remaining);
   else reveal();

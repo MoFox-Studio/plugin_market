@@ -96,7 +96,7 @@ onBeforeUnmount(() => {
       <section v-if="open" class="inbox-drawer" aria-label="最近信箱消息">
         <div class="inbox-drawer-head">
           <div>
-            <span class="inbox-drawer-kicker">Inbox</span>
+            <span class="inbox-drawer-kicker">信箱</span>
             <strong>最近 20 条消息</strong>
           </div>
           <button

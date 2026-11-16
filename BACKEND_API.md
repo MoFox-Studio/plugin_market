@@ -70,7 +70,7 @@ Authorization: Bearer <token>
 {
   "error": {
     "code": "ERROR_CODE",
-    "message": "Human readable message",
+    "message": "可供用户阅读的错误消息",
     "details": {}
   }
 }

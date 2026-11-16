@@ -62,7 +62,7 @@ const entries = computed(() =>
         :aria-pressed="!modelValue"
         @click="$emit('update:modelValue', '')"
       >
-        <span class="category-entry__number">ALL</span
+        <span class="category-entry__number">全部</span
         ><span class="category-entry__copy"
           ><strong>全部内容</strong><small>查看所有分类</small></span
         ><span class="category-entry__arrow" aria-hidden="true">↗</span>

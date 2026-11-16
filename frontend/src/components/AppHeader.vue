@@ -17,7 +17,7 @@ const label = computed(
   () =>
     (
       ({
-        home: '发现 / DISCOVER',
+        home: '发现',
         market: '插件目录',
         plugin: '插件档案',
         skills: '技能目录',
@@ -68,8 +68,8 @@ async function logout() {
       ><FoxMark :size="24" /><strong>MOFOX</strong></router-link
     >
     <span class="header-location"
-      ><i v-if="route.name !== 'home'" class="running-title" lang="en"
-        >MoFox Gazette</i
+      ><i v-if="route.name !== 'home'" class="running-title" lang="zh-CN"
+        >MoFox 市场报</i
       >{{ label }}</span
     >
     <form class="header-search" role="search" @submit.prevent="onSearch">

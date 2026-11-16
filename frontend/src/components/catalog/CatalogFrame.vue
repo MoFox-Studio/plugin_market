@@ -677,7 +677,7 @@
   }
 }
 
-/* Shared resource dossiers: the document and its acquisition record stay distinct. */
+/* 共用资源档案：文档与获取记录保持独立。 */
 .catalog-frame.dossier-page {
   gap: 24px;
 }

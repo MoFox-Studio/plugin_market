@@ -646,7 +646,7 @@ onBeforeUnmount(() => {
           <h4>当前摘要</h4>
           <ul class="meta-list">
             <li>
-              <span>Owner</span
+              <span>所有者</span
               ><strong>{{
                 selectedPlugin.owner_display_name ||
                 selectedPlugin.owner_login ||

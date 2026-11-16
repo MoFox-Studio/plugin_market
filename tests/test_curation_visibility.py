@@ -1,4 +1,4 @@
-"""Property tests for curation visibility."""
+"""精选内容可见性的属性测试。"""
 
 from __future__ import annotations
 

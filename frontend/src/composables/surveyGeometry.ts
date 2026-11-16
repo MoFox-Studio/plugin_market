@@ -16,7 +16,7 @@ interface GeometryOptions {
 }
 interface Observer { sheets: number[]; update(): void }
 
-/** One in-flight sheet, shared results, and a queue derived from current viewports. */
+/** 一次只处理一个图幅，共享计算结果，并依据当前视口生成队列。 */
 export class SurveyGeometryScheduler {
   private readonly cache = new Map<number, Contours>();
   private readonly observers = new Set<Observer>();
@@ -53,7 +53,7 @@ export class SurveyGeometryScheduler {
       setSheets: (sheets: readonly number[]) => {
         if (!this.observers.has(observer)) return;
         observer.sheets = [...new Set(sheets.filter(sheet => Number.isSafeInteger(sheet) && sheet >= 0))];
-        // Most recent viewport goes first; obsolete queued sheets are never dispatched.
+        // 优先处理最近更新的视口，不派发队列中已过时的图幅。
         this.observers.delete(observer);
         this.observers.add(observer);
         this.trimCache();
@@ -76,7 +76,7 @@ export class SurveyGeometryScheduler {
     const visible = new Set(this.requestedSheets());
     for (const sheet of this.cache.keys()) {
       if (this.cache.size <= this.cacheLimit) break;
-      // Keep currently displayed sheets even in unusually tall viewports.
+      // 即使视口异常高，也保留当前显示的图幅。
       if (!visible.has(sheet)) this.cache.delete(sheet);
     }
   }
@@ -104,8 +104,8 @@ export class SurveyGeometryScheduler {
         return;
       }
     }
-    // Unsupported/blocked workers retain the exact geometry algorithm. Yield first,
-    // so route rendering and pending input do not wait for the fallback computation.
+    // Worker 不受支持或被阻止时，仍使用完全相同的几何算法。先让出执行权，
+    // 避免路由渲染与待处理输入等待回退计算。
     this.fallbackTimer = setTimeout(async () => {
       this.fallbackTimer = undefined;
       if (this.active?.id !== request.id) return;

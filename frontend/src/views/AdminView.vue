@@ -134,7 +134,7 @@ onBeforeUnmount(() => {
       </article>
     </section>
 
-    <!-- 主区：活动 + pending -->
+    <!-- 主区：活动与待审核事项 -->
     <section v-if="dashboard" class="dash-main">
       <article class="dash-card dash-activity">
         <header class="dash-card-head">

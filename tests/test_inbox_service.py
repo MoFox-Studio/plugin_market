@@ -1,25 +1,17 @@
-"""Unit tests for ``InboxService`` (task 6).
+"""InboxService 的单元测试（任务 6）。
 
-These tests exercise each surface of
-:class:`plugin_market_backend.services.inbox_service.InboxService` in
-isolation, without going through the HTTP layer:
+绕过 HTTP 层，独立验证 InboxService 的各项功能：
 
-* :meth:`parse_mentions` resolves only existing GitHub logins, drops
-  self-mentions, and is order/duplicate stable (Property 10).
-* :meth:`fan_out_for_comment` writes ``comment_mentions`` and derives
-  exactly the expected ``mention`` / ``reply`` inbox rows. The
-  reply-over-mention precedence from Requirement 10.6 is asserted via a
-  dedicated test.
-* :meth:`fan_out_for_governance` enforces the 5-second sliding-window
-  dedupe across owner + maintainer recipients (Requirement 11.7).
-* :meth:`fan_out_for_announcement` only emits when ``emit_inbox=True`` and
-  refuses otherwise.
-* :meth:`revoke_messages_for_comment` flips derived rows to ``revoked``.
-* :meth:`list_messages` / :meth:`unread_count` / :meth:`mark_read` /
-  :meth:`mark_all_read` honor recipient scoping and the read-state model.
+* parse_mentions 仅解析已有的 GitHub 登录名，过滤自我提及，并保持顺序和去重
+  结果稳定（属性 10）。
+* fan_out_for_comment 写入 comment_mentions，并准确派生预期的 mention 和 reply
+  收件箱记录；独立测试验证回复优先于提及的规则（需求 10.6）。
+* fan_out_for_governance 对所有者及维护者接收者执行 5 秒滑动窗口去重（需求 11.7）。
+* fan_out_for_announcement 仅在 emit_inbox=True 时发送消息。
+* revoke_messages_for_comment 将派生记录标记为 revoked。
+* list_messages、unread_count、mark_read 和 mark_all_read 遵守接收者范围及已读状态模型。
 
-Tests reuse the shared ``conftest.py`` fixtures which spin up an in-memory
-SQLite database and seed it before every test.
+复用 conftest.py 中的共享夹具，在每个测试前创建内存 SQLite 数据库并填充种子数据。
 """
 
 from __future__ import annotations
@@ -50,7 +42,7 @@ from plugin_market_backend.services.inbox_service import (
 
 
 # ---------------------------------------------------------------------------
-# Setup helpers
+# 初始化辅助函数
 # ---------------------------------------------------------------------------
 
 
@@ -61,8 +53,17 @@ async def _ensure_author(
     github_login: str | None = None,
     display_name: str | None = None,
 ) -> AuthorORM:
-    """Create or fetch an author row."""
+    """创建或获取作者记录。
 
+    Args:
+        session: 数据库会话。
+        author_id: 作者标识。
+        github_login: GitHub 登录名；未提供时使用作者标识。
+        display_name: 展示名称；未提供时使用登录名或作者标识。
+
+    Returns:
+        已有或新建的作者记录。
+    """
     existing = await session.get(AuthorORM, author_id)
     if existing is not None:
         return existing
@@ -81,13 +82,21 @@ async def _ensure_author(
 
 
 async def _create_plugin(session, plugin_id: str, owner_id: str) -> PluginORM:
-    """Register a plugin owned by ``owner_id`` using the live MarketService."""
+    """使用实际的 MarketService 注册指定所有者的插件。
 
+    Args:
+        session: 数据库会话。
+        plugin_id: 插件标识。
+        owner_id: 所有者标识。
+
+    Returns:
+        已注册的插件记录。
+    """
     payload = PluginCreate(
         plugin_id=plugin_id,
         display_name=plugin_id,
-        summary=f"summary for {plugin_id}",
-        description=f"description for {plugin_id}",
+        summary=f"{plugin_id} 的摘要",
+        description=f"{plugin_id} 的说明",
         repository_url=f"https://github.com/MoFox-Studio/{plugin_id}",
         license="MIT",
         categories=["tool"],
@@ -105,11 +114,21 @@ async def _add_comment(
     plugin_id: str,
     author_id: str,
     *,
-    content: str = "hello",
+    content: str = "你好",
     parent_id: int | None = None,
 ) -> PluginCommentORM:
-    """Insert a comment row directly so tests do not depend on MarketService."""
+    """直接插入评论记录，避免测试依赖 MarketService。
 
+    Args:
+        session: 数据库会话。
+        plugin_id: 插件标识。
+        author_id: 评论作者标识。
+        content: 评论内容。
+        parent_id: 父评论标识；None 表示顶层评论。
+
+    Returns:
+        新建的评论记录。
+    """
     comment = PluginCommentORM(
         plugin_id=plugin_id,
         author_id=author_id,
@@ -127,8 +146,7 @@ async def _add_comment(
 
 
 async def test_parse_mentions_resolves_existing_logins_in_order() -> None:
-    """Existing GitHub logins should be returned in first-occurrence order."""
-
+    """已有 GitHub 登录名应按首次出现的顺序返回。"""
     async with session_scope() as session:
         await _ensure_author(session, "u-alpha", github_login="alpha")
         await _ensure_author(session, "u-beta", github_login="beta")
@@ -148,8 +166,7 @@ async def test_parse_mentions_resolves_existing_logins_in_order() -> None:
 
 
 async def test_parse_mentions_filters_unknown_logins() -> None:
-    """Tokens that do not match any author are silently dropped (R 9.3)."""
-
+    """未匹配到任何作者的提及标记应被静默忽略（需求 9.3）。"""
     async with session_scope() as session:
         await _ensure_author(session, "u-alpha", github_login="alpha")
         await _ensure_author(session, "u-sender", github_login="sender")
@@ -164,8 +181,7 @@ async def test_parse_mentions_filters_unknown_logins() -> None:
 
 
 async def test_parse_mentions_drops_self_mentions() -> None:
-    """Self-mentions are filtered so we never write a self-message."""
-
+    """应过滤自我提及，避免向自己发送消息。"""
     async with session_scope() as session:
         await _ensure_author(session, "u-sender", github_login="sender")
 
@@ -178,8 +194,7 @@ async def test_parse_mentions_drops_self_mentions() -> None:
 
 
 async def test_parse_mentions_dedupes_repeated_mentions() -> None:
-    """Repeated mentions of the same author appear only once."""
-
+    """同一作者被重复提及时，应只出现一次。"""
     async with session_scope() as session:
         await _ensure_author(session, "u-alpha", github_login="alpha")
         await _ensure_author(session, "u-sender", github_login="sender")
@@ -193,8 +208,7 @@ async def test_parse_mentions_dedupes_repeated_mentions() -> None:
 
 
 async def test_parse_mentions_handles_dashed_logins() -> None:
-    """GitHub logins may contain interior dashes."""
-
+    """GitHub 登录名中间可以包含连字符。"""
     async with session_scope() as session:
         await _ensure_author(
             session, "u-with-dash", github_login="user-with-dash"
@@ -212,8 +226,7 @@ async def test_parse_mentions_handles_dashed_logins() -> None:
 
 
 async def test_parse_mentions_returns_empty_for_blank_content() -> None:
-    """Empty / whitespace content yields no mentions."""
-
+    """空内容或空白内容不应解析出提及。"""
     async with session_scope() as session:
         await _ensure_author(session, "u-sender", github_login="sender")
         service = InboxService(session)
@@ -225,13 +238,12 @@ async def test_parse_mentions_returns_empty_for_blank_content() -> None:
 
 
 # ---------------------------------------------------------------------------
-# fan_out_for_comment
+# 评论触发的消息分发（fan_out_for_comment）。
 # ---------------------------------------------------------------------------
 
 
 async def test_fan_out_for_comment_writes_mention_messages_and_normalized_rows() -> None:
-    """Top-level mention should write comment_mentions + a mention message."""
-
+    """顶层评论中的提及应写入 comment_mentions 和一条 mention 消息。"""
     async with session_scope() as session:
         await _ensure_author(session, "owner", github_login="owner")
         await _ensure_author(session, "u-alpha", github_login="alpha")
@@ -250,7 +262,7 @@ async def test_fan_out_for_comment_writes_mention_messages_and_normalized_rows()
         )
         await service.fan_out_for_comment(comment, mentions)
 
-        # Normalized comment_mentions row exists.
+        # 规范化的 comment_mentions 记录应存在。
         mention_row = await session.scalar(
             select(CommentMentionORM).where(
                 CommentMentionORM.comment_id == comment.id
@@ -258,7 +270,7 @@ async def test_fan_out_for_comment_writes_mention_messages_and_normalized_rows()
         )
         assert mention_row is not None
 
-        # Inbox row for u-alpha exists with type=mention.
+        # u-alpha 应收到一条 type=mention 的收件箱记录。
         rows = list(
             (
                 await session.scalars(
@@ -278,21 +290,20 @@ async def test_fan_out_for_comment_writes_mention_messages_and_normalized_rows()
 
 
 async def test_fan_out_for_comment_writes_reply_message_for_parent_author() -> None:
-    """A reply with no mentions notifies the parent comment's author once."""
-
+    """不含提及的回复应仅通知父评论作者一次。"""
     async with session_scope() as session:
         await _ensure_author(session, "owner", github_login="owner")
         await _ensure_author(session, "u-parent", github_login="parent-user")
         await _ensure_author(session, "u-sender", github_login="sender")
         plugin = await _create_plugin(session, "plug-a", owner_id="owner")
         parent = await _add_comment(
-            session, plugin.plugin_id, "u-parent", content="parent comment"
+            session, plugin.plugin_id, "u-parent", content="父评论"
         )
         reply = await _add_comment(
             session,
             plugin.plugin_id,
             "u-sender",
-            content="thanks for the input",
+            content="感谢反馈",
             parent_id=parent.id,
         )
 
@@ -313,13 +324,11 @@ async def test_fan_out_for_comment_writes_reply_message_for_parent_author() -> N
 
 
 async def test_fan_out_for_comment_reply_over_mention_dedupes_recipient() -> None:
-    """When the parent author is also @-mentioned, only ``reply`` is written.
+    """父评论作者同时被 @ 提及时，应只写入 reply 消息。
 
-    This is Requirement 10.6 / Property 4: a single comment must produce at
-    most one inbox row for any given recipient, with ``reply`` as the
-    canonical type.
+    对应需求 10.6 和属性 4：单条评论对每位接收者最多生成一条收件箱记录，
+    且以 reply 作为最终类型。
     """
-
     async with session_scope() as session:
         await _ensure_author(session, "owner", github_login="owner")
         await _ensure_author(session, "u-parent", github_login="parent-user")
@@ -328,7 +337,7 @@ async def test_fan_out_for_comment_reply_over_mention_dedupes_recipient() -> Non
 
         plugin = await _create_plugin(session, "plug-a", owner_id="owner")
         parent = await _add_comment(
-            session, plugin.plugin_id, "u-parent", content="parent comment"
+            session, plugin.plugin_id, "u-parent", content="父评论"
         )
         reply = await _add_comment(
             session,
@@ -344,7 +353,7 @@ async def test_fan_out_for_comment_reply_over_mention_dedupes_recipient() -> Non
         )
         await service.fan_out_for_comment(reply, mentions)
 
-        # u-parent should only have a reply message — no mention message.
+        # u-parent 应只收到回复消息，不应收到提及消息。
         parent_rows = list(
             (
                 await session.scalars(
@@ -356,7 +365,7 @@ async def test_fan_out_for_comment_reply_over_mention_dedupes_recipient() -> Non
         )
         assert [row.type for row in parent_rows] == ["reply"]
 
-        # u-other should still receive a mention message.
+        # u-other 仍应收到提及消息。
         other_rows = list(
             (
                 await session.scalars(
@@ -368,8 +377,8 @@ async def test_fan_out_for_comment_reply_over_mention_dedupes_recipient() -> Non
         )
         assert [row.type for row in other_rows] == ["mention"]
 
-        # comment_mentions should still record both mentions for the
-        # underlying graph (not just the one whose inbox message survived).
+        # comment_mentions 仍应记录两次提及，以保留完整关系，
+        # 而非只保留最终生成收件箱消息的那次提及。
         mention_rows = list(
             (
                 await session.scalars(
@@ -386,20 +395,19 @@ async def test_fan_out_for_comment_reply_over_mention_dedupes_recipient() -> Non
 
 
 async def test_fan_out_for_comment_skips_self_replies() -> None:
-    """Replying to your own comment must not create a reply notification."""
-
+    """回复自己的评论时，不应创建回复通知。"""
     async with session_scope() as session:
         await _ensure_author(session, "owner", github_login="owner")
         await _ensure_author(session, "u-sender", github_login="sender")
         plugin = await _create_plugin(session, "plug-a", owner_id="owner")
         parent = await _add_comment(
-            session, plugin.plugin_id, "u-sender", content="my own thread"
+            session, plugin.plugin_id, "u-sender", content="我自己的评论串"
         )
         reply = await _add_comment(
             session,
             plugin.plugin_id,
             "u-sender",
-            content="self reply",
+            content="回复自己",
             parent_id=parent.id,
         )
 
@@ -419,15 +427,14 @@ async def test_fan_out_for_comment_skips_self_replies() -> None:
 
 
 async def test_fan_out_for_comment_skips_replies_to_deleted_parent() -> None:
-    """Replies to a tombstoned parent should not notify anyone."""
-
+    """回复已软删除的父评论时，不应通知任何人。"""
     async with session_scope() as session:
         await _ensure_author(session, "owner", github_login="owner")
         await _ensure_author(session, "u-parent", github_login="parent_user")
         await _ensure_author(session, "u-sender", github_login="sender")
         plugin = await _create_plugin(session, "plug-a", owner_id="owner")
         parent = await _add_comment(
-            session, plugin.plugin_id, "u-parent", content="old"
+            session, plugin.plugin_id, "u-parent", content="旧评论"
         )
         parent.is_deleted = True
         await session.flush()
@@ -436,7 +443,7 @@ async def test_fan_out_for_comment_skips_replies_to_deleted_parent() -> None:
             session,
             plugin.plugin_id,
             "u-sender",
-            content="late reply",
+            content="迟来的回复",
             parent_id=parent.id,
         )
         service = InboxService(session)
@@ -455,13 +462,12 @@ async def test_fan_out_for_comment_skips_replies_to_deleted_parent() -> None:
 
 
 # ---------------------------------------------------------------------------
-# fan_out_for_governance
+# 治理事件触发的消息分发（fan_out_for_governance）。
 # ---------------------------------------------------------------------------
 
 
 async def test_fan_out_for_governance_notifies_owner_and_maintainers() -> None:
-    """Governance fan-out must reach owner + every maintainer (R 11.4 / 11.5)."""
-
+    """治理消息应分发给所有者及每位维护者（需求 11.4、11.5）。"""
     async with session_scope() as session:
         await _ensure_author(session, "owner", github_login="owner")
         await _ensure_author(session, "m1", github_login="maintainer-1")
@@ -480,7 +486,7 @@ async def test_fan_out_for_governance_notifies_owner_and_maintainers() -> None:
             plugin,
             action="block_plugin",
             operator_id="admin",
-            reason="policy violation",
+            reason="违反规则",
         )
 
         rows = list(
@@ -497,13 +503,12 @@ async def test_fan_out_for_governance_notifies_owner_and_maintainers() -> None:
         for row in rows:
             assert row.type == "governance"
             assert row.payload["action"] == "block_plugin"
-            assert row.payload["reason"] == "policy violation"
+            assert row.payload["reason"] == "违反规则"
             assert row.source_author_id == "admin"
 
 
 async def test_fan_out_for_governance_dedupes_within_5s_window() -> None:
-    """Two calls within 5s must collapse into one row per recipient."""
-
+    """5 秒内的两次调用应为每位接收者合并成一条记录。"""
     async with session_scope() as session:
         await _ensure_author(session, "owner", github_login="owner")
         await _ensure_author(session, "admin", github_login="admin")
@@ -513,7 +518,7 @@ async def test_fan_out_for_governance_dedupes_within_5s_window() -> None:
         await service.fan_out_for_governance(
             plugin, action="block_plugin", operator_id="admin", reason="r1"
         )
-        # Immediately replay the same action — must collapse.
+        # 立即重复相同操作，应合并记录。
         await service.fan_out_for_governance(
             plugin, action="block_plugin", operator_id="admin", reason="r2"
         )
@@ -529,13 +534,12 @@ async def test_fan_out_for_governance_dedupes_within_5s_window() -> None:
             ).all()
         )
         assert len(rows) == 1
-        # The latest fan-out's payload wins.
+        # 应保留最近一次分发的消息内容。
         assert rows[0].payload["reason"] == "r2"
 
 
 async def test_fan_out_for_governance_creates_new_row_outside_window() -> None:
-    """Beyond the dedupe window a fresh row is written."""
-
+    """超出去重时间窗口后，应写入新记录。"""
     async with session_scope() as session:
         await _ensure_author(session, "owner", github_login="owner")
         await _ensure_author(session, "admin", github_login="admin")
@@ -543,10 +547,9 @@ async def test_fan_out_for_governance_creates_new_row_outside_window() -> None:
 
         service = InboxService(session)
         await service.fan_out_for_governance(
-            plugin, action="block_plugin", operator_id="admin", reason="first"
+            plugin, action="block_plugin", operator_id="admin", reason="首次处理理由"
         )
-        # Backdate the existing row past the dedupe window so the next call
-        # is forced to insert.
+        # 将已有记录的时间调早至去重窗口之外，使下次调用必须插入新记录。
         existing = await session.scalar(
             select(InboxMessageORM).where(
                 InboxMessageORM.recipient_id == "owner",
@@ -560,7 +563,7 @@ async def test_fan_out_for_governance_creates_new_row_outside_window() -> None:
         await session.flush()
 
         await service.fan_out_for_governance(
-            plugin, action="block_plugin", operator_id="admin", reason="second"
+            plugin, action="block_plugin", operator_id="admin", reason="再次处理理由"
         )
 
         rows = list(
@@ -575,12 +578,11 @@ async def test_fan_out_for_governance_creates_new_row_outside_window() -> None:
         )
         assert len(rows) == 2
         reasons = {(row.payload or {}).get("reason") for row in rows}
-        assert reasons == {"first", "second"}
+        assert reasons == {"首次处理理由", "再次处理理由"}
 
 
 async def test_fan_out_for_governance_distinct_actions_dont_dedupe() -> None:
-    """Different actions on the same plugin should each produce a row."""
-
+    """同一插件上的不同操作应各自生成一条记录。"""
     async with session_scope() as session:
         await _ensure_author(session, "owner", github_login="owner")
         await _ensure_author(session, "admin", github_login="admin")
@@ -609,20 +611,19 @@ async def test_fan_out_for_governance_distinct_actions_dont_dedupe() -> None:
 
 
 # ---------------------------------------------------------------------------
-# fan_out_for_announcement
+# 公告触发的消息分发（fan_out_for_announcement）。
 # ---------------------------------------------------------------------------
 
 
 async def test_fan_out_for_announcement_writes_inbox_rows_for_each_recipient() -> None:
-    """``emit_inbox=True`` writes one inbox row per recipient."""
-
+    """emit_inbox=True 时，应为每位接收者写入一条收件箱记录。"""
     async with session_scope() as session:
         await _ensure_author(session, "admin", github_login="admin")
         await _ensure_author(session, "u1", github_login="u1")
         await _ensure_author(session, "u2", github_login="u2")
         announcement = AnnouncementORM(
-            title="Maintenance Window",
-            body_markdown="we will be down briefly",
+            title="维护时段",
+            body_markdown="服务将短暂中断",
             display_mode="banner",
             severity="info",
             dismissible=True,
@@ -653,16 +654,15 @@ async def test_fan_out_for_announcement_writes_inbox_rows_for_each_recipient() -
         for row in rows:
             assert row.type == "announcement"
             assert row.payload["announcement_id"] == announcement.id
-            assert row.payload["title"] == "Maintenance Window"
+            assert row.payload["title"] == "维护时段"
 
 
 async def test_fan_out_for_announcement_refuses_when_emit_inbox_false() -> None:
-    """Calling with ``emit_inbox=False`` is a programmer error."""
-
+    """emit_inbox=False 时调用分发属于编程错误。"""
     async with session_scope() as session:
         await _ensure_author(session, "admin", github_login="admin")
         announcement = AnnouncementORM(
-            title="Silent Notice",
+            title="静默通知",
             body_markdown="",
             display_mode="banner",
             severity="info",
@@ -683,13 +683,12 @@ async def test_fan_out_for_announcement_refuses_when_emit_inbox_false() -> None:
 
 
 async def test_fan_out_for_announcement_dedupes_by_dismiss_token() -> None:
-    """Same announcement+token replays into the same row; bumping token forks it."""
-
+    """相同公告和标记的重复分发应复用记录，更新标记后应创建新记录。"""
     async with session_scope() as session:
         await _ensure_author(session, "admin", github_login="admin")
         await _ensure_author(session, "u1", github_login="u1")
         announcement = AnnouncementORM(
-            title="Notice",
+            title="通知",
             body_markdown="",
             display_mode="banner",
             severity="info",
@@ -705,7 +704,7 @@ async def test_fan_out_for_announcement_dedupes_by_dismiss_token() -> None:
 
         service = InboxService(session)
         await service.fan_out_for_announcement(announcement, ["u1"])
-        await service.fan_out_for_announcement(announcement, ["u1"])  # replay
+        await service.fan_out_for_announcement(announcement, ["u1"])  # 重复分发
 
         rows = list(
             (
@@ -720,8 +719,8 @@ async def test_fan_out_for_announcement_dedupes_by_dismiss_token() -> None:
         )
         assert len(rows) == 1
 
-        # Resurface: bumping dismiss_token gives a new dedup_key, so a
-        # fresh inbox row is written.
+        # 重新展示时递增 dismiss_token 会生成新的 dedup_key，
+        # 因此应写入一条新的收件箱记录。
         announcement.dismiss_token = 1
         await session.flush()
         await service.fan_out_for_announcement(announcement, ["u1"])
@@ -741,13 +740,12 @@ async def test_fan_out_for_announcement_dedupes_by_dismiss_token() -> None:
 
 
 # ---------------------------------------------------------------------------
-# revoke_messages_for_comment
+# 撤销评论相关消息（revoke_messages_for_comment）。
 # ---------------------------------------------------------------------------
 
 
 async def test_revoke_messages_for_comment_marks_derived_rows_as_revoked() -> None:
-    """Deleting a comment must flip every derived inbox row to ``revoked``."""
-
+    """删除评论时，应将所有派生收件箱记录标记为 revoked。"""
     async with session_scope() as session:
         await _ensure_author(session, "owner", github_login="owner")
         await _ensure_author(session, "u-alpha", github_login="alpha")
@@ -780,23 +778,21 @@ async def test_revoke_messages_for_comment_marks_derived_rows_as_revoked() -> No
         )
         assert all(row.status == "revoked" for row in rows)
 
-        # Calling it again is a no-op (already revoked rows are not touched).
+        # 再次调用应无变化，已撤销的记录不再修改。
         again = await service.revoke_messages_for_comment(comment.id)
         assert again == 0
 
 
 # ---------------------------------------------------------------------------
-# list / unread / mark_read / mark_all_read
+# 列表、未读计数与已读标记（list/unread/mark_read/mark_all_read）。
 # ---------------------------------------------------------------------------
 
 
 async def test_list_messages_orders_newest_first_and_paginates() -> None:
-    """Listing returns rows newest-first with pagination metadata."""
-
+    """列表应按时间从新到旧返回记录，并附带分页元数据。"""
     async with session_scope() as session:
         await _ensure_author(session, "viewer", github_login="viewer")
-        # Manually insert messages with deterministic timestamps so the
-        # ordering assertion does not depend on insertion order alone.
+        # 手动插入时间戳确定的消息，避免排序断言仅依赖插入顺序。
         now = utc_now()
         for index in range(5):
             session.add(
@@ -822,8 +818,7 @@ async def test_list_messages_orders_newest_first_and_paginates() -> None:
 
 
 async def test_list_messages_filters_by_type() -> None:
-    """The type filter must select only matching rows."""
-
+    """类型筛选应仅返回匹配的记录。"""
     async with session_scope() as session:
         await _ensure_author(session, "viewer", github_login="viewer")
         session.add_all(
@@ -860,8 +855,7 @@ async def test_list_messages_filters_by_type() -> None:
 
 
 async def test_list_messages_unknown_type_returns_empty() -> None:
-    """Unknown filter values yield an empty page rather than an error."""
-
+    """未知筛选值应返回空页面，而不是报错。"""
     async with session_scope() as session:
         await _ensure_author(session, "viewer", github_login="viewer")
         service = InboxService(session)
@@ -871,8 +865,7 @@ async def test_list_messages_unknown_type_returns_empty() -> None:
 
 
 async def test_list_messages_scope_to_recipient() -> None:
-    """``list_messages`` must never leak rows belonging to other recipients."""
-
+    """list_messages 不得泄露其他接收者的记录。"""
     async with session_scope() as session:
         await _ensure_author(session, "alice", github_login="alice")
         await _ensure_author(session, "bob", github_login="bob")
@@ -902,8 +895,7 @@ async def test_list_messages_scope_to_recipient() -> None:
 
 
 async def test_unread_count_only_counts_unread_rows() -> None:
-    """Read and revoked messages must not contribute to the unread badge."""
-
+    """已读和已撤销消息不应计入未读角标。"""
     async with session_scope() as session:
         await _ensure_author(session, "viewer", github_login="viewer")
         session.add_all(
@@ -945,8 +937,7 @@ async def test_unread_count_only_counts_unread_rows() -> None:
 
 
 async def test_mark_read_only_affects_recipient_unread_rows() -> None:
-    """``mark_read`` must scope to the viewer and ignore non-unread rows."""
-
+    """mark_read 应限定当前查看者，并忽略非未读记录。"""
     async with session_scope() as session:
         await _ensure_author(session, "alice", github_login="alice")
         await _ensure_author(session, "bob", github_login="bob")
@@ -995,7 +986,7 @@ async def test_mark_read_only_affects_recipient_unread_rows() -> None:
         ).id
 
         service = InboxService(session)
-        # Try to mark a row that belongs to bob — must be ignored.
+        # 尝试标记属于 bob 的记录时，应忽略该记录。
         affected = await service.mark_read(
             "alice", [row.id for row in alice_ids] + [bob_id]
         )
@@ -1005,7 +996,7 @@ async def test_mark_read_only_affects_recipient_unread_rows() -> None:
         assert bob_row is not None
         assert bob_row.status == "unread"
 
-        # Repeated mark_read is a no-op.
+        # 重复调用 mark_read 应无变化。
         again = await service.mark_read(
             "alice", [row.id for row in alice_ids]
         )
@@ -1014,8 +1005,7 @@ async def test_mark_read_only_affects_recipient_unread_rows() -> None:
 
 
 async def test_mark_all_read_marks_only_recipient_unread_rows() -> None:
-    """``mark_all_read`` should drain only the viewer's unread queue."""
-
+    """mark_all_read 应仅清空当前查看者的未读队列。"""
     async with session_scope() as session:
         await _ensure_author(session, "alice", github_login="alice")
         await _ensure_author(session, "bob", github_login="bob")
@@ -1050,5 +1040,5 @@ async def test_mark_all_read_marks_only_recipient_unread_rows() -> None:
         affected = await service.mark_all_read("alice")
         assert affected == 1
         assert await service.unread_count("alice") == 0
-        # Bob's unread row is untouched.
+        # bob 的未读记录应保持不变。
         assert await service.unread_count("bob") == 1

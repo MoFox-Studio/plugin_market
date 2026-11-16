@@ -1,20 +1,16 @@
-"""Author profile, background, and pinned plugin service.
+"""提供作者资料、背景图和置顶插件服务。
 
-This module implements the personal-space backend (Requirements 3 and 4):
+本模块实现个人空间后端（需求 3 和 4）：
 
-* :class:`ProfileService.get_profile` / :meth:`update_profile` read and write
-  the ``author_profiles`` row for one author. Profiles are lazily created on
-  first write so existing accounts do not need a backfill.
-* :class:`ProfileService.list_pins` / :meth:`add_pin` /
-  :meth:`update_pin_reason` / :meth:`remove_pin` manage the
-  ``pinned_plugins`` table while preserving Property 6 invariants:
-    - at most 6 active pins per author,
-    - every pin points at a plugin owned or maintained by the author,
-    - render order is ``pinned_at`` descending.
+* ``ProfileService.get_profile`` 和 ``update_profile`` 读取、写入作者的
+  ``author_profiles`` 记录。资料在首次写入时才创建，无需回填已有账户。
+* ``ProfileService.list_pins``、``add_pin``、``update_pin_reason`` 和
+  ``remove_pin`` 管理 ``pinned_plugins`` 表，并保证性质 6 的约束：
+  每位作者最多置顶 6 个插件；置顶插件必须由该作者拥有或维护；
+  展示顺序为 ``pinned_at`` 降序。
 
-All methods raise :class:`plugin_market_backend.errors.ApiError` on failure;
-callers are expected to wrap them in ``session_scope`` so the transaction is
-committed on success and rolled back on failure.
+业务校验失败时抛出 ``plugin_market_backend.errors.ApiError``。
+调用方应使用 ``session_scope`` 包裹调用，以便成功时提交事务、失败时回滚。
 """
 
 from __future__ import annotations
@@ -44,29 +40,25 @@ MAX_ACTIVE_PINS = 6
 
 
 class ProfileService:
-    """Manage ``author_profiles`` and ``pinned_plugins`` rows.
+    """管理 ``author_profiles`` 和 ``pinned_plugins`` 记录。
 
-    The service keeps the personal-space writes in a single bounded module so
-    Property 6 (pinned invariants) can be enforced in exactly one place.
+    本服务将个人空间的写操作集中在职责明确的模块中，统一保证性质 6 的置顶约束。
     """
 
     def __init__(self, session: AsyncSession) -> None:
-        """Create a service bound to one transactional session."""
-
+        """创建绑定到单个事务会话的服务。"""
         self.session = session
 
     # ------------------------------------------------------------------
-    # Profile (bio / background)
+    # 个人资料（简介和背景图）
     # ------------------------------------------------------------------
 
     async def get_profile(self, author_id: str) -> AuthorProfile:
-        """Return the profile row for ``author_id``.
+        """返回 ``author_id`` 对应的个人资料。
 
-        If the author has never updated their profile we synthesize a default
-        ``AuthorProfile`` instance with an empty bio and no background image.
-        The row is not created until the author saves a change.
+        作者尚未更新资料时，返回简介为空、无背景图的默认 ``AuthorProfile`` 实例；
+        只有作者保存变更时才创建数据库记录。
         """
-
         record = await self.session.get(AuthorProfileORM, author_id)
         if record is None:
             return AuthorProfile(author_id=author_id, bio="", background_image_url=None)
@@ -79,27 +71,27 @@ class ProfileService:
         bio: str | None = None,
         background_image_url: str | None = None,
     ) -> AuthorProfile:
-        """Update the bio and/or background image for ``author_id``.
+        """更新 ``author_id`` 的简介或背景图。
 
         Args:
-            author_id: The owner of the profile row.
-            bio: New bio text. ``None`` means "do not change". Empty string
-                clears the bio. Length is capped at 2000 characters
-                (Requirement 3.2).
-            background_image_url: New background image URL. ``None`` means
-                "do not change". An empty string clears the background.
-                Non-https URLs are rejected (Requirement 3.5 / design's
-                ``PROFILE_BACKGROUND_INVALID_URL``).
+            author_id: 个人资料所属作者的 ID。
+            bio: 新的简介文本。``None`` 表示不修改，空字符串表示清空；
+                长度最多为 2000 个字符（需求 3.2）。
+            background_image_url: 新背景图 URL。``None`` 表示不修改，
+                空字符串表示清空；支持 HTTPS URL 或内部媒体路径。
 
         Returns:
-            The updated profile schema.
-        """
+            更新后的个人资料数据模型。
 
+        Raises:
+            ApiError: 简介过长或背景图 URL 不合法时返回 422，错误码分别为
+                ``PROFILE_BIO_TOO_LONG`` 或 ``PROFILE_BACKGROUND_INVALID_URL``。
+        """
         if bio is not None and len(bio) > MAX_BIO_LENGTH:
             raise ApiError(
                 422,
                 "PROFILE_BIO_TOO_LONG",
-                f"Bio must be at most {MAX_BIO_LENGTH} characters.",
+                f"简介最多为 {MAX_BIO_LENGTH} 个字符。",
                 {"max_length": MAX_BIO_LENGTH, "received": len(bio)},
             )
         if background_image_url is not None and background_image_url:
@@ -118,8 +110,7 @@ class ProfileService:
             if bio is not None:
                 record.bio = bio
             if background_image_url is not None:
-                # If the previous background was an upload and we are about to
-                # replace or clear it, delete the orphan file on disk.
+                # 旧背景图若来自上传，替换或清空前删除磁盘上不再被引用的文件。
                 from plugin_market_backend.content import delete_profile_background_url
 
                 if record.background_image_kind == "upload" and record.background_image_url:
@@ -136,8 +127,7 @@ class ProfileService:
         author_id: str,
         raw_bytes: bytes,
     ) -> AuthorProfile:
-        """Persist an uploaded background image and update the profile."""
-
+        """持久化上传的背景图并更新个人资料。"""
         from plugin_market_backend.content import (
             delete_profile_background_url,
             store_profile_background,
@@ -155,7 +145,7 @@ class ProfileService:
             )
             self.session.add(record)
         else:
-            # Best-effort cleanup of the previous upload to avoid orphan files.
+            # 尽力清理之前上传的图片，避免残留无引用文件。
             if record.background_image_kind == "upload":
                 delete_profile_background_url(record.background_image_url)
             record.background_image_url = new_url
@@ -165,12 +155,11 @@ class ProfileService:
         return _profile_to_schema(record)
 
     # ------------------------------------------------------------------
-    # Pinned plugins
+    # 置顶插件
     # ------------------------------------------------------------------
 
     async def list_pins(self, author_id: str) -> list[PinnedPluginItem]:
-        """Return the active pin slots for ``author_id`` ordered by pinned_at desc."""
-
+        """按 ``pinned_at`` 降序返回 ``author_id`` 的置顶插件。"""
         stmt = (
             select(PinnedPluginORM)
             .where(PinnedPluginORM.author_id == author_id)
@@ -211,22 +200,24 @@ class ProfileService:
         plugin_id: str,
         reason: str | None = None,
     ) -> PinnedPluginItem:
-        """Add a new pin for ``author_id``.
+        """为 ``author_id`` 添加一个置顶插件。
 
-        Enforces:
+        校验插件存在且由作者拥有或维护、理由不超过 200 个字符、同一作者不能
+        重复置顶同一插件，以及每位作者最多置顶 6 个插件。
+        ``pinned_at`` 使用 ``utc_now``，使个人空间优先展示最近置顶的插件
+        （需求 4.8、性质 6）。
 
-        * the plugin must exist (``PIN_PLUGIN_NOT_FOUND``),
-        * the author must own or maintain it (``PIN_PLUGIN_NOT_OWNED``),
-        * the reason length cap of 200 characters,
-        * no duplicate pin for the same ``(author_id, plugin_id)`` pair
-          (``PIN_ALREADY_EXISTS``),
-        * at most 6 active pins per author (``PIN_LIMIT_EXCEEDED``).
+        Args:
+            author_id: 请求置顶的作者 ID。
+            plugin_id: 待置顶插件的 ID。
+            reason: 可选的置顶理由。
 
-        The ``pinned_at`` timestamp is set to ``utc_now`` so the personal
-        space renders the most recently added pin first (Requirement 4.8 /
-        Property 6).
+        Returns:
+            包含插件信息的新置顶条目。
+
+        Raises:
+            ApiError: 插件不存在、作者无权限、理由过长、已置顶或置顶数量达到上限。
         """
-
         _assert_reason_length(reason)
         await self._assert_can_pin(author_id, plugin_id)
 
@@ -240,7 +231,7 @@ class ProfileService:
             raise ApiError(
                 409,
                 "PIN_ALREADY_EXISTS",
-                "This plugin is already pinned.",
+                "此插件已置顶。",
                 {"author_id": author_id, "plugin_id": plugin_id},
             )
 
@@ -249,7 +240,7 @@ class ProfileService:
             raise ApiError(
                 409,
                 "PIN_LIMIT_EXCEEDED",
-                f"At most {MAX_ACTIVE_PINS} pinned plugins are allowed.",
+                f"最多允许置顶 {MAX_ACTIVE_PINS} 个插件。",
                 {"limit": MAX_ACTIVE_PINS, "current": active_count},
             )
 
@@ -276,8 +267,7 @@ class ProfileService:
         plugin_id: str,
         reason: str | None,
     ) -> PinnedPluginItem:
-        """Replace the ``pinned_reason`` of an existing pin without touching ``pinned_at``."""
-
+        """替换已有置顶记录的 ``pinned_reason``，保持 ``pinned_at`` 不变。"""
         _assert_reason_length(reason)
         pin = await self.session.scalar(
             select(PinnedPluginORM).where(
@@ -289,7 +279,7 @@ class ProfileService:
             raise ApiError(
                 404,
                 "PIN_NOT_FOUND",
-                "Pinned plugin not found.",
+                "未找到置顶插件。",
                 {"author_id": author_id, "plugin_id": plugin_id},
             )
 
@@ -305,12 +295,16 @@ class ProfileService:
         )
 
     async def remove_pin(self, author_id: str, plugin_id: str) -> None:
-        """Remove the pin record for ``(author_id, plugin_id)``.
+        """删除 ``(author_id, plugin_id)`` 对应的置顶记录。
 
-        Raises ``PIN_NOT_FOUND`` if there is no matching pin so the caller can
-        surface a deterministic error to the client.
+        Args:
+            author_id: 置顶记录所属作者的 ID。
+            plugin_id: 待取消置顶的插件 ID。
+
+        Raises:
+            ApiError: 没有匹配的置顶记录时返回 ``PIN_NOT_FOUND``，
+                使调用方能够向客户端提供明确错误。
         """
-
         pin = await self.session.scalar(
             select(PinnedPluginORM).where(
                 PinnedPluginORM.author_id == author_id,
@@ -321,25 +315,24 @@ class ProfileService:
             raise ApiError(
                 404,
                 "PIN_NOT_FOUND",
-                "Pinned plugin not found.",
+                "未找到置顶插件。",
                 {"author_id": author_id, "plugin_id": plugin_id},
             )
         await self.session.delete(pin)
         await self.session.flush()
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # 内部辅助函数
     # ------------------------------------------------------------------
 
     async def _assert_can_pin(self, author_id: str, plugin_id: str) -> None:
-        """Verify the plugin exists and is owned or maintained by ``author_id``."""
-
+        """确认插件存在，且由 ``author_id`` 对应作者拥有或维护。"""
         plugin = await self.session.get(PluginORM, plugin_id)
         if plugin is None:
             raise ApiError(
                 404,
                 "PIN_PLUGIN_NOT_FOUND",
-                "Plugin not found.",
+                "未找到插件。",
                 {"plugin_id": plugin_id},
             )
         if plugin.owner_id == author_id:
@@ -355,13 +348,12 @@ class ProfileService:
         raise ApiError(
             403,
             "PIN_PLUGIN_NOT_OWNED",
-            "You do not own or maintain this plugin.",
+            "你不是此插件的所有者或维护者。",
             {"author_id": author_id, "plugin_id": plugin_id},
         )
 
     async def _count_active_pins(self, author_id: str) -> int:
-        """Return how many pins ``author_id`` currently has."""
-
+        """返回 ``author_id`` 当前的置顶插件数量。"""
         from sqlalchemy import func
 
         stmt = (
@@ -372,8 +364,7 @@ class ProfileService:
         return int((await self.session.scalar(stmt)) or 0)
 
     async def _load_plugin_for_schema(self, plugin_id: str) -> PluginORM | None:
-        """Load a plugin with the relations the ``Plugin`` schema needs."""
-
+        """加载插件及 ``Plugin`` 数据模型所需的关联记录。"""
         stmt = (
             select(PluginORM)
             .options(
@@ -387,13 +378,12 @@ class ProfileService:
 
 
 # ----------------------------------------------------------------------
-# Module-level helpers (kept private)
+# 模块级私有辅助函数
 # ----------------------------------------------------------------------
 
 
 def _profile_to_schema(record: AuthorProfileORM) -> AuthorProfile:
-    """Convert an ``AuthorProfileORM`` row into the API schema."""
-
+    """将 ``AuthorProfileORM`` 记录转换为 API 数据模型。"""
     kind = record.background_image_kind if record.background_image_kind in {"url", "upload"} else "url"
     return AuthorProfile(
         author_id=record.author_id,
@@ -405,13 +395,11 @@ def _profile_to_schema(record: AuthorProfileORM) -> AuthorProfile:
 
 
 def _plugin_to_schema(plugin: PluginORM | None) -> Plugin | None:
-    """Project a ``PluginORM`` row into the lightweight ``Plugin`` schema.
+    """将 ``PluginORM`` 记录转换为轻量的 ``Plugin`` 数据模型。
 
-    Pinned-plugin payloads do not need community stats (likes / ratings /
-    downloads), so we keep this projection self-contained instead of taking
-    a dependency on :class:`MarketService`.
+    置顶插件响应无需额外查询点赞、评分等社区统计；下载数由已加载版本汇总。
+    因此转换逻辑保持独立，不依赖 ``MarketService``。
     """
-
     if plugin is None:
         return None
 
@@ -455,22 +443,20 @@ def _plugin_to_schema(plugin: PluginORM | None) -> Plugin | None:
 
 
 def _assert_reason_length(reason: str | None) -> None:
-    """Reject pin reasons longer than 200 characters."""
-
+    """拒绝超过 200 个字符的置顶理由。"""
     if reason is None:
         return
     if len(reason) > MAX_PIN_REASON_LENGTH:
         raise ApiError(
             422,
             "PIN_REASON_TOO_LONG",
-            f"Pinned reason must be at most {MAX_PIN_REASON_LENGTH} characters.",
+            f"置顶理由最多为 {MAX_PIN_REASON_LENGTH} 个字符。",
             {"max_length": MAX_PIN_REASON_LENGTH, "received": len(reason)},
         )
 
 
 def _assert_https_url(url: str) -> None:
-    """Reject background URLs that are neither https nor an internal media path."""
-
+    """拒绝既非 HTTPS URL 也非内部媒体路径的背景图地址。"""
     stripped = url.strip()
     if not stripped:
         return
@@ -481,6 +467,6 @@ def _assert_https_url(url: str) -> None:
         raise ApiError(
             422,
             "PROFILE_BACKGROUND_INVALID_URL",
-            "Background image URL must use the https scheme or be an internal /plugin-media/ path.",
+            "背景图 URL 必须使用 HTTPS 协议或内部 /plugin-media/ 路径。",
             {"received": url},
         )

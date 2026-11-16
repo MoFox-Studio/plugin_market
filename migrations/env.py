@@ -1,4 +1,4 @@
-"""Alembic environment for plugin market database migrations."""
+"""插件市场数据库迁移使用的 Alembic 环境。"""
 
 from __future__ import annotations
 
@@ -24,8 +24,11 @@ target_metadata = Base.metadata
 
 
 def ensure_sqlite_parent_dir(database_url: str) -> None:
-    """Create the parent directory for local SQLite migration targets."""
+    """为本地 SQLite 迁移目标创建父目录。
 
+    Args:
+        database_url: 迁移目标的数据库连接 URL。
+    """
     prefix = "sqlite+aiosqlite:///"
     if not database_url.startswith(prefix):
         return
@@ -36,8 +39,7 @@ def ensure_sqlite_parent_dir(database_url: str) -> None:
 
 
 def run_migrations_offline() -> None:
-    """Run migrations without a DBAPI connection."""
-
+    """在不建立 DBAPI 连接的情况下运行迁移。"""
     context.configure(
         url=get_settings().database_url,
         target_metadata=target_metadata,
@@ -49,16 +51,18 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    """Run migrations on an existing sync connection."""
+    """使用已有同步连接运行迁移。
 
+    Args:
+        connection: 用于执行迁移的同步数据库连接。
+    """
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def run_async_migrations() -> None:
-    """Create an async engine and run migrations."""
-
+    """创建异步引擎并运行迁移。"""
     ensure_sqlite_parent_dir(get_settings().database_url)
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),

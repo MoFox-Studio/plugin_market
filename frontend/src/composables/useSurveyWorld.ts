@@ -21,7 +21,7 @@ function positionCamera() {
   const next = projection(window.innerWidth, window.innerHeight, scroll);
   const old = camera.value;
   if (next.first !== old.first || next.width !== old.width || next.height !== old.height) camera.value = next;
-  // Only the two map SVGs move. Do not invalidate inherited styles on the page.
+  // 只移动两个地图 SVG，不使页面的继承样式失效。
   const x = (next.width - WORLD_WIDTH * next.scale) * 0.74;
   const y = next.first * SHEET_HEIGHT * next.scale - scroll;
   if (x !== position.x || y !== position.y) {

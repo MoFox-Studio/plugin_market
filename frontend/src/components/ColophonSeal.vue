@@ -61,7 +61,7 @@ useMarketPointerReveal((pointer) => {
         aria-hidden="true"
         @pointerleave="field?.classList.remove('is-revealing')"
       >
-        <span class="blank-imprint" lang="la">Ex libris</span>
+        <span class="blank-imprint" lang="zh-CN">藏书票</span>
         <ImpressionArt class="secret-ink" :print="print" />
       </span>
       <span class="seal-caption"
@@ -79,25 +79,25 @@ useMarketPointerReveal((pointer) => {
     >
       <div class="print-sheet">
         <header>
-        <span>MOFOX GAZETTE <span class="print-series"> / THE HIDDEN ATLAS</span></span
+        <span>MoFox 市场报 <span class="print-series"> / 隐秘图集</span></span
           ><button type="button" aria-label="合上图版" autofocus @click="close">
             合上 ×
           </button>
         </header>
         <div class="print-spread">
           <figure class="print-artwork">
-            <div class="plate-registration" aria-hidden="true"><span>FIG. {{ plateNumber }}</span><span>PRIVATE IMPRESSION</span></div>
+            <div class="plate-registration" aria-hidden="true"><span>图 {{ plateNumber }}</span><span>私人藏印</span></div>
             <ImpressionArt class="collector-print" :print="print" />
             <figcaption>{{ print.detail }}</figcaption>
           </figure>
           <div class="print-editorial">
-            <span class="print-volume">EX LIBRIS <b>{{ plateNumber }}</b></span>
+            <span class="print-volume">藏书票 <b>{{ plateNumber }}</b></span>
             <span class="print-collection">{{ print.collection }}</span>
             <h2 :id="titleId">{{ print.name }}</h2>
             <p class="print-latin">{{ print.caption }}</p>
             <div class="print-rule" aria-hidden="true">✦</div>
             <p :id="descriptionId" class="print-description">{{ print.description }}</p>
-            <span class="print-signature">The hidden atlas</span>
+            <span class="print-signature">隐秘图集</span>
           </div>
         </div>
       </div>

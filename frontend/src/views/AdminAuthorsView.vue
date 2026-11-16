@@ -32,7 +32,7 @@ const columns = [
     cell: (row: Record<string, unknown>) =>
       `${String(row.display_name || '-')} · @${String(row.github_login || '-')}`,
   },
-  { key: 'author_id', label: 'Author ID', sortable: true },
+  { key: 'author_id', label: '作者 ID', sortable: true },
   {
     key: 'plugins_count',
     label: '插件数',

@@ -1,16 +1,13 @@
-"""Operations console curation service.
+"""提供运营控制台的精选内容管理服务。
 
-Implements Requirement 2 and the service-layer portion of Requirement 1:
+实现需求 2 及需求 1 的服务层部分：
 
-* :func:`is_visible` is a pure function over one ``CurationEntryORM`` row,
-  the current viewer, and the evaluation time. It covers only predicates that
-  are intrinsic to the curation row itself: ``enabled``, schedule window, and
-  ``audience``.
-* :meth:`validate_entry` enforces Property 7: when an author-targeted curation
-  entry carries ``signature_plugin_id``, that plugin must be owned or
-  maintained by the referenced author.
-* Every write path appends an audit row to ``review_records`` using the
-  dedicated curation ``ReviewAction`` values.
+* ``is_visible`` 是基于单条 ``CurationEntryORM`` 记录、当前访问者和判断时间的
+  纯函数，只检查精选记录自身的条件：``enabled``、展示时间范围和 ``audience``。
+* ``validate_entry`` 保证性质 7：面向作者的精选条目若包含
+  ``signature_plugin_id``，对应插件必须由该作者拥有或维护。
+* 所有写操作均使用精选内容专用的 ``ReviewAction`` 值，
+  向 ``review_records`` 追加审计记录。
 """
 
 from __future__ import annotations
@@ -39,8 +36,7 @@ if TYPE_CHECKING:
 
 
 def _strip_tz(dt: datetime) -> datetime:
-    """Normalize SQLite-returned datetimes for safe comparison."""
-
+    """规范化 SQLite 返回的日期时间，确保可以安全比较。"""
     if dt.tzinfo is not None:
         return dt.replace(tzinfo=None)
     return dt
@@ -53,13 +49,20 @@ def is_visible(
     *,
     viewer_has_plugin: bool = False,
 ) -> bool:
-    """Return whether ``entry`` should be shown to ``viewer`` at ``now``.
+    """判断是否应在 ``now`` 时刻向 ``viewer`` 展示 ``entry``。
 
-    This predicate is intentionally pure. Target resource visibility
-    (for example, whether the referenced plugin is publicly visible) is
-    evaluated by the caller that already has those rows loaded.
+    此判断刻意保持为纯函数。目标资源的可见性（例如关联插件是否公开）
+    由已加载对应记录的调用方判断。
+
+    Args:
+        entry: 待判断的精选条目。
+        viewer: 当前已认证作者，匿名访问时为 ``None``。
+        now: 用于判断展示时间范围的当前时间。
+        viewer_has_plugin: 访问者是否拥有或维护至少一个插件。
+
+    Returns:
+        条目已启用、处于展示时间范围内且受众匹配时返回 ``True``。
     """
-
     if not entry.enabled:
         return False
 
@@ -76,7 +79,7 @@ def is_visible(
 
 
 class CurationService:
-    """Curate ``curation_entries`` rows used by the home page showcase."""
+    """管理首页展示区使用的 ``curation_entries`` 精选记录。"""
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -94,7 +97,7 @@ class CurationService:
                 raise ApiError(
                     422,
                     "CURATION_INVALID_SCHEDULE",
-                    "starts_at must be earlier than or equal to ends_at.",
+                    "starts_at 必须早于或等于 ends_at。",
                     {"starts_at": starts_at.isoformat(), "ends_at": ends_at.isoformat()},
                 )
 
@@ -104,7 +107,7 @@ class CurationService:
                 raise ApiError(
                     404,
                     "CURATION_TARGET_NOT_FOUND",
-                    "Referenced plugin was not found.",
+                    "未找到引用的插件。",
                     {"target_type": target_type, "target_id": target_id},
                 )
 
@@ -114,7 +117,7 @@ class CurationService:
                 raise ApiError(
                     404,
                     "CURATION_TARGET_NOT_FOUND",
-                    "Referenced author was not found.",
+                    "未找到引用的作者。",
                     {"target_type": target_type, "target_id": target_id},
                 )
 
@@ -122,7 +125,7 @@ class CurationService:
             raise ApiError(
                 422,
                 "CURATION_SIGNATURE_INVALID_TARGET",
-                "signature_plugin_id is only allowed for author-targeted entries.",
+                "仅面向作者的条目允许设置 signature_plugin_id。",
                 {"target_type": target_type, "signature_plugin_id": signature_plugin_id},
             )
 
@@ -134,7 +137,7 @@ class CurationService:
                 raise ApiError(
                     404,
                     "CURATION_SIGNATURE_PLUGIN_NOT_FOUND",
-                    "Signature plugin was not found.",
+                    "未找到代表插件。",
                     {"plugin_id": signature_plugin_id},
                 )
 
@@ -151,7 +154,7 @@ class CurationService:
                 raise ApiError(
                     422,
                     "CURATION_SIGNATURE_NOT_OWNED",
-                    "Signature plugin must be owned or maintained by the referenced author.",
+                    "代表插件必须由引用的作者拥有或维护。",
                     {
                         "target_id": target_id,
                         "signature_plugin_id": signature_plugin_id,
@@ -256,14 +259,14 @@ class CurationService:
             raise ApiError(
                 422,
                 "CURATION_REORDER_EMPTY",
-                "ids_in_order must not be empty.",
+                "ids_in_order 不能为空。",
             )
 
         if len(set(ids)) != len(ids):
             raise ApiError(
                 422,
                 "CURATION_REORDER_DUPLICATE_IDS",
-                "ids_in_order must not contain duplicates.",
+                "ids_in_order 不能包含重复项。",
                 {"ids_in_order": ids},
             )
 
@@ -275,7 +278,7 @@ class CurationService:
             raise ApiError(
                 404,
                 "CURATION_NOT_FOUND",
-                "One or more curation entries were not found.",
+                "未找到一个或多个精选条目。",
                 {"missing_ids": missing},
             )
 
@@ -299,7 +302,7 @@ class CurationService:
             raise ApiError(
                 404,
                 "CURATION_NOT_FOUND",
-                "Curation entry not found.",
+                "未找到精选条目。",
                 {"entry_id": entry_id},
             )
         return record

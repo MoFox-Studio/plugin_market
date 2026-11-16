@@ -1,9 +1,8 @@
-"""Subscriptions, follows, and single-slot access tokens.
+"""添加订阅、关注和单槽位访问令牌。
 
-Adds ``author_follows``, ``plugin_subscriptions`` and
-``author_access_tokens``. Existing ``plugin_likes`` rows are copied into
-``plugin_subscriptions`` so the old like intent becomes the new subscription
-state.
+新增 ``author_follows``、``plugin_subscriptions`` 和 ``author_access_tokens``。
+将现有 ``plugin_likes`` 记录复制到 ``plugin_subscriptions``，
+使原来的点赞意图转为新的订阅状态。
 """
 
 from __future__ import annotations

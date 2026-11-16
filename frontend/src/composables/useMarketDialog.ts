@@ -18,7 +18,7 @@ export function settleMarketDialog(value: string | boolean | null) {
   request?.resolve(value);
 }
 
-/** A pending decision belongs to its page and identity, never to a later account. */
+/** 待确认的操作仅属于发起时的页面和身份，不会转移给后续切换的账号。 */
 export function useMarketDialog() {
   const owner = Symbol('market-dialog-owner');
   const route = useRoute(),
@@ -42,7 +42,7 @@ export function useMarketDialog() {
     initialValue = '',
   ) {
     if (disposed) return null;
-    // Replace a duplicate click, rather than queuing a stale destructive action.
+    // 重复点击时替换待确认的操作，避免将过时的破坏性操作排入队列。
     settleMarketDialog(null);
     const version = revision;
     const result = await new Promise<string | boolean | null>((resolve) => {

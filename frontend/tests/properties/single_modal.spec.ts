@@ -9,8 +9,8 @@ import type { Announcement } from '@/types'
 function buildAnnouncement(id: number): Announcement {
   return {
     id,
-    title: `Announcement ${id}`,
-    body_markdown: 'Body',
+    title: `公告 ${id}`,
+    body_markdown: '正文',
     display_mode: 'modal',
     severity: 'info',
     dismissible: true,
@@ -26,13 +26,13 @@ function buildAnnouncement(id: number): Announcement {
   }
 }
 
-describe('AnnouncementModalQueue property', () => {
+describe('AnnouncementModalQueue 属性测试', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     window.localStorage.clear()
   })
 
-  test('renders at most one modal for any active modal set', async () => {
+  test('任意活动弹窗集合最多渲染一个弹窗', async () => {
     await fc.assert(
       fc.asyncProperty(
         fc.uniqueArray(fc.integer({ min: 1, max: 500 }), { selector: (value) => value, maxLength: 12 }),

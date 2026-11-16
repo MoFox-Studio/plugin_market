@@ -1,4 +1,4 @@
-"""Runtime configuration for the plugin market backend."""
+"""插件市场后端的运行时配置。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Environment-driven service settings."""
+    """由环境变量驱动的服务配置。"""
 
     model_config = SettingsConfigDict(env_prefix="PLUGIN_MARKET_", env_file=".env", extra="ignore")
 
@@ -36,8 +36,7 @@ class Settings(BaseSettings):
 
     @property
     def database_path(self) -> Path | None:
-        """Return the SQLite file path when the database URL points to a local SQLite database."""
-
+        """当数据库 URL 指向本地 SQLite 数据库时返回文件路径。"""
         prefix = "sqlite+aiosqlite:///"
         if not self.database_url.startswith(prefix):
             return None
@@ -48,19 +47,16 @@ class Settings(BaseSettings):
 
     @property
     def storage_path(self) -> Path:
-        """Return the absolute storage root for uploaded packages and media."""
-
+        """返回上传包与媒体资源的绝对存储根目录。"""
         return Path(self.storage_dir).expanduser().resolve()
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return cached runtime settings."""
-
+    """返回缓存的运行时配置。"""
     return Settings()
 
 
 def reset_settings_cache() -> None:
-    """Clear cached settings for tests."""
-
+    """清除配置缓存，供测试使用。"""
     get_settings.cache_clear()

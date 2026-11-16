@@ -1,8 +1,7 @@
-"""Shared authorization gates for service-layer mutations.
+"""提供服务层写操作共用的授权检查。
 
-Every plugin metadata write (whether through the inline edit endpoint, the
-bulk operations API, or the existing owner endpoints) MUST go through one of
-these helpers so Property 5 ("Plugin Metadata Authorization") holds.
+每次写入插件元数据，无论来自行内编辑端点、批量操作 API 还是现有的所有者端点，
+都必须通过共享辅助函数检查权限，以满足性质 5（插件元数据授权）。
 """
 
 from __future__ import annotations
@@ -19,30 +18,30 @@ async def assert_can_edit_plugin_metadata(
     plugin_id: str,
     viewer_id: str,
 ) -> PluginORM:
-    """Ensure the viewer may edit metadata for ``plugin_id``.
+    """确保访问者有权编辑 ``plugin_id`` 对应的插件元数据。
 
-    The caller must be one of:
+    访问者必须是插件所有者（``plugins.owner_id``）、已登记的维护者
+    （``plugin_maintainers``）或管理员（``authors.is_admin``）。
+    为遵循不暴露资源是否存在的规则，插件不存在与访问者无权限时使用相同错误码，
+    防止客户端通过探测枚举插件 ID。
 
-    * the plugin's owner (``plugins.owner_id``),
-    * a registered maintainer (``plugin_maintainers``), or
-    * an admin (``authors.is_admin``).
-
-    On failure the helper raises ``ApiError(403, "METADATA_FORBIDDEN")``. Per
-    the design's "do not expose existence" rule, the same code is returned for
-    both unknown plugins and unauthorized viewers, so a probing client cannot
-    enumerate plugin ids.
+    Args:
+        session: 用于查询插件及访问者权限的异步会话。
+        plugin_id: 待编辑插件的 ID。
+        viewer_id: 请求编辑的访问者 ID。
 
     Returns:
-        The hydrated ``PluginORM`` row, so callers can keep working without an
-        extra SELECT.
-    """
+        已加载的 ``PluginORM`` 记录，供调用方继续使用，无需额外执行 SELECT。
 
+    Raises:
+        ApiError: 插件不存在或访问者无权限时，返回 403 和 ``METADATA_FORBIDDEN``。
+    """
     plugin = await session.get(PluginORM, plugin_id)
     if plugin is None:
         raise ApiError(
             403,
             "METADATA_FORBIDDEN",
-            "You do not have permission to edit this plugin.",
+            "你没有权限编辑此插件。",
             {"plugin_id": plugin_id},
         )
 
@@ -63,6 +62,6 @@ async def assert_can_edit_plugin_metadata(
     raise ApiError(
         403,
         "METADATA_FORBIDDEN",
-        "You do not have permission to edit this plugin.",
+        "你没有权限编辑此插件。",
         {"plugin_id": plugin_id},
     )

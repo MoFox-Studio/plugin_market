@@ -41,7 +41,7 @@ const entries = computed(() => {
     aria-labelledby="shelf-title"
   >
     <header>
-      <span aria-hidden="true" lang="en">INDEX</span>
+      <span aria-hidden="true" lang="zh-CN">索引</span>
       <h2 id="shelf-title">插件速览</h2>
     </header>
     <ul>

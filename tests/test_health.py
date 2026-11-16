@@ -1,4 +1,4 @@
-"""Health endpoint tests."""
+"""健康检查端点测试。"""
 
 from __future__ import annotations
 
@@ -6,8 +6,7 @@ from httpx import AsyncClient
 
 
 async def test_health_returns_ok(client: AsyncClient) -> None:
-    """Health check should identify the mock service."""
-
+    """健康检查应标识模拟服务。"""
     response = await client.get("/health")
 
     assert response.status_code == 200
@@ -15,8 +14,7 @@ async def test_health_returns_ok(client: AsyncClient) -> None:
 
 
 async def test_status_route_serves_spa(client: AsyncClient) -> None:
-    """/status should serve the SPA shell so deep-linking works."""
-
+    """/status 应提供 SPA 页面外壳以支持直接访问深层链接。"""
     response = await client.get("/status")
 
     assert response.status_code == 200

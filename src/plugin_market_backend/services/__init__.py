@@ -1,15 +1,11 @@
-"""Domain service layer for the plugin market backend.
+"""提供插件市场后端的领域服务层。
 
-Each module in this package owns a single bounded responsibility and follows
-the same shape: a service class taking an ``AsyncSession`` in its constructor
-and exposing async methods. This package will be populated by tasks 4 through
-9; the current commit only ships the skeleton, the shared authorization gate
-``assert_can_edit_plugin_metadata``, and the pure ``audience_matches``
-predicate.
+本包各模块分别承担边界明确的职责。服务类在构造时接收 ``AsyncSession``，
+并提供异步方法；共享授权检查 ``assert_can_edit_plugin_metadata`` 和
+纯函数 ``audience_matches`` 则用于复用权限与受众判断。
 
-Importing from this package never triggers a circular import with
-``plugin_market_backend.service`` (the legacy module), and ``service.py``
-re-exports ``MarketService`` so existing call sites stay valid.
+本包可与旧模块 ``plugin_market_backend.service`` 配合使用，
+现有调用方仍可通过 ``service.py`` 导入 ``MarketService``。
 """
 
 from __future__ import annotations

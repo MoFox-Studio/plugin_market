@@ -14,14 +14,14 @@ export const impressions = [
     ink: 'var(--botanical-ink)',
     source: lycoris + '#lycoris-radiata',
     mask: false,
-    alt: '多簇彼岸花、反卷的狭长花瓣与外伸的花丝，无叶长茎下方署名 design by Lycoris radiata',
+    alt: '多簇彼岸花、反卷的狭长花瓣与外伸的花丝，无叶长茎下方署名：由 Lycoris radiata 设计',
     description: '反卷的花瓣向外舒展，细长花丝像一簇还未熄灭的焰火。',
     detail: '孤茎 · 花序 · 赤墨',
   },
   {
     id: 'tiger',
     name: '花饰虎耳',
-    caption: 'The Rosette',
+    caption: '花饰',
     collection: '人物图录',
     ink: 'var(--ink-900)',
     source: tiger,
@@ -45,7 +45,7 @@ export const impressions = [
   {
     id: 'sr71',
     name: '黑鸟',
-    caption: 'SR-71 Blackbird',
+    caption: 'SR-71 黑鸟',
     collection: '机械图录',
     ink: 'var(--ink-900)',
     source: machines + '#sr71',
@@ -57,7 +57,7 @@ export const impressions = [
   {
     id: 'lunar-lander',
     name: '静海来客',
-    caption: 'Lunar Lander',
+    caption: '月球着陆器',
     collection: '远行图录',
     ink: 'var(--blue-900)',
     source: machines + '#lunar-lander',
@@ -69,7 +69,7 @@ export const impressions = [
   {
     id: 'voyager',
     name: '远行者',
-    caption: 'Voyager',
+    caption: '旅行者号',
     collection: '远行图录',
     ink: 'var(--blue-700)',
     source: cosmos + '#voyager',
@@ -81,7 +81,7 @@ export const impressions = [
   {
     id: 'james-webb',
     name: '十八片宇宙',
-    caption: 'James Webb',
+    caption: '詹姆斯·韦布',
     collection: '远行图录',
     ink: 'var(--blue-900)',
     source: cosmos + '#james-webb',
@@ -93,7 +93,7 @@ export const impressions = [
   {
     id: 'milky-way',
     name: '银河手稿',
-    caption: 'The Milky Way',
+    caption: '银河',
     collection: '天文图录',
     ink: 'var(--blue-700)',
     source: cosmos + '#milky-way',
@@ -105,7 +105,7 @@ export const impressions = [
   {
     id: 'black-hole',
     name: '不可见之心',
-    caption: 'Black Hole',
+    caption: '黑洞',
     collection: '天文图录',
     ink: 'var(--ink-900)',
     source: cosmos + '#black-hole',
@@ -129,7 +129,7 @@ export const impressions = [
   {
     id: 'saturn',
     name: '环的诗篇',
-    caption: 'Saturn',
+    caption: '土星',
     collection: '天文图录',
     ink: 'var(--blue-700)',
     source: cosmos + '#saturn',
@@ -141,7 +141,7 @@ export const impressions = [
   {
     id: 'orrery',
     name: '掌中运行',
-    caption: 'The Orrery',
+    caption: '天体运行仪',
     collection: '器物图录',
     ink: 'var(--blue-900)',
     source: machines + '#orrery',
@@ -153,7 +153,7 @@ export const impressions = [
   {
     id: 'nautilus',
     name: '时间的切面',
-    caption: 'Nautilus',
+    caption: '鹦鹉螺',
     collection: '自然图录',
     ink: 'var(--blue-900)',
     source: natural + '#nautilus',
@@ -165,7 +165,7 @@ export const impressions = [
   {
     id: 'whale',
     name: '海中回声',
-    caption: 'Humpback Whale',
+    caption: '座头鲸',
     collection: '自然图录',
     ink: 'var(--blue-700)',
     source: natural + '#whale',
@@ -177,7 +177,7 @@ export const impressions = [
   {
     id: 'deepsea',
     name: '深海提灯',
-    caption: 'The Anglerfish',
+    caption: '鮟鱇鱼',
     collection: '自然图录',
     ink: 'var(--ink-900)',
     source: natural + '#deepsea',
@@ -189,7 +189,7 @@ export const impressions = [
   {
     id: 'jellyfish',
     name: '透明的夜',
-    caption: 'Moon Jelly',
+    caption: '月亮水母',
     collection: '自然图录',
     ink: 'var(--blue-700)',
     source: natural + '#jellyfish',
@@ -201,7 +201,7 @@ export const impressions = [
   {
     id: 'dragonfly',
     name: '薄翼标本',
-    caption: 'Dragonfly',
+    caption: '蜻蜓',
     collection: '自然图录',
     ink: 'var(--blue-900)',
     source: natural + '#dragonfly',
@@ -213,7 +213,7 @@ export const impressions = [
   {
     id: 'torii',
     name: '潮间之门',
-    caption: 'The Tidal Gate',
+    caption: '潮汐之门',
     collection: '远景图录',
     ink: 'var(--blue-900)',
     source: reverie + '#torii',
@@ -225,7 +225,7 @@ export const impressions = [
   {
     id: 'observatory',
     name: '守夜人',
-    caption: 'The Observatory',
+    caption: '天文台',
     collection: '远景图录',
     ink: 'var(--blue-700)',
     source: machines + '#observatory',
@@ -237,7 +237,7 @@ export const impressions = [
   {
     id: 'pocket-sky',
     name: '袖珍星图',
-    caption: 'A Pocket Sky',
+    caption: '袖珍天空',
     collection: '器物图录',
     ink: 'var(--blue-900)',
     source: reverie + '#pocket-sky',

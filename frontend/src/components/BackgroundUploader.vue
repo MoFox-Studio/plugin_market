@@ -141,7 +141,7 @@ function clearImage(): void {
         alt="背景图片预览"
         class="bg-uploader-image"
       />
-      <span class="bg-uploader-kicker">PREVIEW</span>
+      <span class="bg-uploader-kicker">预览</span>
       <strong v-if="modelValue && !error && isUpload">已上传自定义背景</strong>
       <strong v-else-if="modelValue && !error">使用外部 URL 背景</strong>
       <strong v-else-if="error">链接无效</strong>

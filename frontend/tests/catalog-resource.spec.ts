@@ -66,7 +66,7 @@ function transport() {
   vi.stubGlobal('fetch', vi.fn((path: string, options: RequestInit) => {
     const pending = deferred<Response>();
     const signal = options.signal!;
-    const abort = () => pending.reject(new DOMException('Transport aborted', 'AbortError'));
+    const abort = () => pending.reject(new DOMException('传输已中止', 'AbortError'));
     if (signal.aborted) abort();
     else signal.addEventListener('abort', abort, { once: true });
     requests.push({
@@ -86,9 +86,9 @@ function transport() {
   return requests;
 }
 
-describe('catalog resource lifecycle', () => {
-  test('replacing a hung fetcher aborts and settles it without ending the current loading state', async () => {
-    const { resource } = harness(() => 'previous data');
+describe('目录资源生命周期', () => {
+  test('替换挂起的获取函数时中止并结束原请求，但不结束当前加载状态', async () => {
+    const { resource } = harness(() => '原有数据');
     const old = deferred<string>();
     const next = deferred<string>();
     let oldSignal!: AbortSignal;
@@ -106,34 +106,34 @@ describe('catalog resource lifecycle', () => {
     expect(nextSignal.aborted).toBe(false);
     expect(vi.getTimerCount()).toBe(1);
     await previous;
-    old.reject(new ApiError('late forbidden', 403));
+    old.reject(new ApiError('延迟返回的禁止访问错误', 403));
     await flushPromises();
-    expect(resource).toMatchObject({ data: 'previous data', loading: true, error: '', status: 0 });
+    expect(resource).toMatchObject({ data: '原有数据', loading: true, error: '', status: 0 });
 
-    next.resolve('current data');
+    next.resolve('当前数据');
     await current;
-    expect(resource).toMatchObject({ data: 'current data', loading: false, error: '', status: 0 });
+    expect(resource).toMatchObject({ data: '当前数据', loading: false, error: '', status: 0 });
     expect(nextSignal.aborted).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  test.each(['resolve', 'reject'] as const)('ignores a stale %s even if fetcher ignores abort', async (outcome) => {
-    const { resource } = harness(() => 'initial');
+  test.each(['resolve', 'reject'] as const)('即使获取函数忽略中止，也忽略过时的 %s 结果', async (outcome) => {
+    const { resource } = harness(() => '初始数据');
     const old = deferred<string>();
     const previous = resource.load(() => old.promise);
-    await resource.load(async () => 'newest');
+    await resource.load(async () => '最新数据');
     await previous;
-    if (outcome === 'resolve') old.resolve('stale data');
-    else old.reject(new ApiError('stale missing', 404));
+    if (outcome === 'resolve') old.resolve('过时数据');
+    else old.reject(new ApiError('延迟返回的资源不存在错误', 404));
     await flushPromises();
-    expect(resource).toMatchObject({ data: 'newest', loading: false, error: '', status: 0 });
+    expect(resource).toMatchObject({ data: '最新数据', loading: false, error: '', status: 0 });
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  test('reset aborts immediately, restores identity-specific data and allows another load', async () => {
+  test('重置时立即中止请求、恢复身份对应的数据，并允许再次加载', async () => {
     let viewer = 'alice';
-    const { resource } = harness(() => `${viewer}: empty`);
-    resource.data = 'alice: private data';
+    const { resource } = harness(() => `${viewer}: 空数据`);
+    resource.data = 'alice: 私有数据';
     const old = deferred<string>();
     let oldSignal!: AbortSignal;
     const pending = resource.load((signal) => {
@@ -143,18 +143,18 @@ describe('catalog resource lifecycle', () => {
     viewer = 'bob';
     resource.reset();
     expect(oldSignal.aborted).toBe(true);
-    expect(resource).toMatchObject({ data: 'bob: empty', loading: false, error: '', status: 0 });
+    expect(resource).toMatchObject({ data: 'bob: 空数据', loading: false, error: '', status: 0 });
     expect(vi.getTimerCount()).toBe(0);
     await pending;
-    old.resolve('alice: late private data');
+    old.resolve('alice: 延迟返回的私有数据');
     await flushPromises();
-    expect(resource.data).toBe('bob: empty');
-    await resource.load(async () => 'bob: fresh data');
-    expect(resource.data).toBe('bob: fresh data');
+    expect(resource.data).toBe('bob: 空数据');
+    await resource.load(async () => 'bob: 新数据');
+    expect(resource.data).toBe('bob: 新数据');
   });
 
-  test('unmount aborts and settles a hung fetcher without accepting its late result', async () => {
-    const { resource, unmount } = harness(() => 'retained data');
+  test('卸载时中止并结束挂起的获取函数，且不接受其延迟结果', async () => {
+    const { resource, unmount } = harness(() => '保留数据');
     const old = deferred<string>();
     let signal!: AbortSignal;
     const pending = resource.load((value) => {
@@ -166,17 +166,17 @@ describe('catalog resource lifecycle', () => {
     expect(resource.loading).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
     await pending;
-    old.resolve('too late');
+    old.resolve('过迟的结果');
     await flushPromises();
-    expect(resource).toMatchObject({ data: 'retained data', loading: false, error: '', status: 0 });
+    expect(resource).toMatchObject({ data: '保留数据', loading: false, error: '', status: 0 });
   });
 
-  test('releases completed requests rather than aborting them later', async () => {
-    const { resource, unmount } = harness(() => 'initial');
+  test('释放已完成的请求，而不在之后中止它们', async () => {
+    const { resource, unmount } = harness(() => '初始数据');
     let signal!: AbortSignal;
     await resource.load(async (value) => {
       signal = value;
-      return 'done';
+      return '已完成';
     });
     resource.reset();
     unmount();
@@ -184,8 +184,8 @@ describe('catalog resource lifecycle', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  test('a hung fetcher times out at 12s, aborts its signal, keeps data and can retry', async () => {
-    const { resource } = harness(() => 'retained data');
+  test('挂起的获取函数在 12 秒后超时，中止信号、保留数据并允许重试', async () => {
+    const { resource } = harness(() => '保留数据');
     const old = deferred<string>();
     let signal!: AbortSignal;
     const pending = resource.load((value) => {
@@ -198,7 +198,7 @@ describe('catalog resource lifecycle', () => {
     await vi.advanceTimersByTimeAsync(1);
     await pending;
     expect(signal.aborted).toBe(true);
-    expect(resource).toMatchObject({ data: 'retained data', loading: false, error: '请求超时，请重试。', status: 408 });
+    expect(resource).toMatchObject({ data: '保留数据', loading: false, error: '请求超时，请重试。', status: 408 });
     expect(vi.getTimerCount()).toBe(0);
 
     const retry = deferred<string>();
@@ -207,44 +207,44 @@ describe('catalog resource lifecycle', () => {
       expect(nextSignal.aborted).toBe(false);
       return retry.promise;
     });
-    expect(resource).toMatchObject({ data: 'retained data', loading: true, error: '', status: 0 });
-    retry.resolve('retried');
+    expect(resource).toMatchObject({ data: '保留数据', loading: true, error: '', status: 0 });
+    retry.resolve('重试数据');
     await retrying;
-    old.resolve('late timeout result');
+    old.resolve('超时后延迟返回的结果');
     await flushPromises();
-    expect(resource).toMatchObject({ data: 'retried', loading: false, error: '', status: 0 });
+    expect(resource).toMatchObject({ data: '重试数据', loading: false, error: '', status: 0 });
     expect(vi.getTimerCount()).toBe(0);
   });
 
   test.each([
-    [new ApiError('not found', 404), 404, '该资源不存在或已不可访问。'],
-    [new ApiError('forbidden', 403), 403, '你暂时没有访问权限。'],
-    [new ApiError('server failed', 500), 500, 'server failed'],
-    [new TypeError('network failed'), 0, 'network failed'],
-    [Object.assign(new Error('unexpected abort'), { name: 'AbortError' }), 0, 'unexpected abort'],
-    [new Error('real failure'), 0, 'real failure'],
-    ['unknown rejection', 0, '暂时无法加载，请重试。'],
-  ])('preserves genuine errors: %s', async (failure, status, error) => {
-    const { resource } = harness(() => 'retained data');
+    [new ApiError('未找到资源', 404), 404, '该资源不存在或已不可访问。'],
+    [new ApiError('禁止访问', 403), 403, '你暂时没有访问权限。'],
+    [new ApiError('服务端失败', 500), 500, '服务端失败'],
+    [new TypeError('网络失败'), 0, '网络失败'],
+    [Object.assign(new Error('意外中止'), { name: 'AbortError' }), 0, '意外中止'],
+    [new Error('真实失败'), 0, '真实失败'],
+    ['未知拒绝原因', 0, '暂时无法加载，请重试。'],
+  ])('保留真实错误：%s', async (failure, status, error) => {
+    const { resource } = harness(() => '保留数据');
     await resource.load(async () => { throw failure; });
-    expect(resource).toMatchObject({ data: 'retained data', loading: false, status, error });
+    expect(resource).toMatchObject({ data: '保留数据', loading: false, status, error });
     expect(vi.getTimerCount()).toBe(0);
     resource.reset();
     expect(resource).toMatchObject({ loading: false, status: 0, error: '' });
   });
 
-  test('a genuine DOM AbortError remains visible even across Error realms', async () => {
-    const { resource } = harness(() => 'retained data');
-    await resource.load(async () => { throw new DOMException('unexpected abort', 'AbortError'); });
+  test('真实 DOM AbortError 即使跨越 Error 所属运行域也仍然可见', async () => {
+    const { resource } = harness(() => '保留数据');
+    await resource.load(async () => { throw new DOMException('意外中止', 'AbortError'); });
     expect(resource.error).not.toBe('');
-    expect(resource).toMatchObject({ data: 'retained data', loading: false, status: 0 });
+    expect(resource).toMatchObject({ data: '保留数据', loading: false, status: 0 });
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  test('cleans up the deadline when fetcher throws synchronously', async () => {
-    const { resource } = harness(() => 'initial');
-    await resource.load(() => { throw new Error('synchronous failure'); });
-    expect(resource).toMatchObject({ data: 'initial', loading: false, error: 'synchronous failure' });
+  test('获取函数同步抛出错误时清理超时定时器', async () => {
+    const { resource } = harness(() => '初始数据');
+    await resource.load(() => { throw new Error('同步失败'); });
+    expect(resource).toMatchObject({ data: '初始数据', loading: false, error: '同步失败' });
     expect(vi.getTimerCount()).toBe(0);
   });
 });
@@ -261,8 +261,8 @@ const skillReads: [string, string, (signal: AbortSignal) => Promise<unknown>][] 
   ['tags', '/api/v1/skills/tags', (signal) => api.skills.tags({ signal })],
 ];
 
-describe('catalog API cancellation', () => {
-  test.each(skillReads)('forwards %s options to fetch and cleans up on reset', async (_, path, read) => {
+describe('目录 API 请求取消', () => {
+  test.each(skillReads)('将 %s 的选项传给 fetch，并在重置时清理', async (_, path, read) => {
     const requests = transport();
     const { resource } = harness<unknown>(() => null);
     let removeListener!: ReturnType<typeof vi.spyOn>;
@@ -285,9 +285,9 @@ describe('catalog API cancellation', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  test.each(['plugins', 'skills'])('rapid %s searches abort obsolete transports, not the latest read', async (kind) => {
+  test.each(['plugins', 'skills'])('快速连续的 %s 搜索中止过时传输，而不中止最新读取', async (kind) => {
     const requests = transport();
-    const { resource } = harness<unknown>(() => ({ items: ['previous'] }));
+    const { resource } = harness<unknown>(() => ({ items: ['原有数据'] }));
     const search = (q: string) => resource.load((signal) => kind === 'plugins'
       ? api.get(`/api/v1/plugins?q=${q}`, { signal })
       : api.skills.list({ search: q }, { signal }));
@@ -297,21 +297,21 @@ describe('catalog API cancellation', () => {
     expect(requests.map((item) => item.signal.aborted)).toEqual([true, true, false]);
     await Promise.all([first, second]);
     await flushPromises();
-    expect(resource).toMatchObject({ data: { items: ['previous'] }, loading: true, error: '' });
+    expect(resource).toMatchObject({ data: { items: ['原有数据'] }, loading: true, error: '' });
     expect(routeBusy.value).toBe(true);
     expect(scrollRestorationBusy.value).toBe(true);
     expect(vi.getTimerCount()).toBe(2);
-    requests[2].respond({ items: ['newest'], total: 1 });
+    requests[2].respond({ items: ['最新数据'], total: 1 });
     await third;
-    expect(resource).toMatchObject({ data: { items: ['newest'], total: 1 }, loading: false, error: '' });
+    expect(resource).toMatchObject({ data: { items: ['最新数据'], total: 1 }, loading: false, error: '' });
     expect(routeBusy.value).toBe(false);
     expect(scrollRestorationBusy.value).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  test('the shared 12s deadline remains a timeout error, aborts fetch and releases both timers', async () => {
+  test('共享的 12 秒时限仍报超时错误、中止 fetch 并释放两个定时器', async () => {
     const requests = transport();
-    const { resource } = harness<unknown>(() => 'retained data');
+    const { resource } = harness<unknown>(() => '保留数据');
     let signal!: AbortSignal;
     const pending = resource.load((value) => {
       signal = value;
@@ -322,19 +322,19 @@ describe('catalog API cancellation', () => {
     await pending;
     expect(signal.aborted).toBe(true);
     expect(requests[0].signal.aborted).toBe(true);
-    expect(resource).toMatchObject({ data: 'retained data', loading: false, error: '请求超时，请重试。', status: 408 });
+    expect(resource).toMatchObject({ data: '保留数据', loading: false, error: '请求超时，请重试。', status: 408 });
     expect(routeBusy.value).toBe(false);
     expect(scrollRestorationBusy.value).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
     const retry = resource.load((nextSignal) => api.get('/api/v1/plugins', { signal: nextSignal }));
     expect(requests[1].signal.aborted).toBe(false);
-    requests[1].respond('retried');
+    requests[1].respond('重试数据');
     await retry;
-    expect(resource).toMatchObject({ data: 'retried', loading: false, error: '', status: 0 });
+    expect(resource).toMatchObject({ data: '重试数据', loading: false, error: '', status: 0 });
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  test('an earlier API deadline is not silenced and clears the resource deadline', async () => {
+  test('API 提前超时的错误不被隐藏，且会清理资源超时定时器', async () => {
     const requests = transport();
     const { resource } = harness<unknown>(() => null);
     const pending = resource.load((signal) => api.get('/api/v1/skills', { signal, timeout: 1000 }));
@@ -350,24 +350,24 @@ describe('catalog API cancellation', () => {
   test.each([
     [404, '该资源不存在或已不可访问。'],
     [403, '你暂时没有访问权限。'],
-  ])('keeps real HTTP %s visible', async (status, error) => {
+  ])('保持真实 HTTP %s 错误可见', async (status, error) => {
     const requests = transport();
-    const { resource } = harness<unknown>(() => 'retained data');
+    const { resource } = harness<unknown>(() => '保留数据');
     const pending = resource.load((signal) => api.skills.get('fox', { signal }));
-    requests[0].respond({ error: { message: 'server error' } }, status);
+    requests[0].respond({ error: { message: '服务端错误' } }, status);
     await pending;
-    expect(resource).toMatchObject({ data: 'retained data', loading: false, error, status });
+    expect(resource).toMatchObject({ data: '保留数据', loading: false, error, status });
     expect(vi.getTimerCount()).toBe(0);
     expect(routeBusy.value).toBe(false);
     expect(scrollRestorationBusy.value).toBe(false);
   });
 
-  test('keeps a genuine network failure visible', async () => {
+  test('保持真实网络失败可见', async () => {
     const requests = transport();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     const { resource } = harness<unknown>(() => null);
     const pending = resource.load((signal) => api.get('/api/v1/plugins', { signal }));
-    requests[0].reject(new TypeError('Failed to fetch'));
+    requests[0].reject(new TypeError('请求失败'));
     await pending;
     expect(resource).toMatchObject({ loading: false, error: '无法连接服务，请稍后重试。', status: 0 });
     expect(vi.getTimerCount()).toBe(0);
@@ -375,7 +375,7 @@ describe('catalog API cancellation', () => {
     expect(scrollRestorationBusy.value).toBe(false);
   });
 
-  test('unmount cancels catalog reads without canceling an independent mutation', async () => {
+  test('卸载时取消目录读取，但不取消独立的修改操作', async () => {
     const requests = transport();
     const { resource, unmount } = harness<unknown>(() => null);
     const reading = resource.load((signal) => api.skills.get('fox', { signal }));

@@ -44,9 +44,9 @@ useMarketPointerReveal((pointer) => {
     >
       <div class="print-sheet">
         <div class="running-line">
-          <span>社区插件选刊</span><span>PLATE {{ number }} / 20</span>
+          <span>社区插件选刊</span><span>图版 {{ number }} / 20</span>
         </div>
-        <div class="print-masthead" lang="en">MoFox Gazette</div>
+        <div class="print-masthead" lang="zh-CN">MoFox 市场报</div>
         <div class="plate-edition">
           <span>精选图版</span><i>✦</i><span>社区出品</span>
         </div>
@@ -63,16 +63,16 @@ useMarketPointerReveal((pointer) => {
           </div>
         </div>
         <div class="plate-caption">
-          <i lang="en">Fig. {{ number }}</i
+          <i lang="zh-CN">图 {{ number }}</i
           ><b>{{ plate.title }}</b>
         </div>
       </div>
       <div class="spotlight-reveal" aria-hidden="true">
         <div class="running-line">
-          <span>背印藏书票</span><span>EX LIBRIS · {{ number }}</span>
+          <span>背印藏书票</span><span>藏书票 · {{ number }}</span>
         </div>
         <div class="back-title">
-          <i lang="en">Verso</i><b>{{ plate.reverse }}</b>
+          <i lang="zh-CN">背面</i><b>{{ plate.reverse }}</b>
         </div>
         <svg
           class="back-scene"

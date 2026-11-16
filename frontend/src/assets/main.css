@@ -1,11 +1,11 @@
 /* =============================================================
-   MoFox Plugin Market · Global stylesheet (v2)
+   MoFox 插件市场 · 全局样式表 (v2)
    --------------------------------------------------------------
    方向 A · 蓝调商店街
    - 海报式硬阴影 + 半色调点缀 = 杂志感
    - 思源宋体 / Bebas Neue / Noto Sans SC = 三段对比
-   - 节奏色：blue 主 / coral 温 / lemon 鲜，三色合计 < 6%
-   - 浅色优先 + 深色双主题 + reduced-motion 兼容
+   - 节奏色：蓝色 主 / 珊瑚红 温 / 柠檬黄 鲜，三色合计 < 6%
+   - 浅色优先 + 深色双主题 + 减少动效偏好兼容
    ============================================================= */
 
 *,
@@ -83,7 +83,7 @@ main.shell,
 }
 
 /* =============================================================
-   Layout primitives
+   基础布局
    ============================================================= */
 .shell {
   width: min(var(--shell-max), 100%);
@@ -118,7 +118,7 @@ main.shell,
 }
 
 /* =============================================================
-   Top bar
+   顶栏
    ============================================================= */
 .topbar {
   position: sticky;
@@ -290,7 +290,7 @@ main.shell,
 }
 
 /* =============================================================
-   Vol kicker bar — 杂志期刊感
+   期刊眉题栏 — 杂志期刊感
    ============================================================= */
 .vol-kicker {
   display: flex;
@@ -330,7 +330,7 @@ main.shell,
 }
 
 /* =============================================================
-   Section heads
+   分区标题
    ============================================================= */
 .section {
   margin-bottom: var(--space-12);
@@ -401,7 +401,7 @@ main.shell,
 }
 
 /* =============================================================
-   Buttons
+   按钮
    ============================================================= */
 .btn {
   display: inline-flex;
@@ -513,7 +513,7 @@ main.shell,
 }
 
 /* =============================================================
-   Chips / Tags / Badges
+   筛选标签 / 标签 / 徽章
    ============================================================= */
 .chip-group {
   display: inline-flex;
@@ -625,7 +625,7 @@ main.shell,
 }
 
 /* =============================================================
-   Card / Skeleton
+   卡片 / 骨架屏
    ============================================================= */
 .card {
   background: var(--surface);
@@ -682,7 +682,7 @@ main.shell,
 }
 
 /* =============================================================
-   Sidebar (market / browse) — 浅色卡片版
+   侧边栏（市场 / 浏览）— 浅色卡片版
    ============================================================= */
 .app-sidebar-desktop {
   position: sticky;
@@ -868,7 +868,7 @@ main.shell,
 }
 
 /* =============================================================
-   Inbox bell
+   收件箱铃铛
    ============================================================= */
 .inbox-bell {
   position: relative;
@@ -1123,7 +1123,7 @@ main.shell,
 }
 
 /* =============================================================
-   Announcements
+   公告
    ============================================================= */
 .announcement-banner {
   position: sticky;
@@ -1298,7 +1298,7 @@ main.shell,
 }
 
 /* =============================================================
-   Disclaimer Modal
+   免责声明弹窗
    ============================================================= */
 .disclaimer-overlay {
   position: fixed;
@@ -1370,7 +1370,7 @@ main.shell,
 }
 
 /* =============================================================
-   Empty / Risk warning / Rating
+   空状态 / 风险提示 / 评分
    ============================================================= */
 .empty-state,
 .empty {
@@ -1449,7 +1449,7 @@ main.shell,
 }
 
 /* =============================================================
-   Plugin grid + PluginCard (used in /, /browse and detail context)
+   插件网格 + PluginCard（用于 /、/browse 与详情页）
    ============================================================= */
 .grid {
   display: grid;
@@ -1469,7 +1469,7 @@ main.shell,
   height: 100%;
 }
 
-/* Plugin card v2 — borrowed from mockup */
+/* 插件卡片 v2 — 沿用设计稿 */
 .card-head {
   display: flex;
   gap: 12px;
@@ -1604,12 +1604,12 @@ main.shell,
   color: var(--coral);
 }
 
-/* Featured tag for Plugin card (subtler than the mockup tape) */
+/* 插件卡片的精选标签（比设计稿中的胶带效果更含蓄） */
 .card.is-featured {
   border-color: var(--blue-300);
 }
 .card.is-featured::after {
-  content: 'FEATURED';
+  content: '精选';
   position: absolute;
   top: 10px;
   right: -28px;
@@ -1627,7 +1627,7 @@ main.shell,
 }
 
 /* =============================================================
-   Hero (used by /me, author profile etc — recommendation page has its own)
+   主视觉区（用于 /me、作者主页等，推荐页有独立样式）
    ============================================================= */
 .hero {
   display: grid;
@@ -1709,7 +1709,7 @@ main.shell,
 }
 
 /* =============================================================
-   Toolbar (browse / me)
+   工具栏（浏览页 / 个人页）
    ============================================================= */
 .toolbar {
   display: flex;
@@ -1751,7 +1751,7 @@ main.shell,
   box-shadow: var(--ring);
 }
 
-/* market-layout (Browse view) */
+/* market-layout（浏览视图） */
 .market-layout {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
@@ -1854,7 +1854,7 @@ main.shell,
 }
 
 /* =============================================================
-   Detail page bits
+   详情页组件
    ============================================================= */
 .install-code {
   display: block;
@@ -1934,7 +1934,7 @@ main.shell,
 }
 
 /* =============================================================
-   Footer
+   页脚
    ============================================================= */
 .app-footer {
   margin-top: var(--space-16);
@@ -1982,7 +1982,7 @@ main.shell,
 }
 
 /* =============================================================
-   Responsive
+   响应式布局
    ============================================================= */
 @media (max-width: 768px) {
   .topbar {
@@ -2096,7 +2096,7 @@ main.shell,
 }
 
 /* =============================================================
-   Keyboard focus rings (a11y)
+   键盘焦点环（无障碍）
    ============================================================= */
 :focus-visible {
   outline: none;
@@ -2113,7 +2113,7 @@ a:focus-visible,
 }
 
 /* =============================================================
-   Scrollbars (subtle)
+   滚动条（低调）
    ============================================================= */
 ::-webkit-scrollbar {
   width: 10px;
@@ -2132,7 +2132,7 @@ a:focus-visible,
 }
 
 /* =============================================================
-   Admin / 旧 className 补丁（让 AdminPluginsView 等老视图先看着像样）
+   后台 / 旧 className 补丁（让 AdminPluginsView 等老视图先看着像样）
    ============================================================= */
 .panel {
   background: var(--surface);
@@ -2297,7 +2297,7 @@ a:focus-visible,
 }
 
 /* =============================================================
-   Plugin Detail page (PluginDetailView legacy class names)
+   插件详情页（PluginDetailView 的旧版类名）
    ============================================================= */
 .loading-screen {
   text-align: center;
@@ -2365,7 +2365,7 @@ a:focus-visible,
   letter-spacing: 0.06em;
 }
 
-/* === Hero === */
+/* === 主视觉区 === */
 .detail-hero {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -2465,7 +2465,7 @@ a:focus-visible,
   line-height: 1.65;
 }
 
-/* === Tabs === */
+/* === 标签页 === */
 .tabs {
   display: flex;
   gap: 4px;
@@ -2510,7 +2510,7 @@ a:focus-visible,
   color: var(--ink-900);
 }
 
-/* === Detail panels === */
+/* === 详情面板 === */
 .detail .panel {
   background: var(--surface);
   border: 1.5px solid var(--line);
@@ -2588,7 +2588,7 @@ a:focus-visible,
   padding-left: 22px;
 }
 
-/* === Versions === */
+/* === 版本 === */
 .version-item {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -2639,7 +2639,7 @@ a:focus-visible,
   color: var(--ink-500);
 }
 
-/* === Comments === */
+/* === 评论 === */
 .comment-form {
   display: grid;
   gap: 10px;
@@ -2991,7 +2991,7 @@ a:focus-visible,
 }
 
 /* =============================================================
-   Admin shared widgets (DataTable, BulkActionBar, sub-view stacks)
+   后台共用组件（DataTable、BulkActionBar、子视图堆叠布局）
    ============================================================= */
 .admin-subview-stack {
   display: grid;
@@ -3226,7 +3226,7 @@ a:focus-visible,
   transform: translateY(12px);
 }
 
-/* Form fields shared in admin sub-views */
+/* 后台子视图共用的表单字段 */
 .form-field {
   display: grid;
   gap: 4px;
@@ -3262,7 +3262,7 @@ a:focus-visible,
   resize: vertical;
 }
 
-/* Modal backdrop (used by AdminCurationView / AdminAnnouncementsView modals) */
+/* 弹窗遮罩（供 AdminCurationView / AdminAnnouncementsView 的弹窗使用） */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -3320,7 +3320,7 @@ a:focus-visible,
 }
 
 /* =============================================================
-   Admin Curation / Announcements editors
+   后台精选 / 公告编辑器
    ============================================================= */
 .admin-form-grid {
   display: grid;
@@ -3418,7 +3418,7 @@ a:focus-visible,
   margin-top: var(--space-2);
 }
 
-/* card list (announcement list / curation per-group list) */
+/* 卡片列表（公告列表 / 精选分组列表） */
 .admin-card-list {
   display: grid;
   gap: 8px;

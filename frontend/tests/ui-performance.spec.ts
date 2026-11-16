@@ -19,8 +19,8 @@ afterEach(() => {
   delete window.__mofoxBoot;
 });
 
-describe('the complete intro stays available', () => {
-  test('the original intro plays before revealing a ready route', async () => {
+describe('完整开场动画保持可用', () => {
+  test('先播放原有开场动画，再显示已就绪的路由', async () => {
     vi.useFakeTimers();
     document.body.innerHTML = '<div id="boot-screen"></div><div id="app" inert></div>';
     const stopWatch = vi.fn();
@@ -38,7 +38,7 @@ describe('the complete intro stays available', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  test('explicitly skipping the intro enables a ready app immediately', async () => {
+  test('显式跳过开场动画时立即启用已就绪的应用', async () => {
     vi.useFakeTimers();
     document.body.innerHTML = '<div id="boot-screen"></div><div id="app" inert></div>';
     window.__mofoxBoot = { startedAt: performance.now(), stopWatch: vi.fn(), fail: vi.fn() };
@@ -50,7 +50,7 @@ describe('the complete intro stays available', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  test('startup failure keeps the retry screen available', async () => {
+  test('启动失败时保持重试界面可用', async () => {
     document.body.innerHTML = '<div id="boot-screen" data-phase="failed"></div><div id="app" inert></div>';
     const { finishBoot, booting } = await import('@/composables/useLoadingState');
     finishBoot();
@@ -96,8 +96,8 @@ async function pointerHarness(fine = true, reduced = false) {
   return { frames, listener, move, flushFrame };
 }
 
-describe('pointer decoration stays bounded', () => {
-  test('bursts use the latest coordinate once per frame without changing root styles', async () => {
+describe('指针装饰保持受控', () => {
+  test('连续事件每帧仅使用一次最新坐标，且不改变根元素样式', async () => {
     const { frames, listener, move, flushFrame } = await pointerHarness();
     for (let x = 0; x < 50; x++) move(x);
     expect(listener).not.toHaveBeenCalled();
@@ -118,14 +118,14 @@ describe('pointer decoration stays bounded', () => {
     expect(frames.size).toBe(0);
   });
 
-  test.each([[false, false], [true, true]])('does not animate coarse or reduced-motion input (%s, %s)', async (fine, reduced) => {
+  test.each([[false, false], [true, true]])('粗略指针或减少动态效果的输入不播放动画（%s，%s）', async (fine, reduced) => {
     const { frames, listener, move } = await pointerHarness(fine, reduced);
     move(20);
     expect(frames.size).toBe(0);
     expect(listener).not.toHaveBeenCalled();
   });
 
-  test('a motion preference change cancels pending work', async () => {
+  test('动态效果偏好变化时取消待处理任务', async () => {
     const { frames, listener, move } = await pointerHarness();
     move(20);
     expect(frames.size).toBe(1);

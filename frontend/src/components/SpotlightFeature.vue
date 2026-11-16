@@ -17,7 +17,7 @@ const focused = ref(false);
 const pageHidden = ref(false);
 const inViewport = ref(false);
 const reducedMotion = ref(false);
-// null follows the system preference; the play control is an explicit override.
+// null 表示遵循系统偏好；播放控件可显式覆盖该偏好。
 const manualPlayback = ref<boolean | null>(null);
 const autoplayEnabled = computed(
   () => manualPlayback.value ?? !reducedMotion.value,
@@ -165,7 +165,7 @@ onBeforeUnmount(() => {
     @focusout="focusOut"
   >
     <header class="selection-heading">
-      <p>01 / EDITOR’S SELECTION</p>
+      <p>01 / 编辑精选</p>
       <div><h2>值得一试</h2><span>精选作品</span></div>
       <router-link :to="{ name: 'market', query: { sort: 'popular' } }">浏览热门 ↗</router-link>
     </header>
@@ -193,7 +193,7 @@ onBeforeUnmount(() => {
             <p class="spotlight-summary">{{ current.summary }}</p>
           </div>
           <div class="spotlight-back" :aria-hidden="!flipped || undefined">
-            <span class="eyebrow">PLUGIN DOSSIER</span>
+            <span class="eyebrow">插件档案</span>
             <h3>一份新的能力</h3>
             <dl>
               <div>

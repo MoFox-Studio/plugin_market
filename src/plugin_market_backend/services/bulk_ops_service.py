@@ -1,7 +1,6 @@
-"""Bulk plugin governance service.
+"""提供插件批量治理服务。
 
-Implements task 9: apply admin governance actions to a batch of plugins while
-keeping per-row failures isolated via savepoints.
+实现任务 9：将管理员治理操作应用于一批插件，并通过保存点隔离各条记录的失败。
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ MAX_BULK_TARGETS = 100
 
 
 class BulkOpsService:
-    """Apply governance actions to a batch of plugins atomically per-row."""
+    """批量执行插件治理操作，并保证每条记录的操作具有原子性。"""
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -36,14 +35,14 @@ class BulkOpsService:
             raise ApiError(
                 422,
                 "BULK_TOO_MANY_TARGETS",
-                f"Bulk actions accept at most {MAX_BULK_TARGETS} plugins.",
+                f"批量操作最多接受 {MAX_BULK_TARGETS} 个插件。",
                 {"limit": MAX_BULK_TARGETS, "received": len(ids)},
             )
         if not ids:
             raise ApiError(
                 422,
                 "BULK_NO_TARGETS",
-                "At least one plugin id is required.",
+                "至少需要一个插件 ID。",
             )
 
         normalized_action = str(action or "").strip()
@@ -54,7 +53,7 @@ class BulkOpsService:
             raise ApiError(
                 422,
                 "BULK_MISSING_REASON",
-                "params.reason is required for delete.",
+                "执行 delete 操作时必须提供 params.reason。",
             )
 
         results: list[BulkActionItemResult] = []
@@ -77,14 +76,14 @@ class BulkOpsService:
                         error=BulkActionItemError(code=exc.code, message=exc.message),
                     )
                 )
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception as exc:  # pragma: no cover - 防御性处理
                 results.append(
                     BulkActionItemResult(
                         plugin_id=plugin_id,
                         ok=False,
                         error=BulkActionItemError(
                             code="BULK_OPERATION_FAILED",
-                            message=str(exc) or "Bulk operation failed.",
+                            message=str(exc) or "批量操作失败。",
                         ),
                     )
                 )
@@ -146,7 +145,7 @@ class BulkOpsService:
                 raise ApiError(
                     422,
                     "BULK_MISSING_TRUST_LEVEL",
-                    "params.trust_level is required for set_trust_level.",
+                    "执行 set_trust_level 操作时必须提供 params.trust_level。",
                 )
             before = plugin.trust_level
             plugin.trust_level = trust_level
@@ -156,7 +155,7 @@ class BulkOpsService:
             raise ApiError(
                 422,
                 "BULK_UNKNOWN_ACTION",
-                "Unsupported bulk action.",
+                "不支持的批量操作。",
                 {"action": action},
             )
 
@@ -186,7 +185,7 @@ class BulkOpsService:
             raise ApiError(
                 422,
                 "BULK_MISSING_TRUST_LEVEL",
-                "params.trust_level is required for set_trust_level.",
+                "执行 set_trust_level 操作时必须提供 params.trust_level。",
             )
         try:
             return raw if isinstance(raw, TrustLevel) else TrustLevel(str(raw))
@@ -194,6 +193,6 @@ class BulkOpsService:
             raise ApiError(
                 422,
                 "BULK_INVALID_TRUST_LEVEL",
-                "params.trust_level is invalid.",
+                "params.trust_level 无效。",
                 {"trust_level": raw},
             ) from exc

@@ -1,4 +1,4 @@
-"""Initial plugin market schema."""
+"""插件市场的初始数据库结构。"""
 
 from __future__ import annotations
 
@@ -38,8 +38,7 @@ review_action = sa.Enum(
 
 
 def upgrade() -> None:
-    """Apply initial schema."""
-
+    """创建初始数据库结构。"""
     op.create_table(
         "authors",
         sa.Column("author_id", sa.String(length=120), primary_key=True),
@@ -146,8 +145,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Drop initial schema."""
-
+    """删除初始数据库结构。"""
     op.drop_index("ix_webhook_events_event_name", table_name="webhook_events")
     op.drop_index("ix_webhook_events_created_at", table_name="webhook_events")
     op.drop_table("webhook_events")

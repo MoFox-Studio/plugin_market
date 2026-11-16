@@ -65,7 +65,7 @@ const previewHtml = computed(() => {
       </p>
     </div>
     <div class="bio-editor-preview">
-      <span class="bio-editor-preview-kicker">PREVIEW</span>
+      <span class="bio-editor-preview-kicker">预览</span>
       <div
         class="bio-editor-preview-body"
         v-html="

@@ -378,7 +378,7 @@ onBeforeUnmount(() => {
           @pointerdown.prevent
         >
           <div class="market-select-caption" aria-hidden="true">
-            <span>MOFOX / SELECT</span
+            <span>MOFOX / 选择</span
             ><span>{{ options.length.toString().padStart(2, '0') }}</span>
           </div>
           <template

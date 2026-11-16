@@ -135,7 +135,7 @@ async function undoFeedback() {
       </button>
     </div>
     <div v-else-if="!batch.data?.items.length" class="recommendation-state">
-      <span class="eyebrow">MORE POSSIBILITIES AHEAD</span>
+      <span class="eyebrow">更多可能，等待发现</span>
       <h3>暂时没有更多合适的插件</h3>
       <p>调整兴趣或恢复忽略项，继续发现社区作品。</p>
       <button class="btn" @click="preferencesOpen = true">调整推荐偏好</button

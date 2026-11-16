@@ -49,7 +49,7 @@ onBeforeUnmount(() => {
   >
     <form v-if="marketDialog" @submit.prevent="submit">
       <header>
-        <FoxMark :size="30" /><span>MOFOX / ACTION REVIEW</span
+        <FoxMark :size="30" /><span>MOFOX / 操作确认</span
         ><button
           type="button"
           class="icon-button"

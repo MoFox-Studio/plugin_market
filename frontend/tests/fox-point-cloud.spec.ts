@@ -107,8 +107,8 @@ function draw(time = 16) {
   pending.forEach(callback => callback(time));
 }
 
-describe('full-quality logo animation', () => {
-  test('retains original desktop particle density and shader while drawing once per animation frame', async () => {
+describe('完整画质的标志动画', () => {
+  test('保留原有桌面端粒子密度与着色器，同时每个动画帧仅绘制一次', async () => {
     const wrapper = await mountCloud();
     const renderer = rendering.renderers[0];
     expect(wrapper.find('.logo-scan').exists()).toBe(true);
@@ -128,7 +128,7 @@ describe('full-quality logo animation', () => {
     expect(frames.size).toBe(1);
   });
 
-  test('keeps original mobile sampling density', async () => {
+  test('保持原有移动端采样密度', async () => {
     vi.stubGlobal('innerWidth', 600);
     await mountCloud();
     draw();
@@ -136,7 +136,7 @@ describe('full-quality logo animation', () => {
     expect(scene.children[0].geometry.attributes.position.count).toBe(88 * 88);
   });
 
-  test('reuses immutable pixel data on route return and releases each WebGL scene', async () => {
+  test('返回路由时复用不可变像素数据，并释放每个 WebGL 场景', async () => {
     const first = await mountCloud();
     draw();
     const firstRenderer = rendering.renderers[0];
@@ -155,7 +155,7 @@ describe('full-quality logo animation', () => {
     expect(secondPositions).toBe(firstPositions);
   });
 
-  test('coalesces resize bursts without redundant canvas allocations or extra draws', async () => {
+  test('合并连续尺寸变化，不重复分配画布或额外绘制', async () => {
     await mountCloud();
     draw();
     const renderer = rendering.renderers[0];
@@ -173,7 +173,7 @@ describe('full-quality logo animation', () => {
     expect(renderer.render).toHaveBeenCalledTimes(3);
   });
 
-  test('pauses outside the viewport and in hidden documents, then resumes at the normal frame rate', async () => {
+  test('离开视口或文档隐藏时暂停，之后以正常帧率恢复', async () => {
     await mountCloud();
     draw();
     const renderer = rendering.renderers[0];
@@ -190,7 +190,7 @@ describe('full-quality logo animation', () => {
     expect(frames.size).toBe(1);
   });
 
-  test('reduced-motion preference keeps the original logo without starting WebGL', async () => {
+  test('减少动态效果偏好保留原有标志，且不启动 WebGL', async () => {
     reduced = true;
     const wrapper = await mountCloud();
     expect(wrapper.find('.mofox-original-logo').exists()).toBe(true);

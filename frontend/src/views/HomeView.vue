@@ -72,9 +72,9 @@ function date(value: string) {
     <header class="gazette-masthead">
       <div class="masthead-line">
         <div class="mast-wing"><b>MOFOX STUDIO</b><small>社区出品</small></div>
-        <div class="mast-title" lang="en"><i>The</i> MoFox Gazette</div>
+        <div class="mast-title" lang="zh-CN"><i>MoFox</i> 市场报</div>
         <div class="mast-wing">
-          <b>PLUGIN MARKET</b>
+          <b>插件市场</b>
           <small v-if="stats" class="hero-counts"
             >{{
               formatNumber(stats.published_plugins ?? stats.plugins_total ?? 0)
@@ -85,7 +85,7 @@ function date(value: string) {
         </div>
       </div>
       <div class="mast-register">
-        <span>发现版 <i>◆</i> FRONT PAGE</span>
+        <span>发现版 <i>◆</i> 首页</span>
         <nav aria-label="本版导读">
           <a href="#featured">01 值得一试</a><a href="#for-you">02 猜你喜欢</a>
         </nav>
@@ -95,7 +95,7 @@ function date(value: string) {
     <section class="discovery-hero" aria-labelledby="discovery-title">
       <div class="discovery-copy">
         <div class="lead-kicker">
-          <span>插件市场</span><i lang="en">Open Possibilities</i>
+          <span>插件市场</span><i lang="zh-CN">探索更多可能</i>
         </div>
         <h1 id="discovery-title">拓展边界，<br />让灵感运行<b>。</b></h1>
       </div>
@@ -137,7 +137,7 @@ function date(value: string) {
       <section class="news-section" aria-labelledby="latest-title">
         <header class="section-title">
           <div>
-            <span class="eyebrow">03 / LATEST RELEASES</span>
+            <span class="eyebrow">03 / 最新发布</span>
             <h2 id="latest-title">持续生长 <small>最近更新</small></h2>
           </div>
           <router-link class="text-link" to="/browse?sort=updated"
@@ -168,7 +168,7 @@ function date(value: string) {
               }}</span>
               <div>
                 <small>{{
-                  categoryLabel(plugin.categories?.[0] || 'other')
+                  categoryLabel(plugin.categories?.[0] || '其他')
                 }}</small>
                 <h3>{{ plugin.display_name }}</h3>
                 <p>{{ plugin.summary }}</p>
@@ -186,7 +186,7 @@ function date(value: string) {
       <section class="creators-section" aria-labelledby="people-title">
         <header class="section-title">
           <div>
-            <span class="eyebrow">04 / THE PEOPLE BEHIND</span>
+            <span class="eyebrow">04 / 幕后创作者</span>
             <h2 id="people-title">由热爱驱动 <small>社区创作者</small></h2>
           </div>
           <small v-if="stats" class="edition-tally"
@@ -202,7 +202,7 @@ function date(value: string) {
             class="creator-card"
           >
             <small
-              >{{ author.featured ? 'FEATURED AUTHOR' : 'CONTRIBUTOR' }} / 0{{
+              >{{ author.featured ? '精选作者' : '贡献者' }} / 0{{
                 i + 1
               }}</small
             >
@@ -227,7 +227,7 @@ function date(value: string) {
         aria-labelledby="publish-title"
       >
         <div>
-          <span class="eyebrow">CREATORS' DESK</span>
+          <span class="eyebrow">创作者工作台</span>
           <h2 id="publish-title">把你的插件带到这里。</h2>
           <p>
             在插件项目中使用

@@ -17,8 +17,8 @@ class GeometryWorker implements SurveyGeometryWorker {
 
 afterEach(() => vi.useRealTimers());
 
-describe('survey geometry scheduling', () => {
-  test('deduplicates shared sheets and skips obsolete queued work after a fast scroll', () => {
+describe('测绘几何调度', () => {
+  test('对共享图幅去重，并在快速滚动后跳过已过时的排队任务', () => {
     const worker = new GeometryWorker();
     const scheduler = new SurveyGeometryScheduler({ workerFactory: () => worker });
     const first = scheduler.subscribe(vi.fn());
@@ -44,7 +44,7 @@ describe('survey geometry scheduling', () => {
     expect(worker.terminate).toHaveBeenCalledOnce();
   });
 
-  test('retains cached results across consumers, evicts old sheets, and ignores disposed results', () => {
+  test('在使用方之间保留缓存结果、淘汰旧图幅，并忽略已释放订阅的结果', () => {
     const workers: GeometryWorker[] = [];
     const scheduler = new SurveyGeometryScheduler({
       cacheLimit: 2,
@@ -76,7 +76,7 @@ describe('survey geometry scheduling', () => {
     expect(scheduler.get(0)).toBeUndefined();
   });
 
-  test('keeps every requested sheet even when the viewport exceeds the normal cache limit', () => {
+  test('即使视口超出常规缓存上限，也保留全部请求图幅', () => {
     const worker = new GeometryWorker();
     const scheduler = new SurveyGeometryScheduler({ cacheLimit: 1, workerFactory: () => worker });
     const observer = scheduler.subscribe(vi.fn());
@@ -89,9 +89,9 @@ describe('survey geometry scheduling', () => {
     observer.dispose();
   });
 
-  test('falls back to the complete original algorithm when workers cannot start', async () => {
+  test('工作线程无法启动时回退到完整的原有算法', async () => {
     vi.useFakeTimers();
-    const scheduler = new SurveyGeometryScheduler({ workerFactory: () => { throw new Error('Worker blocked'); } });
+    const scheduler = new SurveyGeometryScheduler({ workerFactory: () => { throw new Error('工作线程被阻止'); } });
     const observer = scheduler.subscribe(vi.fn());
     observer.setSheets([0]);
     expect(scheduler.get(0)).toBeUndefined();
@@ -103,7 +103,7 @@ describe('survey geometry scheduling', () => {
     observer.dispose();
   });
 
-  test('retries only the current viewport through the fallback after a worker failure', async () => {
+  test('工作线程失败后，仅通过回退实现重试当前视口', async () => {
     vi.useFakeTimers();
     const worker = new GeometryWorker();
     const generate = vi.fn((sheet: number) => ({ major: `major-${sheet}`, minor: `minor-${sheet}` }));

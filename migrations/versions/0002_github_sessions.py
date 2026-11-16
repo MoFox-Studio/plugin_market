@@ -1,4 +1,4 @@
-"""Add GitHub OAuth browser sessions."""
+"""添加 GitHub OAuth 浏览器会话。"""
 
 from __future__ import annotations
 
@@ -12,8 +12,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Apply GitHub session tables."""
-
+    """创建 GitHub 会话表。"""
     op.create_table(
         "auth_sessions",
         sa.Column("session_id", sa.String(length=160), primary_key=True),
@@ -35,8 +34,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Drop GitHub session tables."""
-
+    """删除 GitHub 会话表。"""
     op.drop_index("ix_oauth_states_expires_at", table_name="oauth_states")
     op.drop_table("oauth_states")
     op.drop_index("ix_auth_sessions_expires_at", table_name="auth_sessions")

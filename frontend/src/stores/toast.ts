@@ -33,7 +33,7 @@ export const useToastStore = defineStore('toast', () => {
   let nextExitAt = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  // One timer belongs to the oldest entry. New arrivals cannot restart its lifetime.
+  // 计时器只负责最早的提示；新提示不会重置它的显示时长。
   function schedule() {
     clearTimeout(timer);
     timer = undefined;

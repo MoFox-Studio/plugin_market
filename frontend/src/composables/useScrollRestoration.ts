@@ -24,7 +24,7 @@ export function keepsReadingPosition(to: RouteLocationNormalized, from: RouteLoc
   if (!from.matched.length || to.path !== from.path) return false;
   if (!to.hash) return true;
   if ((to.name === 'plugin' || to.name === 'skill') && chapterTabs.has(to.hash)) return true;
-  // Updating a query on an anchored page is not a new request to visit that anchor.
+  // 带锚点的页面更新查询参数时，不视为再次访问该锚点的请求。
   return to.hash === from.hash && to.fullPath !== from.fullPath;
 }
 
@@ -33,7 +33,7 @@ function hashTarget(hash: string): HTMLElement | null {
   try {
     id = decodeURIComponent(id);
   } catch {
-    /* Keep a literal malformed ID. */
+    // 解码失败时保留原始 ID。
   }
   return document.getElementById(id);
 }
@@ -60,11 +60,11 @@ function anchorOffset(target: HTMLElement): number {
   );
 }
 
-/** Restore once, after this navigation's content can actually contain the target.
+/**
+ * 仅在本次导航的内容能够包含目标位置后，恢复一次滚动位置。
  *
- * We apply the scroll ourselves and return false to Vue Router. This keeps the
- * final navigation check and scrolling in one synchronous operation, so a late
- * router promise cannot apply an old position after another navigation starts.
+ * 自行执行滚动并向 Vue Router 返回 false，将最终导航检查与滚动保持在同一个同步操作中，
+ * 避免延迟完成的路由 Promise 在下一次导航开始后应用旧位置。
  */
 export function restoreRouteScroll(options: Restoration): Promise<false> {
   cancelPending?.();
@@ -136,7 +136,7 @@ export function restoreRouteScroll(options: Restoration): Promise<false> {
         };
       }
       const target = hashTarget(options.hash);
-      // A hash in a still-hidden tab is not ready to be scrolled into view.
+      // 锚点位于尚未显示的标签页时，还不能将其滚动到可视区域。
       if (!target || !target.getClientRects().length) return null;
       return {
         top: Math.max(
@@ -173,8 +173,8 @@ export function restoreRouteScroll(options: Restoration): Promise<false> {
     }
 
     const deadline = setTimeout(() => {
-      // A changed catalogue can be genuinely shorter than its old position.
-      // Clamp once only after loading ended; never scroll a pending/erroring task.
+      // 目录变化后，内容高度可能确实不足以恢复旧位置。
+      // 仅在加载结束后限制一次滚动范围，不为待完成或出错的任务执行滚动。
       finish(
         current() && !scrollRestorationBusy.value
           ? destination(true) || undefined
@@ -193,8 +193,8 @@ export function restoreRouteScroll(options: Restoration): Promise<false> {
       passive: true,
     });
     window.addEventListener('keydown', onKey, true);
-    // API completion precedes its consumer's reactive updates. The DOM tick and
-    // two animation frames also cover those queued renders and layout changes.
+    // API 请求完成早于使用方的响应式更新。等待一次 DOM 更新和两个动画帧，
+    // 也能涵盖已排队的渲染与布局变化。
     void nextTick().then(() => {
       if (!finished) frame = requestAnimationFrame(check);
     });

@@ -1,5 +1,5 @@
 /**
- * API client module - thin wrapper around fetch
+ * API 客户端模块，对 fetch 进行轻量封装。
  */
 
 import { trackRead } from '@/composables/useLoadingState';

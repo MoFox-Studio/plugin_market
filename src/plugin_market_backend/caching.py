@@ -1,8 +1,8 @@
-"""Small in-process cache helpers for market aggregate endpoints.
+"""为市场聚合接口提供轻量级进程内缓存。
 
-Task 10 uses one generic async loader helper backed by ``cachetools.TTLCache``
-and one tiny invalidation bus keyed by logical namespaces such as ``home`` and
-``announcements_active``.
+任务 10 使用基于 ``cachetools.TTLCache`` 的通用异步加载工具，
+以及按 ``home``、``announcements_active`` 等逻辑命名空间
+组织的轻量级缓存失效总线。
 """
 
 from __future__ import annotations
@@ -31,8 +31,7 @@ def _cache_for_ttl(ttl: int) -> TTLCache:
 
 
 async def aget_or_set(key: CacheKey, ttl: int, loader: AsyncLoader) -> Any:
-    """Return a cached value for ``key`` or populate it through ``loader``."""
-
+    """返回 ``key`` 对应的缓存值，未命中时通过 ``loader`` 加载。"""
     cache = _cache_for_ttl(int(ttl))
     if key in cache:
         return cache[key]
@@ -56,7 +55,7 @@ def _matches_namespace(key: CacheKey, namespace: str) -> bool:
 
 
 class CacheBus:
-    """Synchronous invalidation helper for namespace-scoped cache keys."""
+    """按命名空间同步清除缓存键的辅助工具。"""
 
     def invalidate(self, namespace: str) -> None:
         for cache in _caches_by_ttl.values():

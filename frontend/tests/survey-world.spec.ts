@@ -64,8 +64,8 @@ async function surveyHarness() {
   return { consumer, frames, flushFrame, requestFrame, cancelFrame };
 }
 
-// Compatibility oracle: the projection and CSS translations used by HEAD before
-// scroll handling moved into rAF. Keep the original constants and operation order.
+// 兼容性基准：将滚动处理移入 rAF 前，HEAD 使用的投影与 CSS 位移。
+// 保持原有常量与运算顺序。
 function legacyProjection(width: number, height: number, scrollY: number) {
   const scroll = Math.max(0, scrollY);
   const scale = Math.max(0.74, width / 1600);
@@ -88,8 +88,8 @@ const projectionCases = [
   scroll: sheet * 640 * Math.max(0.74, viewport.width / 1600),
 })));
 
-describe('survey camera scheduling and geometry', () => {
-  test('a scroll burst reads the latest position once in a single animation frame', async () => {
+describe('测绘相机调度与几何', () => {
+  test('一组连续滚动事件仅在一个动画帧内读取一次最新位置', async () => {
     const { consumer, frames, flushFrame, requestFrame } = await surveyHarness();
     const { listener } = consumer();
     for (let scroll = 100; scroll < 200; scroll++) {
@@ -112,7 +112,7 @@ describe('survey camera scheduling and geometry', () => {
     expect(listener.mock.lastCall?.[0]).toEqual({ x: 0, y: -205 });
   });
 
-  test.each(projectionCases)('preserves HEAD projection at $width × $height, scroll $scroll', async ({ width, height, scroll }) => {
+  test.each(projectionCases)('在 $width × $height 视口与 $scroll 滚动位置下保持 HEAD 投影结果', async ({ width, height, scroll }) => {
     const { consumer, flushFrame, frames } = await surveyHarness();
     const { world, listener } = consumer();
     setViewport(width, height, scroll);
@@ -136,7 +136,7 @@ describe('survey camera scheduling and geometry', () => {
     });
   });
 
-  test('mounting, moving, resizing and unmounting leave root styles untouched', async () => {
+  test('挂载、移动、调整尺寸与卸载均不修改根元素样式', async () => {
     const { consumer, flushFrame } = await surveyHarness();
     const rootStyle = document.documentElement.style;
     rootStyle.setProperty('--existing-theme-value', 'unchanged');
@@ -156,7 +156,7 @@ describe('survey camera scheduling and geometry', () => {
     expect(document.documentElement.getAttribute('style')).toBe(before);
   });
 
-  test('consumers share event listeners and only the last unmount cancels pending work', async () => {
+  test('使用方共享事件监听器，仅最后一个使用方卸载时取消待处理任务', async () => {
     const { consumer, frames, flushFrame, requestFrame, cancelFrame } = await surveyHarness();
     const addListener = vi.spyOn(window, 'addEventListener');
     const removeListener = vi.spyOn(window, 'removeEventListener');

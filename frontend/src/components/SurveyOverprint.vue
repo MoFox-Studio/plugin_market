@@ -17,6 +17,12 @@ const { sheets, dimensions, viewBox } = useSurveyWorld((position) => {
   paintPosition();
 });
 defineExpose({ setLensPosition(x: number, y: number) { lensOrigin = { x, y }; paintPosition(); } });
+const editionLabels = {
+  RIDGE: '山脊',
+  ATLAS: '图集',
+  PROOF: '校样',
+  RELAY: '中继',
+} as const;
 const editions = {
   home: { symbol: 'pass', code: 'RIDGE', x: 1110, y: 285 },
   catalog: { symbol: 'chart', code: 'ATLAS', x: 1050, y: 250 },
@@ -59,11 +65,11 @@ const marks = computed(() => sheets.value.map((sheet, i) => {
         <g v-for="site in mark.miniatures" :key="site.id" :transform="`translate(${site.x} ${site.y})`">
           <use class="survey-miniature" :href="site.source" width="176" height="132" />
           <path d="M3 113v12h12m146-118h12v12" fill="none" stroke="currentColor" stroke-width=".8"/>
-          <text x="157" y="131" text-anchor="end" fill="currentColor" font-family="monospace" font-size="6" letter-spacing="1.2">FIG. {{ site.number }}</text>
+          <text x="157" y="131" text-anchor="end" fill="currentColor" font-family="monospace" font-size="6" letter-spacing="1.2">图 {{ site.number }}</text>
         </g>
         <g :transform="`translate(${mark.east} ${mark.north})`">
           <path d="M-53 0h106m-104-6v12m9-8v4m9-4v4m9-6v8m9-6v4m9-4v4m9-8v12m9-8v4m9-4v4m9-6v8m9-6v4m9-4v4" stroke="currentColor" stroke-width="0.9" />
-          <text x="-52" y="17" fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1.2">{{ mark.label }}</text>
+          <text x="-52" y="17" fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1.2">{{ mark.label.replace(edition.code, editionLabels[edition.code]) }}</text>
         </g>
       </g>
     </svg>

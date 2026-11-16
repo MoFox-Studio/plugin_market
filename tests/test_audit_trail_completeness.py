@@ -1,4 +1,4 @@
-"""Property tests for review-record audit trail completeness."""
+"""审核记录审计轨迹完整性的属性测试。"""
 
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ def _plugin_payload(plugin_id: str) -> PluginCreate:
     return PluginCreate(
         plugin_id=plugin_id,
         display_name=plugin_id,
-        summary=f'summary for {plugin_id}',
-        description=f'description for {plugin_id}',
+        summary=f'{plugin_id} 的摘要',
+        description=f'{plugin_id} 的说明',
         repository_url=f'https://github.com/MoFox-Studio/{plugin_id}',
         license='MIT',
         categories=['tool'],
@@ -39,7 +39,7 @@ def _version_payload(version: str = '1.0.0') -> PluginVersionCreate:
     return PluginVersionCreate(
         version=version,
         release_tag=f'v{version}',
-        release_title=f'Release {version}',
+        release_title=f'版本 {version}',
         release_url=f'https://github.com/MoFox-Studio/sample/releases/tag/v{version}',
         asset_name=f'sample-{version}.mfp',
         asset_download_url=f'https://github.com/MoFox-Studio/sample/releases/download/v{version}/sample-{version}.mfp',
@@ -109,8 +109,8 @@ async def _run_case(operation: str, affected_targets: int) -> None:
 
         announcement = await announcements.create(
             AnnouncementCreate(
-                title='Initial',
-                body_markdown='body',
+                title='初始公告',
+                body_markdown='正文',
                 display_mode='banner',
                 audience='all',
             ),
@@ -138,15 +138,15 @@ async def _run_case(operation: str, affected_targets: int) -> None:
         elif operation == 'announcement_create':
             await announcements.create(
                 AnnouncementCreate(
-                    title='Created',
-                    body_markdown='body',
+                    title='新建公告',
+                    body_markdown='正文',
                     display_mode='modal',
                     audience='all',
                 ),
                 operator_id='admin',
             )
         elif operation == 'announcement_update':
-            await announcements.update(announcement.id, AnnouncementUpdate(title='Updated'), operator_id='admin')
+            await announcements.update(announcement.id, AnnouncementUpdate(title='更新后的标题'), operator_id='admin')
         elif operation == 'announcement_disable':
             await announcements.disable(announcement.id, operator_id='admin')
         elif operation == 'announcement_resurface':
@@ -154,15 +154,15 @@ async def _run_case(operation: str, affected_targets: int) -> None:
         elif operation == 'bulk_publish':
             await BulkOpsService(session).bulk_apply('admin', ['plug-a', 'plug-b', 'plug-c'][:affected_targets], 'publish')
         elif operation == 'metadata_patch':
-            await InlineEditService(session).patch_metadata('owner', 'plug-a', {'display_name': 'Renamed'})
+            await InlineEditService(session).patch_metadata('owner', 'plug-a', {'display_name': '已重命名'})
         elif operation == 'plugin_block':
-            await market.set_plugin_status('plug-a', PluginStatus.BLOCKED, ReviewAction.BLOCK_PLUGIN, 'admin', 'policy')
+            await market.set_plugin_status('plug-a', PluginStatus.BLOCKED, ReviewAction.BLOCK_PLUGIN, 'admin', '规则要求')
         elif operation == 'trust_level':
-            await market.set_plugin_trust_level('plug-a', TrustLevel.VERIFIED, 'admin', 'trusted')
+            await market.set_plugin_trust_level('plug-a', TrustLevel.VERIFIED, 'admin', '可信')
         elif operation == 'version_block':
-            await market.set_version_status('plug-a', '1.0.0', VersionStatus.BLOCKED, ReviewAction.BLOCK_VERSION, 'admin', 'version-policy')
-        else:  # pragma: no cover - defensive
-            raise AssertionError(f'Unknown operation: {operation}')
+            await market.set_version_status('plug-a', '1.0.0', VersionStatus.BLOCKED, ReviewAction.BLOCK_VERSION, 'admin', '版本规则要求')
+        else:  # pragma: no cover - 防御性分支
+            raise AssertionError(f'未知操作：{operation}')
 
         after = await _count_reviews(session)
 

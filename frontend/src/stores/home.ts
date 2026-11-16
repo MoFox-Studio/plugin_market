@@ -38,7 +38,7 @@ export const useHomeStore = defineStore('home', () => {
       } catch (err) {
         if (id !== generation) return null;
         error.value =
-          err instanceof Error ? err.message : 'Failed to load market home.';
+          err instanceof Error ? err.message : '市场首页加载失败。';
         return data.value;
       } finally {
         if (id === generation) {

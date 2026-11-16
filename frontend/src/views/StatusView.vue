@@ -115,9 +115,9 @@ async function refreshAll(): Promise<void> {
       stats.value = statsRes.payload as unknown as MarketStats;
     } else stats.value = null;
 
-    // /health intentionally returns minimal info; /api/v1/admin/system carries
-    // started_at / uptime, but it requires admin. We stay public-friendly here
-    // and only show uptime if a public probe ever exposes it.
+    // /health 仅返回最少信息；/api/v1/admin/system 提供启动时间和运行时长，
+    // 但需要管理员权限。此页面供所有访问者使用，
+    // 仅在公开探测端点提供运行时长时展示。
     const startedFromPayload = healthRes.payload?.['started_at'];
     if (typeof startedFromPayload === 'string') {
       startedAt.value = startedFromPayload;

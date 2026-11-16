@@ -1,18 +1,16 @@
-"""Skill market domain service.
+"""提供技能市场的领域服务。
 
-This module implements the skill market backend operations:
+本模块实现技能市场后端操作：
 
-* :class:`SkillService.create_skill` validates a zip package, extracts metadata
-  from SKILL.md, persists the package, and records the skill + version in the
-  database.
-* :class:`SkillService.publish_version` adds a new installable zip version.
-* :class:`SkillService.update_skill_meta` patches mutable metadata fields.
-* :class:`SkillService.get_skill` / :meth:`list_skills` provide public query
-  endpoints with community-stats aggregation.
-* Community interactions: like/unlike, rate, comment (CRUD), subscribe/unsubscribe.
-* Admin operations: block, set trust level, delete.
+* ``SkillService.create_skill`` 校验 ZIP 包，从 SKILL.md 提取元数据，
+  持久化安装包，并在数据库中记录技能和版本。
+* ``SkillService.publish_version`` 添加可安装的新 ZIP 版本。
+* ``SkillService.update_skill_meta`` 局部更新可修改的元数据字段。
+* ``SkillService.get_skill`` 和 ``list_skills`` 提供公开查询并聚合社区统计。
+* 社区交互：点赞与取消点赞、评分、评论管理、订阅与取消订阅。
+* 管理员操作：封禁、设置信任级别和删除。
 
-All write methods append :class:`ReviewRecordORM` audit records.
+技能发布、元数据变更和治理写操作会追加 ``ReviewRecordORM`` 审计记录。
 """
 
 from __future__ import annotations
@@ -66,19 +64,17 @@ from plugin_market_backend.schemas import (
 
 
 class SkillService:
-    """Manage skill market records, versions, and community interactions.
+    """管理技能市场记录、版本及社区交互。
 
-    The service keeps skill-market writes in a single bounded module so
-    audit trails and validation rules are enforced in exactly one place.
+    本服务将技能市场写操作集中在职责明确的模块中，统一执行审计和校验规则。
     """
 
     def __init__(self, session: AsyncSession) -> None:
-        """Create a service bound to one transactional session."""
-
+        """创建绑定到单个事务会话的服务。"""
         self.session = session
 
     # ------------------------------------------------------------------
-    # Create / publish
+    # 创建和发布
     # ------------------------------------------------------------------
 
     async def create_skill(
@@ -93,33 +89,46 @@ class SkillService:
         categories: list[str] | None = None,
         tags: list[str] | None = None,
     ) -> Skill:
-        """Validate a skill zip, extract metadata, persist everything.
+        """校验技能 ZIP 包、提取元数据并持久化技能与版本。
 
-        Returns the newly-created skill DTO.
+        Args:
+            owner_id: 技能所有者 ID。
+            skill_id: 待创建的技能 ID。
+            zip_bytes: 技能 ZIP 包的原始字节。
+            version: 初始版本号。
+            release_notes: 可选的版本说明。
+            min_mofox_version: 可选的最低 MoFox 版本要求。
+            categories: 可选的分类列表。
+            tags: 可选的标签列表。
+
+        Returns:
+            新建技能的 DTO。
+
+        Raises:
+            ApiError: 技能 ID、版本或安装包校验失败，或技能 ID 已存在。
         """
-
         skill_id = validate_skill_id(skill_id)
         version = validate_skill_version(version)
 
-        # Validate and extract metadata from the zip
+        # 校验 ZIP 包并提取元数据。
         name, description, _readme = extract_and_validate_skill(zip_bytes)
 
-        # Check that the skill_id does not already exist
+        # 检查 skill_id 是否已存在。
         existing = await self.session.get(SkillORM, skill_id)
         if existing is not None:
             raise ApiError(
                 409,
                 "SKILL_ALREADY_EXISTS",
-                f"A skill with id '{skill_id}' already exists.",
+                f"ID 为 '{skill_id}' 的技能已存在。",
                 {"skill_id": skill_id},
             )
 
-        # Store the zip package
+        # 存储 ZIP 安装包。
         package_path = store_skill_package(owner_id, skill_id, version, zip_bytes)
         package_size = len(zip_bytes)
         checksum = hashlib.sha256(zip_bytes).hexdigest()
 
-        # Create skill ORM
+        # 创建技能 ORM 记录。
         now = utc_now()
         skill = SkillORM(
             skill_id=skill_id,
@@ -137,7 +146,7 @@ class SkillService:
         )
         self.session.add(skill)
 
-        # Create version ORM
+        # 创建版本 ORM 记录。
         ver = SkillVersionORM(
             skill_id=skill_id,
             version=version,
@@ -171,7 +180,7 @@ class SkillService:
             },
         )
 
-        # Audit record
+        # 记录审计信息。
         await _append_audit(
             self.session,
             action=ReviewAction.PUBLISH_SKILL,
@@ -195,22 +204,35 @@ class SkillService:
         release_notes: str | None = None,
         min_mofox_version: str | None = None,
     ) -> SkillVersion:
-        """Publish a new version for an existing skill.
+        """为已有技能发布新版本。
 
-        The zip is validated the same way as :meth:`create_skill`.
+        ZIP 包使用与 ``create_skill`` 相同的校验方式。
+
+        Args:
+            skill_id: 目标技能的 ID。
+            version: 待发布的版本号。
+            zip_bytes: 技能 ZIP 包的原始字节。
+            operator_id: 发布版本的操作者 ID。
+            release_notes: 可选的版本说明。
+            min_mofox_version: 可选的最低 MoFox 版本要求。
+
+        Returns:
+            新建的技能版本数据模型。
+
+        Raises:
+            ApiError: 技能不存在、版本重复，或 ID、版本、安装包校验失败。
         """
-
         skill_id = validate_skill_id(skill_id)
         version = validate_skill_version(version)
 
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
-        # Validate the zip package (we don't use the extracted name/desc here)
+        # 校验 ZIP 包，此处不使用提取出的名称和描述。
         extract_and_validate_skill(zip_bytes)
 
-        # Check version uniqueness
+        # 检查版本号是否唯一。
         existing_ver = await self.session.scalar(
             select(SkillVersionORM).where(
                 SkillVersionORM.skill_id == skill_id,
@@ -221,11 +243,11 @@ class SkillService:
             raise ApiError(
                 409,
                 "SKILL_VERSION_EXISTS",
-                f"Version '{version}' already exists for skill '{skill_id}'.",
+                f"版本 '{version}' 已存在于技能 '{skill_id}' 中。",
                 {"skill_id": skill_id, "version": version},
             )
 
-        # Store the zip package
+        # 存储 ZIP 安装包。
         package_path = store_skill_package(skill.owner_id, skill_id, version, zip_bytes)
         package_size = len(zip_bytes)
         checksum = hashlib.sha256(zip_bytes).hexdigest()
@@ -272,7 +294,7 @@ class SkillService:
             },
         )
 
-        # Update skill timestamp
+        # 更新技能时间戳。
         skill.updated_at = updated_at
 
         await _append_audit(
@@ -287,7 +309,7 @@ class SkillService:
         return _version_to_schema(ver)
 
     # ------------------------------------------------------------------
-    # Metadata update
+    # 元数据更新
     # ------------------------------------------------------------------
 
     async def update_skill_meta(
@@ -296,14 +318,13 @@ class SkillService:
         operator_id: str,
         update: SkillUpdate,
     ) -> Skill:
-        """Patch mutable skill metadata fields.
+        """局部更新技能中可修改的元数据字段。
 
-        Only supplied (non-None) fields are changed.
+        仅修改已提供且不为 ``None`` 的字段。
         """
-
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         changed = False
         if update.display_name is not None:
@@ -336,15 +357,14 @@ class SkillService:
         return _skill_to_schema(skill, owner=owner, latest_version=latest.version if latest else None)
 
     # ------------------------------------------------------------------
-    # Query
+    # 查询
     # ------------------------------------------------------------------
 
     async def get_skill(self, skill_id: str, viewer_id: str | None = None) -> Skill:
-        """Return a single skill with community-stats aggregation."""
-
+        """返回单个技能及聚合后的社区统计。"""
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         owner = await self.session.get(AuthorORM, skill.owner_id)
         versions = await self._load_versions_for_skill(skill_id)
@@ -365,8 +385,7 @@ class SkillService:
         page_size: int = 50,
         viewer_id: str | None = None,
     ) -> SkillListResponse:
-        """Return a paginated, filtered list of published skills."""
-
+        """返回经过筛选和分页的已发布技能列表。"""
         page_size = max(1, min(page_size, 100))
         page = max(1, page)
         offset = (page - 1) * page_size
@@ -391,7 +410,7 @@ class SkillService:
 
         total = (await self.session.scalar(count_stmt)) or 0
 
-        # Sort
+        # 排序
         sort_cols: dict[str, object] = {
             "updated": SkillORM.updated_at.desc(),
             "created": SkillORM.created_at.desc(),
@@ -403,7 +422,7 @@ class SkillService:
 
         rows = list((await self.session.scalars(stmt)).all())
 
-        # Gather owners, versions and stats
+        # 汇总所有者、版本及统计信息。
         owner_ids = [row.owner_id for row in rows]
         owner_map = await self._load_authors(owner_ids)
 
@@ -424,11 +443,10 @@ class SkillService:
         return SkillListResponse(items=items, total=total)
 
     async def get_skill_versions(self, skill_id: str) -> SkillVersionListResponse:
-        """Return all versions for a skill."""
-
+        """返回指定技能的所有版本。"""
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         versions = await self._load_versions_for_skill(skill_id)
         return SkillVersionListResponse(
@@ -439,8 +457,7 @@ class SkillService:
     async def get_version_download(
         self, skill_id: str, version: str
     ) -> tuple[str, int, str]:
-        """Return (file_path, file_size, checksum) for a skill version package."""
-
+        """返回技能版本安装包的路径、大小和校验和元组。"""
         ver = await self.session.scalar(
             select(SkillVersionORM).where(
                 SkillVersionORM.skill_id == skill_id,
@@ -451,7 +468,7 @@ class SkillService:
             raise ApiError(
                 404,
                 "SKILL_VERSION_NOT_FOUND",
-                "Skill version not found.",
+                "未找到技能版本。",
                 {"skill_id": skill_id, "version": version},
             )
 
@@ -460,25 +477,24 @@ class SkillService:
             raise ApiError(
                 404,
                 "SKILL_PACKAGE_MISSING",
-                "The package file is missing from storage.",
+                "存储中缺少安装包文件。",
                 {"skill_id": skill_id, "version": version},
             )
 
         return str(file_path), ver.package_size, ver.checksum_sha256
 
     async def record_download(self, skill_id: str, version: str | None = None) -> SkillInstallRecord:
-        """Increment the download counter for a skill version.
+        """增加技能版本的下载计数。
 
-        If *version* is ``None``, the latest version is used.
+        ``version`` 为 ``None`` 时使用最新版本。
         """
-
         if version is None:
             versions = await self._load_versions_for_skill(skill_id)
             if not versions:
                 raise ApiError(
                     404,
                     "SKILL_NO_VERSIONS",
-                    "Skill has no versions yet.",
+                    "技能尚无版本。",
                     {"skill_id": skill_id},
                 )
             version = versions[0].version
@@ -493,13 +509,13 @@ class SkillService:
             raise ApiError(
                 404,
                 "SKILL_VERSION_NOT_FOUND",
-                "Skill version not found.",
+                "未找到技能版本。",
                 {"skill_id": skill_id, "version": version},
             )
 
         ver.download_count = (ver.download_count or 0) + 1
 
-        # Also aggregate to parent skill
+        # 同时累加到所属技能的下载计数。
         skill = await self.session.get(SkillORM, skill_id)
         if skill is not None:
             skill.download_count = (skill.download_count or 0) + 1
@@ -512,15 +528,14 @@ class SkillService:
         )
 
     # ------------------------------------------------------------------
-    # Delete / block
+    # 删除和封禁
     # ------------------------------------------------------------------
 
     async def delete_skill(self, skill_id: str, operator_id: str) -> None:
-        """Delete a skill and all associated records."""
-
+        """删除技能及其关联记录。"""
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         await _append_audit(
             self.session,
@@ -531,7 +546,7 @@ class SkillService:
             status_before=skill.status.value,
         )
 
-        # Delete associated records using ORM delete for cascade-like behavior
+        # 通过 ORM 删除技能及其关联记录。
         await self.session.execute(
             select(SkillCommentORM).where(SkillCommentORM.skill_id == skill_id)
         )
@@ -554,11 +569,10 @@ class SkillService:
     async def block_skill(
         self, skill_id: str, operator_id: str, reason: str | None = None
     ) -> Skill:
-        """Block a skill (admin operation)."""
-
+        """封禁技能，仅供管理员操作。"""
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         skill.status = SkillStatus.BLOCKED
         skill.updated_at = utc_now()
@@ -584,11 +598,10 @@ class SkillService:
         trust_level: str,
         operator_id: str,
     ) -> Skill:
-        """Set the trust level for a skill."""
-
+        """设置技能的信任级别。"""
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         try:
             new_level = TrustLevel(trust_level)
@@ -596,7 +609,7 @@ class SkillService:
             raise ApiError(
                 422,
                 "INVALID_TRUST_LEVEL",
-                f"Invalid trust level: {trust_level}.",
+                f"无效的信任级别：{trust_level}。",
                 {"valid_values": [e.value for e in TrustLevel]},
             )
 
@@ -619,15 +632,14 @@ class SkillService:
         return _skill_to_schema(skill, owner=owner)
 
     # ------------------------------------------------------------------
-    # Community: like / unlike
+    # 社区交互：点赞和取消点赞
     # ------------------------------------------------------------------
 
     async def toggle_like(self, skill_id: str, viewer_id: str) -> dict:
-        """Toggle the viewer's like on a skill. Returns {liked, likes_count}."""
-
+        """切换访问者对技能的点赞状态，返回 ``liked`` 和 ``likes_count``。"""
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         existing = await self.session.scalar(
             select(SkillLikeORM).where(
@@ -656,18 +668,17 @@ class SkillService:
         return {"liked": liked, "likes_count": int(likes_count)}
 
     # ------------------------------------------------------------------
-    # Community: rate
+    # 社区交互：评分
     # ------------------------------------------------------------------
 
     async def rate_skill(self, skill_id: str, viewer_id: str, score: int) -> SkillRatingInfo:
-        """Submit or update the viewer's rating (1-5)."""
-
+        """提交或更新访问者的评分，范围为 1 至 5 分。"""
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         if score < 1 or score > 5:
-            raise ApiError(422, "INVALID_RATING", "Score must be between 1 and 5.")
+            raise ApiError(422, "INVALID_RATING", "评分必须在 1 至 5 之间。")
 
         existing = await self.session.scalar(
             select(SkillRatingORM).where(
@@ -694,8 +705,7 @@ class SkillService:
         return await self.rating_summary(skill_id, viewer_id)
 
     async def clear_rating(self, skill_id: str, viewer_id: str) -> SkillRatingInfo:
-        """Remove the viewer's rating."""
-
+        """移除访问者的评分。"""
         existing = await self.session.scalar(
             select(SkillRatingORM).where(
                 SkillRatingORM.skill_id == skill_id,
@@ -711,8 +721,7 @@ class SkillService:
     async def rating_summary(
         self, skill_id: str, viewer_id: str | None = None
     ) -> SkillRatingInfo:
-        """Return aggregated rating stats for a skill."""
-
+        """返回指定技能的评分汇总统计。"""
         agg = await self.session.execute(
             select(
                 func.coalesce(func.avg(SkillRatingORM.score), 0.0),
@@ -723,7 +732,7 @@ class SkillService:
         avg_val = float(row[0]) if row else 0.0
         count_val = int(row[1]) if row else 0
 
-        # Distribution
+        # 评分分布
         dist: dict[str, int] = {}
         for s in range(1, 6):
             c = await self.session.scalar(
@@ -753,7 +762,7 @@ class SkillService:
         )
 
     # ------------------------------------------------------------------
-    # Community: comment
+    # 社区交互：评论
     # ------------------------------------------------------------------
 
     async def list_comments(
@@ -763,11 +772,10 @@ class SkillService:
         offset: int = 0,
         limit: int = 50,
     ) -> SkillCommentListResponse:
-        """List comments for a skill, oldest first."""
-
+        """按时间从早到晚列出技能评论。"""
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         total = await self.session.scalar(
             select(func.count()).select_from(SkillCommentORM).where(
@@ -798,11 +806,10 @@ class SkillService:
         content: str,
         parent_id: int | None = None,
     ) -> SkillComment:
-        """Submit a new comment on a skill."""
-
+        """为技能提交新评论。"""
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         if parent_id is not None:
             parent = await self.session.get(SkillCommentORM, parent_id)
@@ -810,7 +817,7 @@ class SkillService:
                 raise ApiError(
                     422,
                     "INVALID_PARENT",
-                    "Parent comment not found or belongs to a different skill.",
+                    "父评论不存在或属于其他技能。",
                 )
 
         comment = SkillCommentORM(
@@ -834,29 +841,27 @@ class SkillService:
         viewer_id: str,
         is_admin: bool = False,
     ) -> None:
-        """Soft-delete a comment (owner or admin)."""
-
+        """由评论作者或管理员软删除评论。"""
         comment = await self.session.get(SkillCommentORM, comment_id)
         if comment is None or comment.skill_id != skill_id or comment.is_deleted:
-            raise ApiError(404, "COMMENT_NOT_FOUND", "Comment not found.")
+            raise ApiError(404, "COMMENT_NOT_FOUND", "未找到评论。")
 
         if not is_admin and comment.author_id != viewer_id:
-            raise ApiError(403, "FORBIDDEN", "You can only delete your own comments.")
+            raise ApiError(403, "FORBIDDEN", "你只能删除自己的评论。")
 
         comment.is_deleted = True
         comment.updated_at = utc_now()
         await self.session.flush()
 
     # ------------------------------------------------------------------
-    # Community: subscribe / unsubscribe
+    # 社区交互：订阅和取消订阅
     # ------------------------------------------------------------------
 
     async def toggle_subscription(self, skill_id: str, viewer_id: str) -> dict:
-        """Toggle the viewer's subscription on a skill."""
-
+        """切换访问者对技能的订阅状态。"""
         skill = await self.session.get(SkillORM, skill_id)
         if skill is None:
-            raise ApiError(404, "SKILL_NOT_FOUND", "Skill not found.", {"skill_id": skill_id})
+            raise ApiError(404, "SKILL_NOT_FOUND", "未找到技能。", {"skill_id": skill_id})
 
         existing = await self.session.scalar(
             select(SkillSubscriptionORM).where(
@@ -889,12 +894,11 @@ class SkillService:
         return {"subscribed": subscribed, "subscriptions_count": int(count)}
 
     # ------------------------------------------------------------------
-    # Taxonomy
+    # 分类体系
     # ------------------------------------------------------------------
 
     async def get_categories(self) -> list[str]:
-        """Return distinct categories across all published skills."""
-
+        """返回所有已发布技能的去重分类列表。"""
         rows = (
             await self.session.scalars(
                 select(SkillORM.categories).where(
@@ -910,13 +914,12 @@ class SkillService:
                     if isinstance(c, str):
                         seen.add(c)
         if not seen:
-            # Preset fallback categories when no skills exist yet
+            # 尚无可用分类时返回预设分类。
             return ["工具", "娱乐", "开发", "知识", "社交"]
         return sorted(seen)
 
     async def get_tags(self) -> list[str]:
-        """Return distinct tags across all published skills."""
-
+        """返回所有已发布技能的去重标签列表。"""
         rows = (
             await self.session.scalars(
                 select(SkillORM.tags).where(
@@ -934,12 +937,11 @@ class SkillService:
         return sorted(seen)
 
     # ------------------------------------------------------------------
-    # My skills
+    # 我的技能
     # ------------------------------------------------------------------
 
     async def my_skills(self, owner_id: str) -> SkillListResponse:
-        """Return skills owned by the current viewer."""
-
+        """返回当前访问者拥有的技能。"""
         stmt = (
             select(SkillORM)
             .where(SkillORM.owner_id == owner_id)
@@ -965,12 +967,11 @@ class SkillService:
         return SkillListResponse(items=items, total=len(items))
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # 内部辅助函数
     # ------------------------------------------------------------------
 
     async def _load_authors(self, author_ids: list[str]) -> dict[str, AuthorORM]:
-        """Fetch authors keyed by id for comment / list serialization."""
-
+        """按 ID 加载作者映射，用于评论和列表的序列化。"""
         unique_ids = [value for value in dict.fromkeys(author_ids)]
         if not unique_ids:
             return {}
@@ -980,8 +981,7 @@ class SkillService:
         return {author.author_id: author for author in rows}
 
     async def _load_versions_for_skill(self, skill_id: str) -> list[SkillVersionORM]:
-        """Return versions for a skill, newest first."""
-
+        """按时间从新到旧返回技能版本。"""
         rows = (
             await self.session.scalars(
                 select(SkillVersionORM)
@@ -993,15 +993,13 @@ class SkillService:
 
 
 async def synchronize_skill_storage(session: AsyncSession) -> int:
-    """Backfill storage metadata and recover missing skill rows from disk."""
-
+    """回填存储元数据，并从磁盘恢复缺失的技能记录。"""
     await _backfill_skill_storage_metadata(session)
     return await _recover_missing_skills_from_storage(session)
 
 
 async def _backfill_skill_storage_metadata(session: AsyncSession) -> None:
-    """Ensure stored skill packages have stable paths and sidecar manifests."""
-
+    """确保已存储的技能包具有稳定路径及配套清单文件。"""
     rows = (
         await session.execute(
             select(SkillORM, SkillVersionORM).join(
@@ -1060,8 +1058,7 @@ async def _backfill_skill_storage_metadata(session: AsyncSession) -> None:
 
 
 async def _recover_missing_skills_from_storage(session: AsyncSession) -> int:
-    """Recreate missing skill rows from persisted zip packages and manifests."""
-
+    """从已持久化的 ZIP 包和清单中重建缺失的技能记录。"""
     existing_skills = set((await session.scalars(select(SkillORM.skill_id))).all())
     existing_versions = set(
         tuple(row)
@@ -1226,8 +1223,7 @@ async def _ensure_recovery_author(
     owner_id: str,
     display_name: str,
 ) -> None:
-    """Create a minimal author row when recovery finds an unknown owner."""
-
+    """恢复时发现未知所有者，则创建包含最少必要信息的作者记录。"""
     with session.no_autoflush:
         existing = await session.get(AuthorORM, owner_id)
         if existing is not None:
@@ -1254,8 +1250,7 @@ async def _ensure_recovery_author(
 
 
 def _parse_recovery_datetime(value: object) -> datetime | None:
-    """Parse an optional stored ISO datetime."""
-
+    """解析可选的已存储 ISO 日期时间。"""
     if isinstance(value, str) and value.strip():
         normalized = value.strip().replace("Z", "+00:00")
         try:
@@ -1267,8 +1262,7 @@ def _parse_recovery_datetime(value: object) -> datetime | None:
 
 
 def _coerce_optional_text(value: object) -> str | None:
-    """Normalize optional manifest/front-matter text values."""
-
+    """规范化清单或文档头部元数据中的可选文本值。"""
     if value is None:
         return None
     text = str(value).strip()
@@ -1276,8 +1270,7 @@ def _coerce_optional_text(value: object) -> str | None:
 
 
 def _coerce_string_list(value: object) -> list[str]:
-    """Normalize list-like manifest/front-matter values into clean strings."""
-
+    """将清单或文档头部元数据中的列表类值规范化为干净的字符串列表。"""
     if value is None:
         return []
     if isinstance(value, list):
@@ -1288,8 +1281,7 @@ def _coerce_string_list(value: object) -> list[str]:
 
 
 def _parse_skill_status(value: object) -> SkillStatus:
-    """Parse a stored status, defaulting to published for recovery."""
-
+    """解析已存储的状态，恢复时默认使用已发布状态。"""
     if isinstance(value, str):
         try:
             return SkillStatus(value)
@@ -1299,8 +1291,7 @@ def _parse_skill_status(value: object) -> SkillStatus:
 
 
 def _parse_trust_level(value: object) -> TrustLevel:
-    """Parse a stored trust level, defaulting to community for recovery."""
-
+    """解析已存储的信任级别，恢复时默认使用社区级别。"""
     if isinstance(value, str):
         try:
             return TrustLevel(value)
@@ -1310,7 +1301,7 @@ def _parse_trust_level(value: object) -> TrustLevel:
 
 
 # ----------------------------------------------------------------------
-# Module-level helpers (kept private)
+# 模块级私有辅助函数
 # ----------------------------------------------------------------------
 
 
@@ -1321,8 +1312,7 @@ def _skill_to_schema(
     latest_version: str | None = None,
     stats: dict | None = None,
 ) -> Skill:
-    """Convert a SkillORM row into the Skill API schema."""
-
+    """将 SkillORM 记录转换为 Skill API 数据模型。"""
     return Skill(
         skill_id=skill.skill_id,
         display_name=skill.display_name,
@@ -1351,8 +1341,7 @@ def _skill_to_schema(
 
 
 def _version_to_schema(ver: SkillVersionORM) -> SkillVersion:
-    """Convert a SkillVersionORM row into the SkillVersion API schema."""
-
+    """将 SkillVersionORM 记录转换为 SkillVersion API 数据模型。"""
     return SkillVersion(
         version=ver.version,
         package_size=ver.package_size,
@@ -1368,8 +1357,7 @@ def _comment_to_schema(
     comment: SkillCommentORM,
     authors: dict[str, AuthorORM],
 ) -> SkillComment:
-    """Convert a SkillCommentORM row into the SkillComment API schema."""
-
+    """将 SkillCommentORM 记录转换为 SkillComment API 数据模型。"""
     author = authors.get(comment.author_id)
     return SkillComment(
         id=comment.id,
@@ -1395,8 +1383,7 @@ async def _aggregate_skill_stats(
     skill_id: str,
     viewer_id: str | None = None,
 ) -> dict:
-    """Compute community stats for a skill."""
-
+    """计算指定技能的社区统计信息。"""
     likes_count = await session.scalar(
         select(func.count()).select_from(SkillLikeORM).where(
             SkillLikeORM.skill_id == skill_id
@@ -1460,8 +1447,7 @@ async def _append_audit(
     status_after: str | None = None,
     reason: str | None = None,
 ) -> None:
-    """Append a ReviewRecordORM audit row."""
-
+    """追加一条 ReviewRecordORM 审计记录。"""
     record = ReviewRecordORM(
         target_type=target_type,
         target_id=target_id,

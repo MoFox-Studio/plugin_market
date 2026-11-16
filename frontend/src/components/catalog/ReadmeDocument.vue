@@ -30,8 +30,8 @@ function createSlugger() {
     return id;
   };
 }
-// The Skill API supplies Markdown source. Keep its text exact and safe, while
-// exposing actual heading anchors without executing embedded HTML.
+// Skill API 提供 Markdown 源码。在原样、安全地保留文本的同时，
+// 提供真实的标题锚点，且不执行嵌入的 HTML。
 const sourceLines = computed(() => {
   const slug = createSlugger();
   let fence = '';
@@ -69,7 +69,7 @@ watch(
     const nestedDocument = entries.some((heading) => heading.tagName === 'H1');
     headings.value = entries.map((source) => {
       let heading = source;
-      // The resource title owns the page's h1. Keep the README's internal hierarchy.
+      // 页面 h1 留给资源标题，同时保留 README 内部的层级关系。
       if (nestedDocument) {
         const level = Math.min(6, Number(source.tagName[1]) + 1);
         heading = document.createElement(`h${level}`);
@@ -102,7 +102,7 @@ watch(
         >
       </nav>
     </div>
-    <!-- HTML is the backend's sanitized README response, never raw Markdown. -->
+    <!-- HTML 来自后端净化后的 README 响应，绝不是原始 Markdown。 -->
     <div v-if="html" ref="content" class="markdown-content" v-html="html"></div>
     <pre
       v-else

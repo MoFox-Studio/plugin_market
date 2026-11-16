@@ -139,7 +139,7 @@ function toggle(category: string) {
   >
     <header>
       <div>
-        <span class="eyebrow">YOUR DISCOVERY / 你的发现</span>
+        <span class="eyebrow">你的发现</span>
         <h2 id="recommendation-preferences-title">让推荐更合心意</h2>
       </div>
       <button

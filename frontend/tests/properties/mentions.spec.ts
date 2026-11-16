@@ -4,10 +4,10 @@ import type { MentionCandidate } from '@/types'
 import { MENTION_PATTERN, parseMentionsRoundTrip } from '@/utils/mentions'
 
 const KNOWN_CANDIDATES: MentionCandidate[] = [
-  { author_id: 'u-alpha', github_login: 'alpha', display_name: 'Alpha' },
-  { author_id: 'u-beta', github_login: 'beta', display_name: 'Beta' },
-  { author_id: 'u-gamma', github_login: 'gamma', display_name: 'Gamma' },
-  { author_id: 'u-dash', github_login: 'user-with-dash', display_name: 'Dash' },
+  { author_id: 'u-alpha', github_login: 'alpha', display_name: '阿尔法' },
+  { author_id: 'u-beta', github_login: 'beta', display_name: '贝塔' },
+  { author_id: 'u-gamma', github_login: 'gamma', display_name: '伽马' },
+  { author_id: 'u-dash', github_login: 'user-with-dash', display_name: '连字符用户' },
 ]
 
 function backendResolvedMentions(content: string): MentionCandidate[] {
@@ -60,12 +60,13 @@ function backendFixtureSegments(content: string, resolvedMentions: MentionCandid
   return segments.length ? segments : [{ type: 'text' as const, text: content }]
 }
 
-describe('parseMentionsRoundTrip property', () => {
-  test('matches backend fixture semantics for generated content', () => {
+describe('parseMentionsRoundTrip 属性测试', () => {
+  test('生成内容的解析结果与后端测试数据的语义一致', () => {
     fc.assert(
       fc.property(
         fc.array(
           fc.constantFrom(
+            // 保留 ASCII 文本、标点与 GitHub 登录名，用于验证提及解析边界。
             'hello',
             'world',
             '@alpha',

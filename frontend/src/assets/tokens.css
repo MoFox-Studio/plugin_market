@@ -1,7 +1,7 @@
 /* =============================================================
-   MoFox Plugin Market · Design Tokens
+   MoFox 插件市场 · 设计变量
    --------------------------------------------------------------
-   单一来源（single source of truth）。组件层禁止使用字面 hex；
+   单一来源。组件层禁止使用十六进制颜色字面值；
    所有颜色 / 间距 / 字号 / 圆角 / 阴影 / 动效都从这里取。
    双主题：data-theme="light" (默认) / data-theme="dark"
    减少动效：data-reduced-motion="reduce"
@@ -11,7 +11,7 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  /* paper / surface — 白色底纸与清晰的阅读层级 */
+  /* 底纸 / 表面 — 白色底纸与清晰的阅读层级 */
   --paper: #ffffff;
   --paper-grain: #ffffff;
   --surface: #ffffff;
@@ -19,12 +19,12 @@
   --surface-hover: #e1e6ed;
   --surface-elevated: #ffffff;
 
-  /* divider */
+  /* 分隔线 */
   --line: #cbd2dc;
   --line-soft: #dde2e9;
   --line-strong: #aeb9c8;
 
-  /* ink */
+  /* 墨色 */
   --ink-900: #2c3e50;
   --ink-700: #3a5169;
   --ink-500: #4d5e73;
@@ -32,7 +32,7 @@
   --ink-200: #566578;
   --ink-on-blue: #ffffff;
 
-  /* blue (主色) */
+  /* 蓝色 (主色) */
   --blue-50: #eff4ff;
   --blue-100: #e5edff;
   --blue-200: #c7d8fa;
@@ -164,7 +164,7 @@
   --ring: 0 0 0 3px var(--blue-100);
   --ring-strong: 0 0 0 3px var(--blue-200);
 
-  /* === 兼容旧 token 别名（让既有大量样式无痛迁移） === */
+  /* === 兼容旧设计变量别名（让既有大量样式无痛迁移） === */
   --bg: var(--paper);
   --surface-2: var(--surface-soft);
   --ink: var(--ink-900);
@@ -278,7 +278,7 @@
 }
 
 /* =============================================================
-   Dark mode — 文档站的中性暗色；文字与图层保持清晰层级
+   深色模式 — 文档站的中性暗色；文字与图层保持清晰层级
    ============================================================= */
 :root[data-theme='dark'] {
   color-scheme: dark;
@@ -375,7 +375,7 @@
 }
 
 /* =============================================================
-   Reduced motion — 任何时长 ≤ 80ms，禁用装饰性动画
+   减少动效 — 任何时长 ≤ 80ms，禁用装饰性动画
    ============================================================= */
 :root[data-reduced-motion='reduce'] {
   --dur-fast: 0ms;

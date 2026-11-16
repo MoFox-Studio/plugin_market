@@ -1,4 +1,4 @@
-"""Property tests for curation signature ownership consistency."""
+"""精选代表作归属一致性的属性测试。"""
 
 from __future__ import annotations
 
@@ -44,8 +44,8 @@ async def _create_plugin(session, plugin_id: str, owner_id: str) -> None:
     payload = PluginCreate(
         plugin_id=plugin_id,
         display_name=plugin_id,
-        summary=f'summary for {plugin_id}',
-        description=f'description for {plugin_id}',
+        summary=f'{plugin_id} 的摘要',
+        description=f'{plugin_id} 的说明',
         repository_url=f'https://github.com/MoFox-Studio/{plugin_id}',
         license='MIT',
         categories=['tool'],

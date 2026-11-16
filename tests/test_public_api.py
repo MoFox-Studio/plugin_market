@@ -1,4 +1,4 @@
-"""Public plugin market API tests."""
+"""插件市场公开 API 测试。"""
 
 from __future__ import annotations
 
@@ -7,8 +7,7 @@ from test_author_api import AUTHOR_HEADERS, plugin_payload, version_payload
 
 
 async def test_list_plugins_returns_seed_data(client: AsyncClient) -> None:
-    """The public list endpoint should expose seeded plugin data."""
-
+    """公开列表端点应返回预置插件数据。"""
     response = await client.get("/api/v1/plugins")
     body = response.json()
 
@@ -18,8 +17,7 @@ async def test_list_plugins_returns_seed_data(client: AsyncClient) -> None:
 
 
 async def test_list_plugins_filters_and_paginates(client: AsyncClient) -> None:
-    """Public plugin search should support basic filters and pagination."""
-
+    """公开插件搜索应支持基本筛选和分页。"""
     response = await client.get("/api/v1/plugins", params={"q": "demo", "category": "tool", "tag": "utility", "limit": 1})
     body = response.json()
 
@@ -29,8 +27,7 @@ async def test_list_plugins_filters_and_paginates(client: AsyncClient) -> None:
 
 
 async def test_list_plugins_filters_by_author_before_paginating(client: AsyncClient) -> None:
-    """Author pages should paginate over that author's complete result set."""
-
+    """作者页面应对该作者的完整结果集分页。"""
     for plugin_id in ("author_page_one", "author_page_two", "author_page_three"):
         response = await client.post(
             "/api/v1/plugins",
@@ -65,8 +62,7 @@ async def test_list_plugins_filters_by_author_before_paginating(client: AsyncCli
 
 
 async def test_public_plugin_detail_and_versions(client: AsyncClient) -> None:
-    """Plugin details, versions and recommendation should be available."""
-
+    """应能获取插件详情、版本和推荐版本。"""
     detail = await client.get("/api/v1/plugins/demo_plugin")
     versions = await client.get("/api/v1/plugins/demo_plugin/versions")
     recommended = await client.get("/api/v1/plugins/demo_plugin/recommended-version")
@@ -80,8 +76,7 @@ async def test_public_plugin_detail_and_versions(client: AsyncClient) -> None:
 
 
 async def test_public_plugin_readme_endpoint(client: AsyncClient) -> None:
-    """README endpoint should report absence cleanly for plugins without README content."""
-
+    """插件没有 README 内容时，README 端点应明确返回不存在。"""
     response = await client.get("/api/v1/plugins/demo_plugin/readme")
 
     assert response.status_code == 200
@@ -89,10 +84,9 @@ async def test_public_plugin_readme_endpoint(client: AsyncClient) -> None:
 
 
 async def test_public_plugin_dependencies_endpoint(client: AsyncClient) -> None:
-    """Dependency endpoint should resolve marketplace matches and preserve version constraints."""
-
-    await client.post("/api/v1/plugins", json=plugin_payload("asr_adapter", display_name="ASR Adapter"), headers=AUTHOR_HEADERS)
-    payload = plugin_payload("funasr_asr_provider", display_name="FunASR Provider")
+    """依赖端点应解析市场中的匹配插件，并保留版本约束。"""
+    await client.post("/api/v1/plugins", json=plugin_payload("asr_adapter", display_name="ASR 适配器"), headers=AUTHOR_HEADERS)
+    payload = plugin_payload("funasr_asr_provider", display_name="FunASR 提供器")
     payload["plugin_dependencies"] = ["asr_adapter>=1.0.0"]
     await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
 
@@ -107,7 +101,7 @@ async def test_public_plugin_dependencies_endpoint(client: AsyncClient) -> None:
                 "raw": "asr_adapter>=1.0.0",
                 "version_spec": ">=1.0.0",
                 "exists_in_market": True,
-                "display_name": "ASR Adapter",
+                "display_name": "ASR 适配器",
                 "icon_url": None,
             }
         ],
@@ -115,8 +109,7 @@ async def test_public_plugin_dependencies_endpoint(client: AsyncClient) -> None:
 
 
 async def test_public_install_info(client: AsyncClient) -> None:
-    """Install info should include plugin and recommended version metadata."""
-
+    """安装信息应包含插件及推荐版本的元数据。"""
     response = await client.get("/api/v1/plugins/demo_plugin/install")
 
     assert response.status_code == 200
@@ -125,8 +118,7 @@ async def test_public_install_info(client: AsyncClient) -> None:
 
 
 async def test_public_versions_are_visible_immediately_after_publish(client: AsyncClient) -> None:
-    """Fresh author submissions should be installable from public endpoints immediately."""
-
+    """作者新提交的版本应能立即通过公开端点安装。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     await client.post("/api/v1/plugins/sample_plugin/versions", json=version_payload(), headers=AUTHOR_HEADERS)
 
@@ -148,8 +140,7 @@ async def test_public_versions_are_visible_immediately_after_publish(client: Asy
 
 
 async def test_taxonomy_endpoints(client: AsyncClient) -> None:
-    """Categories and tags should be derived from stored plugins."""
-
+    """分类和标签应从已存储的插件中派生。"""
     categories = await client.get("/api/v1/categories")
     tags = await client.get("/api/v1/tags")
 
@@ -158,8 +149,7 @@ async def test_taxonomy_endpoints(client: AsyncClient) -> None:
 
 
 async def test_not_found_uses_error_envelope(client: AsyncClient) -> None:
-    """Missing plugins should use the uniform error response."""
-
+    """插件不存在时，应使用统一的错误响应格式。"""
     response = await client.get("/api/v1/plugins/missing_plugin")
     body = response.json()
 

@@ -1,4 +1,4 @@
-"""Author and CLI API tests."""
+"""作者及 CLI API 测试。"""
 
 from __future__ import annotations
 
@@ -13,14 +13,21 @@ AUTHOR_HEADERS = {"Authorization": "Bearer dev-token"}
 PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5W7i8AAAAASUVORK5CYII="
 
 
-def plugin_payload(plugin_id: str = "sample_plugin", *, display_name: str = "Sample Plugin") -> dict[str, object]:
-    """Return a valid plugin registration payload."""
+def plugin_payload(plugin_id: str = "sample_plugin", *, display_name: str = "示例插件") -> dict[str, object]:
+    """返回有效的插件注册请求体。
 
+    Args:
+        plugin_id: 插件标识。
+        display_name: 插件展示名称。
+
+    Returns:
+        包含插件注册字段的字典。
+    """
     return {
         "plugin_id": plugin_id,
         "display_name": display_name,
-        "summary": "Sample summary",
-        "description": "Sample description",
+        "summary": "示例摘要",
+        "description": "示例说明",
         "homepage": "https://example.com/sample_plugin",
         "repository_url": "https://github.com/MoFox-Studio/sample_plugin",
         "license": "MIT",
@@ -31,12 +38,18 @@ def plugin_payload(plugin_id: str = "sample_plugin", *, display_name: str = "Sam
 
 
 def version_payload(version: str = "1.0.0") -> dict[str, object]:
-    """Return a valid version submission payload."""
+    """返回有效的版本提交请求体。
 
+    Args:
+        version: 待提交的版本号。
+
+    Returns:
+        包含版本提交字段的字典。
+    """
     return {
         "version": version,
         "release_tag": f"v{version}",
-        "release_title": f"Sample Plugin {version}",
+        "release_title": f"示例插件 {version}",
         "release_url": f"https://github.com/MoFox-Studio/sample_plugin/releases/tag/v{version}",
         "asset_name": f"sample_plugin-{version}.mfp",
         "asset_download_url": f"https://github.com/MoFox-Studio/sample_plugin/releases/download/v{version}/sample_plugin-{version}.mfp",
@@ -51,15 +64,20 @@ def version_payload(version: str = "1.0.0") -> dict[str, object]:
 
 
 def parse_api_datetime(value: str) -> datetime:
-    """Parse FastAPI ISO datetime payloads into aware datetimes."""
+    """将 FastAPI 的 ISO 日期时间字段解析为带时区的日期时间。
 
+    Args:
+        value: API 返回的 ISO 日期时间字符串。
+
+    Returns:
+        带时区的日期时间；未提供时区时使用 UTC。
+    """
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 async def test_register_plugin_requires_author_token(client: AsyncClient) -> None:
-    """Author endpoints should reject missing auth."""
-
+    """作者端点应拒绝未认证的请求。"""
     response = await client.post("/api/v1/plugins", json=plugin_payload())
 
     assert response.status_code == 401
@@ -67,8 +85,7 @@ async def test_register_plugin_requires_author_token(client: AsyncClient) -> Non
 
 
 async def test_register_plugin_and_duplicate_conflict(client: AsyncClient) -> None:
-    """Registration should publish immediately and reject duplicates."""
-
+    """注册插件后应立即发布，并拒绝重复注册。"""
     created = await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     duplicate = await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
 
@@ -80,9 +97,8 @@ async def test_register_plugin_and_duplicate_conflict(client: AsyncClient) -> No
 
 
 async def test_register_plugin_creates_missing_late_maintainer_without_autoflush_fk_error(client: AsyncClient) -> None:
-    """Registration should create later missing maintainers before maintainer rows flush."""
-
-    payload = plugin_payload("group_news", display_name="Group News")
+    """注册时应在刷新维护者关系前创建列表后部缺失的维护者。"""
+    payload = plugin_payload("group_news", display_name="群聊新闻")
     payload["maintainers"] = ["mock-author", "KKKKKaoriiiii"]
 
     response = await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
@@ -93,8 +109,7 @@ async def test_register_plugin_creates_missing_late_maintainer_without_autoflush
 
 
 async def test_register_plugin_reuses_canonical_author_id_for_existing_github_login(client: AsyncClient) -> None:
-    """Registration should store maintainer rows against the existing canonical author id."""
-
+    """注册时应使用已有的规范作者标识保存维护者记录。"""
     async with session_scope() as session:
         await MarketService(session).ensure_author(
             "github:kkkkkaoriiiii",
@@ -102,7 +117,7 @@ async def test_register_plugin_reuses_canonical_author_id_for_existing_github_lo
             display_name="Kaoriiiii",
         )
 
-    payload = plugin_payload("canonical_group_news", display_name="Canonical Group News")
+    payload = plugin_payload("canonical_group_news", display_name="规范作者群聊新闻")
     payload["maintainers"] = ["KKKKKaoriiiii"]
 
     response = await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
@@ -113,8 +128,7 @@ async def test_register_plugin_reuses_canonical_author_id_for_existing_github_lo
 
 
 async def test_submit_version_status_and_duplicate_conflict(client: AsyncClient) -> None:
-    """Version submission should publish immediately and reject duplicates."""
-
+    """提交版本后应立即发布，并拒绝重复提交。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     created = await client.post("/api/v1/plugins/sample_plugin/versions", json=version_payload(), headers=AUTHOR_HEADERS)
     duplicate = await client.post("/api/v1/plugins/sample_plugin/versions", json=version_payload(), headers=AUTHOR_HEADERS)
@@ -131,8 +145,7 @@ async def test_submit_version_status_and_duplicate_conflict(client: AsyncClient)
 
 
 async def test_sync_version_updates_metadata(client: AsyncClient) -> None:
-    """Sync should update mutable release metadata and mark sync success."""
-
+    """同步应更新可变的发布元数据，并标记同步成功。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     await client.post("/api/v1/plugins/sample_plugin/versions", json=version_payload(), headers=AUTHOR_HEADERS)
     response = await client.post(
@@ -148,15 +161,14 @@ async def test_sync_version_updates_metadata(client: AsyncClient) -> None:
 
 
 async def test_submit_version_updates_plugin_timestamp_and_readme(client: AsyncClient) -> None:
-    """Version submission should refresh plugin freshness metadata and README content."""
-
+    """提交版本应刷新插件更新时间及 README 内容。"""
     payload = plugin_payload()
-    payload["readme_markdown"] = "# Sample Plugin\n\nOld README."
+    payload["readme_markdown"] = "# 示例插件\n\n旧版 README。"
     created = await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
     original_updated_at = parse_api_datetime(created.json()["updated_at"])
 
     release_payload = version_payload()
-    release_payload["readme_markdown"] = "# Sample Plugin\n\nNew README."
+    release_payload["readme_markdown"] = "# 示例插件\n\n新版 README。"
     submitted = await client.post(
         "/api/v1/plugins/sample_plugin/versions",
         json=release_payload,
@@ -169,31 +181,29 @@ async def test_submit_version_updates_plugin_timestamp_and_readme(client: AsyncC
     assert parse_api_datetime(detail.json()["updated_at"]) >= original_updated_at
     assert readme.status_code == 200
     assert readme.json()["exists"] is True
-    assert "New README." in readme.json()["html"]
+    assert "新版 README。" in readme.json()["html"]
 
 
 async def test_update_plugin_metadata_returns_pending_review(client: AsyncClient) -> None:
-    """Plugin metadata updates should remain published for the owner."""
-
+    """所有者更新插件元数据后，插件应保持已发布状态。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     response = await client.put(
         "/api/v1/plugins/sample_plugin",
-        json={"summary": "Updated summary", "tags": ["sample", "updated"]},
+        json={"summary": "更新后的摘要", "tags": ["sample", "updated"]},
         headers=AUTHOR_HEADERS,
     )
 
     assert response.status_code == 200
-    assert response.json()["summary"] == "Updated summary"
+    assert response.json()["summary"] == "更新后的摘要"
     assert response.json()["tags"] == ["sample", "updated"]
     assert response.json()["status"] == "published"
 
 
 async def test_register_plugin_stores_icon_and_readme(client: AsyncClient) -> None:
-    """Plugin registration should normalize icon uploads and expose README availability."""
-
+    """注册插件应规范化上传图标，并返回 README 是否可用。"""
     payload = plugin_payload()
     payload["icon_png_base64"] = PNG_BASE64
-    payload["readme_markdown"] = "# Sample Plugin\n\n**Hello** from the README."
+    payload["readme_markdown"] = "# 示例插件\n\n**你好**，来自 README。"
 
     response = await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
     readme = await client.get("/api/v1/plugins/sample_plugin/readme")
@@ -203,19 +213,18 @@ async def test_register_plugin_stores_icon_and_readme(client: AsyncClient) -> No
     assert response.json()["has_readme"] is True
     assert readme.status_code == 200
     assert readme.json()["exists"] is True
-    assert "<h1>Sample Plugin</h1>" in readme.json()["html"]
-    assert "<strong>Hello</strong>" in readme.json()["html"]
+    assert "<h1>示例插件</h1>" in readme.json()["html"]
+    assert "<strong>你好</strong>" in readme.json()["html"]
 
 
 async def test_register_plugin_stores_plugin_dependencies(client: AsyncClient) -> None:
-    """Plugin registration should persist dependency metadata for detail views."""
-
+    """注册插件应持久化依赖元数据，以供详情展示。"""
     await client.post(
         "/api/v1/plugins",
-        json=plugin_payload("asr_adapter", display_name="ASR Adapter"),
+        json=plugin_payload("asr_adapter", display_name="ASR 适配器"),
         headers=AUTHOR_HEADERS,
     )
-    payload = plugin_payload("funasr_asr_provider", display_name="FunASR Provider")
+    payload = plugin_payload("funasr_asr_provider", display_name="FunASR 提供器")
     payload["plugin_dependencies"] = ["asr_adapter>=1.0.0", "missing_plugin"]
 
     response = await client.post("/api/v1/plugins", json=payload, headers=AUTHOR_HEADERS)
@@ -226,19 +235,18 @@ async def test_register_plugin_stores_plugin_dependencies(client: AsyncClient) -
     assert dependencies.json()["items"][0]["plugin_id"] == "asr_adapter"
     assert dependencies.json()["items"][0]["version_spec"] == ">=1.0.0"
     assert dependencies.json()["items"][0]["exists_in_market"] is True
-    assert dependencies.json()["items"][0]["display_name"] == "ASR Adapter"
+    assert dependencies.json()["items"][0]["display_name"] == "ASR 适配器"
     assert dependencies.json()["items"][1]["plugin_id"] == "missing_plugin"
     assert dependencies.json()["items"][1]["exists_in_market"] is False
 
 
 async def test_author_yank_version(client: AsyncClient) -> None:
-    """Plugin owners should be able to yank a version."""
-
+    """插件所有者应能撤回版本。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     await client.post("/api/v1/plugins/sample_plugin/versions", json=version_payload(), headers=AUTHOR_HEADERS)
     response = await client.post(
         "/api/v1/plugins/sample_plugin/versions/1.0.0/yank",
-        json={"reason": "Bad release"},
+        json={"reason": "有问题的版本"},
         headers=AUTHOR_HEADERS,
     )
 
@@ -248,8 +256,7 @@ async def test_author_yank_version(client: AsyncClient) -> None:
 
 
 async def test_me_plugin_management_snapshot_and_delete(client: AsyncClient) -> None:
-    """Logged-in browser users should be able to inspect and delete their own plugins."""
-
+    """已登录的浏览器用户应能查看和删除自己的插件。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     await client.post("/api/v1/plugins/sample_plugin/versions", json=version_payload(), headers=AUTHOR_HEADERS)
     session_id = await create_browser_session("mock-author", "browser-test-token")
@@ -267,8 +274,7 @@ async def test_me_plugin_management_snapshot_and_delete(client: AsyncClient) -> 
 
 
 async def test_me_profile_get_update_and_public_author_profile(client: AsyncClient) -> None:
-    """Browser users should manage their own profile and expose it publicly."""
-
+    """浏览器用户应能管理自己的资料并公开展示。"""
     session_id = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", session_id, path="/")
 
@@ -276,7 +282,7 @@ async def test_me_profile_get_update_and_public_author_profile(client: AsyncClie
     updated = await client.put(
         "/api/v1/me/profile",
         json={
-            "bio": "Hello from MoFox",
+            "bio": "来自 MoFox 的问候",
             "background_image_url": "https://cdn.example.com/profile-bg.png",
         },
     )
@@ -286,47 +292,45 @@ async def test_me_profile_get_update_and_public_author_profile(client: AsyncClie
     assert initial.json()["bio"] == ""
     assert initial.json()["background_image_url"] is None
     assert updated.status_code == 200
-    assert updated.json()["bio"] == "Hello from MoFox"
+    assert updated.json()["bio"] == "来自 MoFox 的问候"
     assert updated.json()["background_image_url"] == "https://cdn.example.com/profile-bg.png"
     assert public.status_code == 200
     assert public.json()["author_id"] == "mock-author"
-    assert public.json()["bio"] == "Hello from MoFox"
+    assert public.json()["bio"] == "来自 MoFox 的问候"
 
 
 async def test_me_pins_crud_via_browser_session(client: AsyncClient) -> None:
-    """Browser users should add, edit, list and remove their own pins."""
-
+    """浏览器用户应能添加、编辑、列出和移除自己的置顶插件。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     session_id = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", session_id, path="/")
 
     created = await client.post(
         "/api/v1/me/pins",
-        json={"plugin_id": "sample_plugin", "pinned_reason": "featured"},
+        json={"plugin_id": "sample_plugin", "pinned_reason": "精选推荐"},
     )
     listed = await client.get("/api/v1/me/pins")
     updated = await client.put(
         "/api/v1/me/pins/sample_plugin",
-        json={"pinned_reason": "updated reason"},
+        json={"pinned_reason": "更新后的理由"},
     )
     deleted = await client.delete("/api/v1/me/pins/sample_plugin")
     empty = await client.get("/api/v1/me/pins")
 
     assert created.status_code == 200
     assert created.json()["plugin_id"] == "sample_plugin"
-    assert created.json()["pinned_reason"] == "featured"
+    assert created.json()["pinned_reason"] == "精选推荐"
     assert listed.status_code == 200
     assert [item["plugin_id"] for item in listed.json()] == ["sample_plugin"]
     assert updated.status_code == 200
-    assert updated.json()["pinned_reason"] == "updated reason"
+    assert updated.json()["pinned_reason"] == "更新后的理由"
     assert deleted.status_code == 204
     assert empty.status_code == 200
     assert empty.json() == []
 
 
 async def test_me_plugin_metadata_patch_via_browser_session(client: AsyncClient) -> None:
-    """Browser users should patch display-facing plugin metadata inline."""
-
+    """浏览器用户应能行内更新用于展示的插件元数据。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     session_id = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", session_id, path="/")
@@ -334,26 +338,25 @@ async def test_me_plugin_metadata_patch_via_browser_session(client: AsyncClient)
     response = await client.patch(
         "/api/v1/me/plugins/sample_plugin/metadata",
         json={
-            "display_name": "Browser Edited Plugin",
+            "display_name": "浏览器编辑的插件",
             "tags": ["sample", "browser"],
         },
     )
 
     assert response.status_code == 200
-    assert response.json()["display_name"] == "Browser Edited Plugin"
+    assert response.json()["display_name"] == "浏览器编辑的插件"
     assert response.json()["tags"] == ["sample", "browser"]
 
 
 async def test_comment_submit_accepts_forwarded_https_origin(client: AsyncClient) -> None:
-    """Browser writes should stay allowed behind an HTTPS reverse proxy."""
-
+    """通过 HTTPS 反向代理访问时，浏览器写入请求仍应获准。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     session_id = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", session_id, path="/")
 
     response = await client.post(
         "/api/v1/plugins/sample_plugin/comments",
-        json={"content": "Looks good."},
+        json={"content": "看起来不错。"},
         headers={
             "Origin": "https://market.mofox-sama.com",
             "X-Forwarded-Proto": "https",
@@ -363,12 +366,11 @@ async def test_comment_submit_accepts_forwarded_https_origin(client: AsyncClient
     )
 
     assert response.status_code == 200
-    assert response.json()["content"] == "Looks good."
+    assert response.json()["content"] == "看起来不错。"
 
 
 async def test_author_search_and_comment_mentions_round_trip(client: AsyncClient) -> None:
-    """Author search and listed comments should expose resolved mention metadata."""
-
+    """作者搜索和评论列表应包含已解析的提及元数据。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     async with session_scope() as session:
         await MarketService(session).ensure_author(
@@ -396,8 +398,7 @@ async def test_author_search_and_comment_mentions_round_trip(client: AsyncClient
 
 
 async def test_author_follow_toggle_via_browser_session(client: AsyncClient) -> None:
-    """Browser users should be able to follow and unfollow another author."""
-
+    """浏览器用户应能关注和取消关注其他作者。"""
     async with session_scope() as session:
         await MarketService(session).ensure_author(
             "alpha",
@@ -428,8 +429,7 @@ async def test_author_follow_toggle_via_browser_session(client: AsyncClient) -> 
 
 
 async def test_subscription_and_rotated_access_token_machine_api(client: AsyncClient) -> None:
-    """Subscription state should drive machine reads and old tokens must be revoked on rotation."""
-
+    """机器端读取应反映订阅状态，轮换令牌时应撤销旧令牌。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     session_id = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", session_id, path="/")

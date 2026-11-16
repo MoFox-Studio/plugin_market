@@ -1,4 +1,4 @@
-"""Admin mock API tests."""
+"""管理员模拟 API 测试。"""
 
 from __future__ import annotations
 
@@ -9,8 +9,7 @@ ADMIN_HEADERS = {"Authorization": "Bearer admin-token"}
 
 
 async def test_admin_requires_admin_token(client: AsyncClient) -> None:
-    """Admin endpoints should reject author tokens."""
-
+    """管理员端点应拒绝作者令牌。"""
     response = await client.get("/api/v1/admin/reviews", headers=AUTHOR_HEADERS)
 
     assert response.status_code == 403
@@ -18,11 +17,10 @@ async def test_admin_requires_admin_token(client: AsyncClient) -> None:
 
 
 async def test_admin_yank_version(client: AsyncClient) -> None:
-    """Admin should be able to yank a published version."""
-
+    """管理员应能撤回已发布的版本。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     await client.post("/api/v1/plugins/sample_plugin/versions", json=version_payload(), headers=AUTHOR_HEADERS)
-    yanked = await client.post("/api/v1/admin/plugins/sample_plugin/versions/1.0.0/yank", json={"reason": "Regression"}, headers=ADMIN_HEADERS)
+    yanked = await client.post("/api/v1/admin/plugins/sample_plugin/versions/1.0.0/yank", json={"reason": "回归问题"}, headers=ADMIN_HEADERS)
 
     assert yanked.status_code == 200
     assert yanked.json()["status"] == "yanked"
@@ -30,8 +28,7 @@ async def test_admin_yank_version(client: AsyncClient) -> None:
 
 
 async def test_admin_delete_plugin_clears_market_records(client: AsyncClient) -> None:
-    """Admin deletion should remove the plugin and its related review trail."""
-
+    """管理员删除插件时应一并移除相关审核记录。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     await client.post("/api/v1/plugins/sample_plugin/versions", json=version_payload(), headers=AUTHOR_HEADERS)
 
@@ -49,12 +46,11 @@ async def test_admin_delete_plugin_clears_market_records(client: AsyncClient) ->
 
 
 async def test_admin_deprecate_plugin_and_block_version(client: AsyncClient) -> None:
-    """Admin should deprecate plugins and block versions."""
-
+    """管理员应能弃用插件并封禁版本。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     await client.post("/api/v1/plugins/sample_plugin/versions", json=version_payload(), headers=AUTHOR_HEADERS)
-    deprecated = await client.post("/api/v1/admin/plugins/sample_plugin/deprecate", json={"reason": "Old"}, headers=ADMIN_HEADERS)
-    blocked = await client.post("/api/v1/admin/plugins/sample_plugin/versions/1.0.0/block", json={"reason": "Risk"}, headers=ADMIN_HEADERS)
+    deprecated = await client.post("/api/v1/admin/plugins/sample_plugin/deprecate", json={"reason": "已过时"}, headers=ADMIN_HEADERS)
+    blocked = await client.post("/api/v1/admin/plugins/sample_plugin/versions/1.0.0/block", json={"reason": "存在风险"}, headers=ADMIN_HEADERS)
 
     assert deprecated.status_code == 200
     assert deprecated.json()["status"] == "deprecated"
@@ -63,8 +59,7 @@ async def test_admin_deprecate_plugin_and_block_version(client: AsyncClient) -> 
 
 
 async def test_admin_stats(client: AsyncClient) -> None:
-    """Admin stats should expose aggregate counts."""
-
+    """管理员统计应提供汇总计数。"""
     response = await client.get("/api/v1/admin/stats", headers=ADMIN_HEADERS)
 
     assert response.status_code == 200
@@ -73,8 +68,7 @@ async def test_admin_stats(client: AsyncClient) -> None:
 
 
 async def test_admin_reviews_include_actions(client: AsyncClient) -> None:
-    """Review records should expose mock audit actions."""
-
+    """审核记录应包含模拟审计操作。"""
     response = await client.get("/api/v1/admin/reviews", headers=ADMIN_HEADERS)
 
     assert response.status_code == 200
@@ -82,21 +76,20 @@ async def test_admin_reviews_include_actions(client: AsyncClient) -> None:
 
 
 async def test_admin_can_republish_plugin_and_restore_version(client: AsyncClient) -> None:
-    """Admin should be able to re-publish plugins and versions after governance actions."""
-
+    """管理员应能在治理操作后重新发布插件和版本。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
     await client.post("/api/v1/plugins/sample_plugin/versions", json=version_payload(), headers=AUTHOR_HEADERS)
-    await client.post("/api/v1/admin/plugins/sample_plugin/block", json={"reason": "Risk"}, headers=ADMIN_HEADERS)
+    await client.post("/api/v1/admin/plugins/sample_plugin/block", json={"reason": "存在风险"}, headers=ADMIN_HEADERS)
     await client.post(
         "/api/v1/admin/plugins/sample_plugin/versions/1.0.0/yank",
-        json={"reason": "Rollback"},
+        json={"reason": "回滚"},
         headers=ADMIN_HEADERS,
     )
 
-    plugin = await client.post("/api/v1/admin/plugins/sample_plugin/publish", json={"reason": "Fixed"}, headers=ADMIN_HEADERS)
+    plugin = await client.post("/api/v1/admin/plugins/sample_plugin/publish", json={"reason": "已修复"}, headers=ADMIN_HEADERS)
     version = await client.post(
         "/api/v1/admin/plugins/sample_plugin/versions/1.0.0/publish",
-        json={"reason": "Fixed"},
+        json={"reason": "已修复"},
         headers=ADMIN_HEADERS,
     )
     dashboard = await client.get("/api/v1/admin/dashboard", headers=ADMIN_HEADERS)
@@ -111,13 +104,12 @@ async def test_admin_can_republish_plugin_and_restore_version(client: AsyncClien
 
 
 async def test_admin_can_switch_plugin_trust_level(client: AsyncClient) -> None:
-    """Admin should be able to change plugin trust badges."""
-
+    """管理员应能更改插件的信任标识。"""
     await client.post("/api/v1/plugins", json=plugin_payload(), headers=AUTHOR_HEADERS)
 
     updated = await client.post(
         "/api/v1/admin/plugins/sample_plugin/trust-level/official",
-        json={"reason": "Internal plugin"},
+        json={"reason": "内部插件"},
         headers=ADMIN_HEADERS,
     )
     reviews = await client.get("/api/v1/admin/reviews", headers=ADMIN_HEADERS)

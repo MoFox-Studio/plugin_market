@@ -93,7 +93,7 @@ const routes: RouteRecordRaw[] = [
         props: {
           title: '版本治理',
           description:
-            '后续会拆出独立版本治理视图，承接版本审核与 yank/block 操作。',
+            '后续会拆出独立版本治理视图，承接版本审核与撤回/封禁操作。',
         },
       },
       {
@@ -186,14 +186,14 @@ router.beforeEach(async (to) => {
     return true;
   }
 
-  // The admin layout shows the precise authentication/permission state without
-  // mounting private child views. Preserve the requested URL for sign-in/retry.
+  // 管理后台布局会显示具体的登录与权限状态，不挂载受限的子视图。
+  // 保留请求的 URL，以便登录或重试。
   return true;
 });
 
 router.afterEach((to, from) => {
   finishNavigation();
-  document.title = `${({ home: '发现', market: '插件目录', skills: 'Skills', me: '工作台', inbox: '信箱', status: '服务状态' } as Record<string, string>)[String(to.name)] || '插件档案'} · MoFox`;
+  document.title = `${({ home: '发现', market: '插件目录', skills: 'Skill 目录', me: '工作台', inbox: '信箱', status: '服务状态' } as Record<string, string>)[String(to.name)] || '插件档案'} · MoFox`;
   if (from.matched.length && to.path !== from.path)
     requestAnimationFrame(() =>
       document.getElementById('main-content')?.focus({ preventScroll: true }),

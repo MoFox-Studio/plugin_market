@@ -18,8 +18,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('colophon pointer lens', () => {
-  test('keeps both original radius extremes local to the seal and clears reveal on exit', () => {
+describe('刊记印章的指针透镜', () => {
+  test('将原有半径的两个极值限制在印章内部，并在离开时清除显现效果', () => {
     const rootStyles = document.documentElement.getAttribute('style');
     wrapper = mount(ColophonSeal, {
       props: { print: impressions[0] },

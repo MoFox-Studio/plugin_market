@@ -1,4 +1,4 @@
-"""Unit tests for ``BulkOpsService`` (task 9)."""
+"""BulkOpsService 的单元测试（任务 9）。"""
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ async def _create_plugin(session, plugin_id: str, owner_id: str) -> None:
     payload = PluginCreate(
         plugin_id=plugin_id,
         display_name=plugin_id,
-        summary=f"summary for {plugin_id}",
-        description=f"description for {plugin_id}",
+        summary=f"{plugin_id} 的摘要",
+        description=f"{plugin_id} 的说明",
         repository_url=f"https://github.com/MoFox-Studio/{plugin_id}",
         license="MIT",
         categories=["tool"],
@@ -87,7 +87,7 @@ async def test_bulk_apply_set_trust_level_updates_plugin() -> None:
             "admin",
             ["plug-a"],
             "set_trust_level",
-            {"trust_level": "official", "reason": "internal"},
+            {"trust_level": "official", "reason": "内部使用"},
         )
         assert result.results[0].ok is True
         assert result.results[0].after is not None
@@ -117,7 +117,7 @@ async def test_bulk_apply_delete_requires_reason_and_deletes_plugin() -> None:
             "admin",
             ["plug-a"],
             "delete",
-            {"reason": "cleanup"},
+            {"reason": "清理"},
         )
         assert result.results[0].ok is True
         assert result.results[0].after is None
@@ -143,7 +143,7 @@ async def test_bulk_apply_partial_failure_keeps_successes() -> None:
             "admin",
             ["plug-a", "missing-plugin"],
             "block",
-            {"reason": "risk"},
+            {"reason": "存在风险"},
         )
         assert [item.ok for item in result.results] == [True, False]
         assert result.results[1].error is not None

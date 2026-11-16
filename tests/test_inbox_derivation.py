@@ -1,4 +1,4 @@
-"""Property tests for inbox derivation."""
+"""收件箱消息派生逻辑的属性测试。"""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from plugin_market_backend.services.inbox_service import GOVERNANCE_DEDUPE_WINDO
 COMMENT_AUTHORS = ['alpha', 'beta', 'gamma', 'owner', 'maint']
 GOVERNANCE_RECIPIENTS = ['owner', 'maint']
 GOVERNANCE_ACTIONS = ['block_plugin', 'set_trust_level', 'reject_plugin']
-REASONS = ['', 'policy', 'quality', 'duplicate']
+REASONS = ['', '规则要求', '质量问题', '重复内容']
 
 
 @dataclass(frozen=True)
@@ -72,8 +72,8 @@ async def _create_plugin(session, plugin_id: str, owner_id: str) -> PluginORM:
     payload = PluginCreate(
         plugin_id=plugin_id,
         display_name=plugin_id,
-        summary=f'summary for {plugin_id}',
-        description=f'description for {plugin_id}',
+        summary=f'{plugin_id} 的摘要',
+        description=f'{plugin_id} 的说明',
         repository_url=f'https://github.com/MoFox-Studio/{plugin_id}',
         license='MIT',
         categories=['tool'],

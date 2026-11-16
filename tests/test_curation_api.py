@@ -1,4 +1,4 @@
-"""API tests for curation management routes (task 15)."""
+"""精选内容管理路由的 API 测试（任务 15）。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ ADMIN_HEADERS = {"Authorization": "Bearer admin-token"}
 async def test_admin_curation_crud_and_list(client: AsyncClient) -> None:
     await client.post(
         "/api/v1/plugins",
-        json=plugin_payload("curated_plugin", display_name="Curated Plugin"),
+        json=plugin_payload("curated_plugin", display_name="精选插件"),
         headers=AUTHOR_HEADERS,
     )
 

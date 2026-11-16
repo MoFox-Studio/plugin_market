@@ -1,4 +1,4 @@
-"""Property tests for pinned plugin invariants."""
+"""置顶插件不变量的属性测试。"""
 
 from __future__ import annotations
 
@@ -53,8 +53,8 @@ async def _create_plugin(session, plugin_id: str, owner_id: str) -> None:
     payload = PluginCreate(
         plugin_id=plugin_id,
         display_name=plugin_id,
-        summary=f'summary for {plugin_id}',
-        description=f'description for {plugin_id}',
+        summary=f'{plugin_id} 的摘要',
+        description=f'{plugin_id} 的说明',
         repository_url=f'https://github.com/MoFox-Studio/{plugin_id}',
         license='MIT',
         categories=['tool'],
@@ -149,7 +149,7 @@ operations_strategy = st.lists(
         PinOperation,
         kind=st.sampled_from(['add', 'update', 'remove']),
         plugin_id=st.sampled_from(ALL_PLUGIN_IDS),
-        reason=st.one_of(st.none(), st.sampled_from(['top pick', 'fresh', 'updated'])),
+        reason=st.one_of(st.none(), st.sampled_from(['首选推荐', '新鲜推荐', '已更新'])),
     ),
     min_size=0,
     max_size=16,

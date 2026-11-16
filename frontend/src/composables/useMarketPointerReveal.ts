@@ -36,7 +36,7 @@ let targetPending = false;
 let refreshTarget = false;
 
 function publish() {
-  // Subscribers update their own bounded layers; never publish inherited root styles.
+  // 订阅方只更新自身有边界的图层，不将样式发布到会被继承的根节点。
   for (const listener of listeners) listener(state);
 }
 function stopFrame() {
@@ -91,7 +91,7 @@ function animate(now: number) {
   if (now - lastMove >= STOP_DELAY) aimRadius(BASE_RADIUS, now);
   sampleRadius(now);
   publish();
-  // A settled stationary lens does not keep the rendering loop alive.
+  // 镜片静止且半径稳定后，不再维持渲染循环。
   if (state.radius !== targetRadius || targetRadius !== BASE_RADIUS)
     frame = requestAnimationFrame(animate);
 }
@@ -131,8 +131,8 @@ function move(event: PointerEvent) {
   refreshTarget = false;
   lastMove = now;
   aimRadius(radiusForSpeed(speed), now);
-  // Preserve the original speed-sensitive radius, but commit only the newest
-  // input once per display frame instead of on every hardware pointer event.
+  // 保留原有随速度变化的半径，但每个显示帧只提交一次最新输入，
+  // 而不是在每次硬件指针事件发生时都提交。
   if (!frame) frame = requestAnimationFrame(animate);
 }
 function syncPreference() {
@@ -198,7 +198,7 @@ function disconnect() {
   enabled = false;
 }
 
-/** One pointer stream and radius animation shared by the global and local lenses. */
+/** 全局与局部镜片共用一套指针事件流和半径动画。 */
 export function useMarketPointerReveal(listener: Listener) {
   onMounted(() => {
     listeners.add(listener);

@@ -1,4 +1,4 @@
-"""Small unit tests for the in-process cache helpers (task 10 groundwork)."""
+"""进程内缓存辅助函数的小型单元测试（任务 10 的基础工作）。"""
 
 from __future__ import annotations
 

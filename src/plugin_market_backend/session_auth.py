@@ -1,4 +1,4 @@
-"""Cookie and GitHub token authentication helpers."""
+"""Cookie 与 GitHub 令牌认证辅助工具。"""
 
 from __future__ import annotations
 
@@ -22,8 +22,7 @@ OAUTH_STATE_TTL = timedelta(minutes=10)
 
 
 def _is_expired(expires_at: datetime, now: datetime | None = None) -> bool:
-    """Compare expiration times defensively across SQLite naive datetime round-trips."""
-
+    """比较过期时间，兼容 SQLite 读写后丢失时区的日期时间。"""
     current_time = now or utc_now()
     normalized_expires_at = expires_at if expires_at.tzinfo is not None else expires_at.replace(tzinfo=timezone.utc)
     normalized_now = current_time if current_time.tzinfo is not None else current_time.replace(tzinfo=timezone.utc)
@@ -31,8 +30,7 @@ def _is_expired(expires_at: datetime, now: datetime | None = None) -> bool:
 
 
 async def create_oauth_state(redirect_to: str) -> str:
-    """Create a one-time OAuth state."""
-
+    """创建一次性 OAuth state。"""
     state = secrets.token_urlsafe(32)
     now = utc_now()
     async with session_scope() as session:
@@ -42,30 +40,27 @@ async def create_oauth_state(redirect_to: str) -> str:
 
 
 async def consume_oauth_state(state: str) -> str:
-    """Consume and return the stored redirect path for an OAuth state."""
-
+    """消费 OAuth state 并返回其存储的跳转路径。"""
     async with session_scope() as session:
         record = await session.get(OAuthStateORM, state)
         if record is None or _is_expired(record.expires_at):
-            raise ApiError(401, "OAUTH_STATE_INVALID", "GitHub OAuth state is invalid or expired.")
+            raise ApiError(401, "OAUTH_STATE_INVALID", "GitHub OAuth state 无效或已过期。")
         redirect_to = record.redirect_to
         await session.delete(record)
         return redirect_to
 
 
 async def validate_oauth_state(state: str) -> str:
-    """Validate an OAuth state without consuming it before remote calls succeed."""
-
+    """验证 OAuth state，在远程调用成功前不消费它。"""
     async with session_scope() as session:
         record = await session.get(OAuthStateORM, state)
         if record is None or _is_expired(record.expires_at):
-            raise ApiError(401, "OAUTH_STATE_INVALID", "GitHub OAuth state is invalid or expired.")
+            raise ApiError(401, "OAUTH_STATE_INVALID", "GitHub OAuth state 无效或已过期。")
         return record.redirect_to
 
 
 async def create_browser_session(author_id: str, access_token: str) -> str:
-    """Create a browser session for an authenticated author."""
-
+    """为已认证的作者创建浏览器会话。"""
     session_id = secrets.token_urlsafe(40)
     now = utc_now()
     async with session_scope() as session:
@@ -75,8 +70,7 @@ async def create_browser_session(author_id: str, access_token: str) -> str:
 
 
 async def clear_browser_session(session_id: str | None) -> None:
-    """Delete a browser session if present."""
-
+    """删除指定浏览器会话（若存在）。"""
     if not session_id:
         return
     async with session_scope() as session:
@@ -86,8 +80,7 @@ async def clear_browser_session(session_id: str | None) -> None:
 
 
 async def upsert_github_author(access_token: str) -> AuthorORM:
-    """Fetch GitHub user info and upsert the matching author record."""
-
+    """获取 GitHub 用户信息并创建或更新对应作者记录。"""
     settings = get_settings()
     github_user = await fetch_github_user(settings, access_token)
     author_id = f"github:{github_user.github_login.lower()}"
@@ -105,8 +98,7 @@ async def upsert_github_author(access_token: str) -> AuthorORM:
 
 
 async def current_author_from_request(request: Request) -> AuthorORM | None:
-    """Return the current browser author, if a valid session cookie exists."""
-
+    """会话 Cookie 有效时返回当前浏览器作者。"""
     settings = get_settings()
     session_id = request.cookies.get(settings.session_cookie_name)
     if not session_id:
@@ -119,28 +111,25 @@ async def current_author_from_request(request: Request) -> AuthorORM | None:
 
 
 async def require_browser_author(request: Request) -> str:
-    """Require a valid browser session and return its author id."""
-
+    """验证浏览器会话并返回作者 ID。"""
     author = await current_author_from_request(request)
     if author is None:
-        raise ApiError(401, "UNAUTHORIZED", "GitHub login is required.")
+        raise ApiError(401, "UNAUTHORIZED", "请先登录 GitHub。")
     return author.author_id
 
 
 async def require_browser_admin(request: Request) -> str:
-    """Require a valid browser admin session and return its author id."""
-
+    """验证浏览器管理员会话并返回作者 ID。"""
     author = await current_author_from_request(request)
     if author is None:
-        raise ApiError(401, "UNAUTHORIZED", "GitHub login is required.")
+        raise ApiError(401, "UNAUTHORIZED", "请先登录 GitHub。")
     if not author.is_admin:
-        raise ApiError(403, "FORBIDDEN", "Admin permission is required.")
+        raise ApiError(403, "FORBIDDEN", "需要管理员权限。")
     return author.author_id
 
 
 async def github_author_from_bearer(authorization: str | None = Header(default=None)) -> str | None:
-    """Resolve a GitHub token from Bearer authorization, returning None when absent."""
-
+    """从 Bearer 认证中解析 GitHub 令牌，缺失时返回 None。"""
     if not authorization or not authorization.startswith("Bearer "):
         return None
     token = authorization[len("Bearer ") :]
@@ -149,8 +138,7 @@ async def github_author_from_bearer(authorization: str | None = Header(default=N
 
 
 def author_schema(author: AuthorORM) -> dict[str, Any]:
-    """Convert an author ORM object to a public API dictionary."""
-
+    """将作者 ORM 对象转换为公开 API 字典。"""
     return {
         "author_id": author.author_id,
         "github_user_id": author.github_user_id,
