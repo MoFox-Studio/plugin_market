@@ -38,7 +38,11 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     if (typeof window === 'undefined') {
       return
     }
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(dismissedTokens.value))
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(dismissedTokens.value))
+    } catch {
+      // Private browsing or a full storage quota can reject writes.
+    }
   }
 
   async function loadActive(force = false): Promise<Announcement[]> {
@@ -69,8 +73,19 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   }
 
   async function dismiss(announcementId: number): Promise<void> {
-    const result = await api.announcements.dismiss(announcementId)
-    dismissLocal(result.announcement_id, result.dismiss_token)
+    const item = items.value.find((entry) => entry.id === announcementId)
+
+    // Persist locally first so anonymous viewers (whose dismiss request is
+    // rejected with 401) are not asked again on the next page load.
+    dismissLocal(announcementId, item?.dismiss_token ?? 0)
+
+    try {
+      const result = await api.announcements.dismiss(announcementId)
+      dismissLocal(result.announcement_id, result.dismiss_token)
+    } catch {
+      // The local record above is enough; a later authenticated dismissal
+      // will sync with the server.
+    }
   }
 
   function reset(): void {
