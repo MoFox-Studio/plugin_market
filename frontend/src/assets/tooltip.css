@@ -1,0 +1,66 @@
+.market-tooltip {
+  position: fixed;
+  z-index: 12000;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-left: 2px solid var(--blue-500);
+  border-radius: 3px;
+  background: var(--surface-elevated);
+  color: var(--ink-900);
+  box-shadow: var(--shadow-2);
+  font: 12px/1.65 var(--font-body);
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+  white-space: pre-line;
+  pointer-events: auto;
+  animation: market-tooltip-in 120ms ease-out;
+}
+.market-tooltip::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--surface-elevated);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.market-tooltip[data-placement='top']::after {
+  bottom: -4px;
+  left: calc(var(--tooltip-arrow-x) - 3px);
+  border-right: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+}
+.market-tooltip[data-placement='bottom']::after {
+  top: -4px;
+  left: calc(var(--tooltip-arrow-x) - 3px);
+  border-top: 1px solid var(--line-strong);
+  border-left: 1px solid var(--line-strong);
+}
+.market-tooltip[data-placement='left']::after {
+  right: -4px;
+  top: calc(var(--tooltip-arrow-y) - 3px);
+  border-top: 1px solid var(--line-strong);
+  border-right: 1px solid var(--line-strong);
+}
+.market-tooltip[data-placement='right']::after {
+  left: -4px;
+  top: calc(var(--tooltip-arrow-y) - 3px);
+  border-bottom: 1px solid var(--line-strong);
+  border-left: 1px solid var(--line-strong);
+}
+@keyframes market-tooltip-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .market-tooltip {
+    animation: none;
+  }
+}

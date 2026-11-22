@@ -14,20 +14,35 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/pinyon-script": "5.3.0",
+    "@fontsource/playfair-display": "5.3.0",
     "pinia": "2.3.1",
-    "vue": "3.5.13",
+    "three": "^0.170.0",
+    "vue": "3.5.44",
     "vue-router": "4.5.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "5.2.3",
-    "@vue/test-utils": "^2.4.10",
+    "@types/three": "^0.170.0",
+    "@vitejs/plugin-vue": "5.2.4",
+    "@vue/test-utils": "2.5.1",
     "fast-check": "^3.23.2",
     "jsdom": "^26.1.0",
     "postcss-html": "^1.8.0",
     "stylelint": "^16.19.1",
     "typescript": "5.7.3",
-    "vite": "6.3.5",
-    "vitest": "^2.1.9",
-    "vue-tsc": "2.2.8"
+    "vite": "6.4.5",
+    "vitest": "4.1.12",
+    "vue-tsc": "3.3.14"
+  },
+  "overrides": {
+    "js-beautify": {
+      "glob": "14.0.3",
+      "editorconfig": {
+        "minimatch": "11.0.4"
+      }
+    }
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

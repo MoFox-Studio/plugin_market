@@ -3,15 +3,164 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Neo-MoFox Plugin Market</title>
-  <meta name="description" content="Neo-MoFox 插件市场 · 发现、评价并参与共建优秀插件生态。">
+  <title>MoFox · 插件市场</title>
+  <meta name="description" content="发现为 MoFox 带来更多可能的插件与技能。浏览社区作品，找到你的下一份灵感。">
   <link rel="icon" type="image/png" href="/logo.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="preload" as="image" href="/logo.png">
+  <script>
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('mofox:theme'); } catch (_) {}
+      var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = theme === 'dark' || (!theme && systemDark) ? 'dark' : 'light';
+    })();
+  </script>
+  <style>
+    html { background: #fafbff; color: #0b1220; }
+    html[data-theme="dark"] { background: #0a1220; color: #e6edf6; }
+    #boot-screen {
+      --paper: #fafbff; --ink: #162c42; --blue: #166997; --line: #a7bacd; --muted: #465970;
+      position: fixed; inset: 0; z-index: 10000; isolation: isolate;
+      display: grid; place-items: center; overflow: auto; overscroll-behavior: contain; padding: clamp(20px, 5vw, 64px);
+      box-sizing: border-box; background: var(--paper); color: var(--ink);
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+    }
+    [data-theme="dark"] #boot-screen {
+      --paper: #0a1220; --ink: #e6edf6; --blue: #78c7ff; --line: #354e69; --muted: #a3b6cb;
+    }
+    .boot-map, .boot-frame { position: absolute; pointer-events: none; z-index: -1; }
+    .boot-map { inset: 0; width: 100%; height: 100%; color: var(--blue); opacity: .24; }
+    .boot-etch { stroke-dasharray: 1; animation: boot-etch 1.75s cubic-bezier(.2,.65,.25,1) both; }
+    .boot-frame { inset: clamp(12px, 3.5vw, 48px); border: 1px solid var(--line); }
+    .boot-frame::before, .boot-frame::after {
+      content: "+"; position: absolute; font: 21px/1 Georgia, serif;
+      background: var(--paper); color: var(--blue);
+    }
+    .boot-frame::before { top: -11px; left: -6px; }
+    .boot-frame::after { bottom: -11px; right: -6px; }
+    .boot-sheet {
+      position: relative; width: min(520px, 100%); box-sizing: border-box;
+      background: var(--paper); text-align: center;
+      padding: clamp(18px, 4vh, 42px) clamp(14px, 4vw, 42px);
+    }
+    .boot-running {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+      border-bottom: 3px double var(--line); padding-bottom: 8px;
+      font: 10px/1.4 Georgia, serif; letter-spacing: .12em; color: var(--muted);
+    }
+    .boot-running span:last-child { font-family: "Microsoft YaHei", sans-serif; }
+    .boot-emblem {
+      position: relative; display: grid; place-items: center;
+      width: clamp(82px, 16vh, 116px); aspect-ratio: 1; margin: clamp(14px, 3.6vh, 34px) auto 12px;
+    }
+    .boot-emblem::before, .boot-emblem::after {
+      content: ""; position: absolute; inset: 0; border: 1px solid var(--line);
+    }
+    .boot-emblem::before { transform: translate(-3px,-3px); }
+    .boot-emblem::after { border-color: var(--blue); animation: boot-register .95s cubic-bezier(.2,.75,.25,1) both; }
+    .boot-logo { display: block; width: 78%; height: 78%; object-fit: contain; }
+    .boot-masthead {
+      margin: 0; font: bold clamp(33px, 6.7vw, 61px)/1.08 Georgia, "Times New Roman", serif;
+      letter-spacing: -.06em; animation: boot-ink .75s .18s both;
+    }
+    .boot-masthead i { font-weight: 400; }
+    .boot-market { margin: 8px 0 20px; font: 600 13px/1.5 "Microsoft YaHei", sans-serif; letter-spacing: .2em; }
+    .boot-rule { height: 3px; border-block: 1px solid var(--line); }
+    .boot-track { width: min(170px, 65%); height: 2px; background: var(--line); margin: 18px auto 0; overflow: hidden; }
+    .boot-track::after { display: block; content: ""; width: 36%; height: 100%; background: var(--blue); animation: boot-sweep 1.4s ease-in-out infinite; }
+    #boot-status { margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    #boot-retry { margin: 12px 0 0; padding: 9px 18px; border: 1px solid var(--blue); background: var(--paper); color: var(--blue); font: inherit; cursor: pointer; }
+    #boot-retry:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+    #boot-screen[data-phase="leaving"] { animation: boot-leave .2s ease-in both; }
+    #boot-screen[data-phase="failed"] *, #boot-screen[data-phase="failed"] ::after { animation: none; }
+    html[data-reduced-motion="reduce"] #boot-screen,
+    html[data-reduced-motion="reduce"] #boot-screen *,
+    html[data-reduced-motion="reduce"] #boot-screen ::before,
+    html[data-reduced-motion="reduce"] #boot-screen ::after { animation: none !important; }
+    html[data-reduced-motion="reduce"] .boot-track::after { width: 100%; }
+    @keyframes boot-etch { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+    @keyframes boot-register { from { transform: translate(9px,6px); opacity: .2; } to { transform: translate(2px,2px); opacity: 1; } }
+    @keyframes boot-ink { from { opacity: .25; text-shadow: 3px 1px var(--blue); } to { opacity: 1; text-shadow: 0 0 transparent; } }
+    @keyframes boot-sweep { from { transform: translateX(-110%); } to { transform: translateX(290%); } }
+    @keyframes boot-leave { from { clip-path: inset(0); } to { clip-path: inset(0 0 100%); } }
+    @media (prefers-reduced-motion: reduce) {
+      #boot-screen, #boot-screen *, #boot-screen ::before, #boot-screen ::after { animation: none !important; }
+      .boot-track::after { width: 100%; }
+    }
+    @media (max-height: 420px) {
+      .boot-sheet { padding-block: 10px; }
+      .boot-emblem { width: 52px; margin: 8px auto; }
+      .boot-masthead { font-size: 30px; }
+      .boot-market, .boot-track { margin-block: 7px; }
+    }
+  </style>
 </head>
 <body>
+  <section id="boot-screen" data-phase="loading" aria-label="MoFox 插件市场加载页">
+    <div class="boot-frame" aria-hidden="true"></div>
+    <svg class="boot-map" viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice" fill="none" aria-hidden="true">
+      <defs><path id="boot-ridge" pathLength="1" d="M945-80c-165 95-114 192-41 259s60 146 9 225-56 131 0 188 35 94 3 143-46 112-12 224"/></defs>
+      <g class="boot-etch" stroke="currentColor" stroke-width="1.2">
+        <use href="#boot-ridge"/><use href="#boot-ridge" transform="translate(42 5)"/>
+        <use href="#boot-ridge" transform="translate(84 16)"/><use href="#boot-ridge" transform="translate(126 8)"/>
+        <use href="#boot-ridge" transform="translate(168 -8)"/><use href="#boot-ridge" transform="translate(210 -17)"/>
+        <use href="#boot-ridge" transform="translate(258 -8)"/><use href="#boot-ridge" transform="translate(312 14)"/>
+        <use href="#boot-ridge" transform="translate(363 19)"/><use href="#boot-ridge" transform="translate(418 11)"/>
+      </g>
+    </svg>
+    <div class="boot-sheet">
+      <div aria-hidden="true">
+        <div class="boot-running"><span>MOFOX STUDIO</span><span>社区插件与技能</span></div>
+        <div class="boot-emblem"><img class="boot-logo" src="/logo.png" width="96" height="96" alt="" fetchpriority="high"></div>
+        <div class="boot-masthead" lang="en"><i>The</i> MoFox Gazette</div>
+        <p class="boot-market">MoFox 插件市场</p>
+        <div class="boot-rule"></div><div class="boot-track"></div>
+      </div>
+      <p id="boot-status" role="status" aria-live="polite" aria-atomic="true">正在准备插件市场</p>
+      <button id="boot-retry" type="button" hidden onclick="location.reload()">重新加载</button>
+      <noscript><p>请启用 JavaScript 以使用插件市场。</p></noscript>
+    </div>
+  </section>
   <div id="app"></div>
+  <script id="boot-watch">
+    (function () {
+      document.getElementById('app').setAttribute('inert', '');
+      var screen = document.getElementById('boot-screen');
+      var status = document.getElementById('boot-status');
+      var retry = document.getElementById('boot-retry');
+      var path = location.pathname;
+      var title = path.startsWith('/plugin/') ? '插件档案' : path.startsWith('/skill/') ? '技能档案' : path.startsWith('/author/') ? '作者档案' : path.startsWith('/me') ? '工作台' : '插件市场';
+      status.textContent = '正在准备' + title;
+      var startedAt = performance.now();
+      var slowTimer = window.setTimeout(function () {
+        status.textContent = '加载时间比平时长，请稍候…';
+      }, 3000);
+      var retryTimer = window.setTimeout(function () {
+        screen.dataset.phase = 'waiting';
+        status.textContent = '页面仍在加载，可以继续等候或重新加载。';
+        retry.hidden = false;
+      }, 8000);
+      function stopWatch() {
+        window.clearTimeout(slowTimer);
+        window.clearTimeout(retryTimer);
+        window.removeEventListener('error', moduleError, true);
+      }
+      function fail() {
+        stopWatch();
+        screen.dataset.phase = 'failed';
+        status.setAttribute('role', 'alert');
+        status.setAttribute('aria-live', 'assertive');
+        status.textContent = '页面未能启动，请检查网络连接后重新加载。';
+        retry.hidden = false;
+      }
+      function moduleError(event) {
+        if (event.target instanceof HTMLScriptElement && event.target.type === 'module') fail();
+        else if (event.target === window && event.filename && event.filename.startsWith(location.origin + '/')) fail();
+      }
+      window.addEventListener('error', moduleError, true);
+      window.__mofoxBoot = { startedAt: startedAt, stopWatch: stopWatch, fail: fail };
+    })();
+  </script>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

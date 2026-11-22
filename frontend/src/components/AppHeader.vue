@@ -1,99 +1,119 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
-import InboxBell from '@/components/InboxBell.vue'
-
-defineEmits<{
-  (e: 'toggle-sidebar'): void
-}>()
-
-const router = useRouter()
-const auth = useAuthStore()
-const toast = useToastStore()
-
-const searchQuery = ref('')
-
+import { ref, computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import InboxBell from './InboxBell.vue';
+import AppIcon from './AppIcon.vue';
+import FoxMark from './FoxMark.vue';
+defineEmits<{ 'toggle-sidebar': [] }>();
+const router = useRouter();
+const route = useRoute();
+const auth = useAuthStore();
+const toast = useToastStore();
+const searchQuery = ref('');
+const dark = ref(document.documentElement.dataset.theme === 'dark');
+const label = computed(
+  () =>
+    (
+      ({
+        home: '发现 / DISCOVER',
+        market: '插件目录',
+        plugin: '插件档案',
+        skills: '技能目录',
+        skill: '技能档案',
+        author: '社区人物',
+        me: '创作工作台',
+        'me-profile': '作者资料',
+        inbox: '社区来信',
+        status: '服务公报',
+        notfound: '缺页',
+      }) as Record<string, string>
+    )[String(route.name)] ||
+    (String(route.name).startsWith('admin') ? '编辑部' : '社区'),
+);
 function onSearch() {
-  const q = searchQuery.value.trim()
   void router.push({
     name: 'market',
-    query: q ? { q } : {},
-  })
+    query: searchQuery.value.trim() ? { q: searchQuery.value.trim() } : {},
+  });
 }
-
-async function onLogout() {
-  await auth.logout()
-  toast.show('已退出登录', 'ok')
-  router.push('/')
+function toggleTheme() {
+  dark.value = !dark.value;
+  document.documentElement.dataset.theme = dark.value ? 'dark' : 'light';
+  try {
+    localStorage.setItem('mofox:theme', dark.value ? 'dark' : 'light');
+  } catch {}
+}
+async function logout() {
+  try {
+    await auth.logout();
+    toast.show('已退出登录', 'ok');
+    void router.push('/');
+  } catch (err) {
+    toast.show(err instanceof Error ? err.message : '退出失败，请重试', 'bad');
+  }
 }
 </script>
-
 <template>
-  <header class="topbar">
-    <router-link class="brand" to="/">
-      <img class="brand-logo" src="/logo.png" alt="Neo-MoFox">
-      <span class="brand-text">
-        <b>Neo-MoFox</b>
-        <span>Plugin Market</span>
-      </span>
-    </router-link>
-
-    <form class="topbar-search" role="search" @submit.prevent="onSearch">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <input
-        v-model="searchQuery"
-        type="search"
-        name="q"
-        placeholder="搜索插件、作者、标签…"
-        autocomplete="off"
-      >
-      <button type="submit" class="btn btn-primary btn-sm">搜索</button>
-    </form>
-
-    <nav class="topbar-nav">
-      <router-link class="navlink" to="/" active-class="active" exact>推荐</router-link>
-      <router-link class="navlink" to="/browse" active-class="active">浏览</router-link>
-      <router-link class="navlink" to="/skills" active-class="active">Skills</router-link>
-      <router-link class="navlink" to="/me" active-class="active">我的</router-link>
-      <span class="auth-slot" data-auth-slot>
-        <template v-if="auth.isAuthenticated && auth.viewer">
-          <InboxBell />
-          <router-link
-            class="navlink navlink-profile"
-            :to="`/author/${encodeURIComponent(auth.viewer.author_id)}`"
-          >
-            <img
-              v-if="auth.viewer.avatar_url"
-              class="auth-avatar"
-              :src="auth.viewer.avatar_url"
-              alt=""
-            >
-            <span
-              v-else
-              class="auth-avatar auth-avatar-fallback"
-              aria-hidden="true"
-            >{{ (auth.viewer.display_name || 'M').trim()[0]?.toUpperCase() || 'M' }}</span>
-            <span class="auth-name">{{ auth.viewer.display_name }}</span>
-          </router-link>
-          <router-link v-if="auth.isAdmin" class="navlink" to="/admin">管理</router-link>
-          <button class="btn btn-ghost btn-sm" @click.stop="onLogout">退出</button>
-        </template>
-        <template v-else>
-          <a class="btn btn-primary btn-sm" :href="auth.getLoginUrl()">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-            GitHub 登录
-          </a>
-        </template>
-      </span>
-    </nav>
-
+  <header class="market-header">
     <button
-      class="mobile-menu-toggle"
-      aria-expanded="false"
+      class="header-menu icon-button"
       aria-label="打开导航"
       @click="$emit('toggle-sidebar')"
-    >☰</button>
+    >
+      <AppIcon name="menu" />
+    </button>
+    <router-link to="/" class="header-brand"
+      ><FoxMark :size="24" /><strong>MOFOX</strong></router-link
+    >
+    <span class="header-location"
+      ><i v-if="route.name !== 'home'" class="running-title" lang="en"
+        >MoFox Gazette</i
+      >{{ label }}</span
+    >
+    <form class="header-search" role="search" @submit.prevent="onSearch">
+      <AppIcon name="search" :size="16" /><input
+        v-model="searchQuery"
+        name="q"
+        type="search"
+        placeholder="搜索插件…"
+        aria-label="搜索插件名称或功能"
+      /><button type="submit" aria-label="提交搜索">↵</button>
+    </form>
+    <div class="header-actions">
+      <button
+        class="icon-button"
+        :aria-label="dark ? '切换浅色主题' : '切换深色主题'"
+        @click="toggleTheme"
+      >
+        <AppIcon :name="dark ? 'sun' : 'moon'" />
+      </button>
+      <span
+        v-if="auth.loading && !auth.loaded"
+        class="auth-pending"
+        role="status"
+        >确认身份…</span
+      >
+      <template v-else-if="auth.viewer"
+        ><InboxBell /><router-link class="header-account" to="/me"
+          ><img
+            v-if="auth.viewer.avatar_url"
+            :src="auth.viewer.avatar_url"
+            alt=""
+          /><span>{{ auth.viewer.display_name }}</span></router-link
+        ><button class="header-logout" @click="logout">退出</button></template
+      >
+      <button
+        v-else-if="auth.error"
+        class="header-login"
+        @click="auth.loadViewer(true)"
+      >
+        重试登录状态
+      </button>
+      <a v-else class="header-login" :href="auth.getLoginUrl()"
+        ><AppIcon name="github" :size="18" /><span>登录</span></a
+      >
+    </div>
   </header>
 </template>

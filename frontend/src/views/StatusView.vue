@@ -1,132 +1,180 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { MarketStats } from '@/types'
-import { formatNumber, formatUptime, parseApiDate } from '@/utils/format'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import type { MarketStats } from '@/types';
+import { formatNumber, formatUptime, parseApiDate } from '@/utils/format';
 
 interface ProbeResult {
-  ok: boolean
-  status: number | null
-  latencyMs: number | null
-  detail: string | null
-  payload: Record<string, unknown> | null
-  checkedAt: string | null
+  ok: boolean;
+  status: number | null;
+  latencyMs: number | null;
+  detail: string | null;
+  payload: Record<string, unknown> | null;
+  checkedAt: string | null;
 }
 
-const REFRESH_INTERVAL_MS = 30000
+const REFRESH_INTERVAL_MS = 30000;
 
-const health = ref<ProbeResult | null>(null)
-const ready = ref<ProbeResult | null>(null)
-const statsProbe = ref<ProbeResult | null>(null)
+const health = ref<ProbeResult | null>(null);
+const ready = ref<ProbeResult | null>(null);
+const statsProbe = ref<ProbeResult | null>(null);
 
-const stats = ref<MarketStats | null>(null)
-const startedAt = ref<string | null>(null)
-const uptimeSeconds = ref<number | null>(null)
-const lastRefreshedAt = ref<string | null>(null)
-const refreshing = ref(false)
-let timer: number | null = null
-let uptimeTimer: number | null = null
+const stats = ref<MarketStats | null>(null);
+const startedAt = ref<string | null>(null);
+const uptimeSeconds = ref<number | null>(null);
+const lastRefreshedAt = ref<string | null>(null);
+const refreshing = ref(false);
+const now = ref(Date.now());
+const pendingControllers = new Set<AbortController>();
+let disposed = false;
+let timer: number | null = null;
+let uptimeTimer: number | null = null;
 
 async function probe(path: string): Promise<ProbeResult> {
-  const startedTs = (typeof performance !== 'undefined' ? performance.now() : Date.now())
+  const startedTs =
+    typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const controller = new AbortController();
+  pendingControllers.add(controller);
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
   try {
-    const response = await fetch(path, { credentials: 'include' })
-    const latencyMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedTs)
-    let payload: Record<string, unknown> | null = null
+    const response = await fetch(path, {
+      credentials: 'include',
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    const latencyMs = Math.round(
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+        startedTs,
+    );
+    let payload: Record<string, unknown> | null = null;
     try {
-      payload = await response.clone().json()
+      payload = await response.clone().json();
     } catch {
-      payload = null
+      payload = null;
     }
+    const validObject =
+      payload !== null &&
+      typeof payload === 'object' &&
+      !Array.isArray(payload);
+    const validPayload =
+      validObject &&
+      (path === '/health'
+        ? payload?.status === 'ok'
+        : path === '/ready'
+          ? payload?.status === 'ready' && payload?.database === 'ok'
+          : typeof payload?.plugins_total === 'number');
     return {
-      ok: response.ok,
+      ok: response.ok && validPayload,
       status: response.status,
       latencyMs,
-      detail: response.ok ? null : (response.statusText || `HTTP ${response.status}`),
+      detail: response.ok
+        ? validPayload
+          ? null
+          : '接口没有返回有效的状态数据'
+        : response.statusText || `HTTP ${response.status}`,
       payload,
       checkedAt: new Date().toISOString(),
-    }
+    };
   } catch (err) {
-    const latencyMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedTs)
+    const latencyMs = Math.round(
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+        startedTs,
+    );
     return {
       ok: false,
       status: null,
       latencyMs,
-      detail: err instanceof Error ? err.message : '请求失败',
+      detail: controller.signal.aborted
+        ? '请求超过 12 秒未完成'
+        : err instanceof Error
+          ? err.message
+          : '请求失败',
       payload: null,
       checkedAt: new Date().toISOString(),
-    }
+    };
+  } finally {
+    window.clearTimeout(timeout);
+    pendingControllers.delete(controller);
   }
 }
 
 async function refreshAll(): Promise<void> {
-  if (refreshing.value) return
-  refreshing.value = true
+  if (refreshing.value || disposed) return;
+  refreshing.value = true;
   try {
     const [healthRes, readyRes, statsRes] = await Promise.all([
       probe('/health'),
       probe('/ready'),
       probe('/api/v1/market/stats'),
-    ])
-    health.value = healthRes
-    ready.value = readyRes
-    statsProbe.value = statsRes
+    ]);
+    if (disposed) return;
+    health.value = healthRes;
+    ready.value = readyRes;
+    statsProbe.value = statsRes;
 
     if (statsRes.ok && statsRes.payload) {
-      stats.value = statsRes.payload as unknown as MarketStats
-    }
+      stats.value = statsRes.payload as unknown as MarketStats;
+    } else stats.value = null;
 
     // /health intentionally returns minimal info; /api/v1/admin/system carries
     // started_at / uptime, but it requires admin. We stay public-friendly here
     // and only show uptime if a public probe ever exposes it.
-    const startedFromPayload = healthRes.payload?.['started_at']
+    const startedFromPayload = healthRes.payload?.['started_at'];
     if (typeof startedFromPayload === 'string') {
-      startedAt.value = startedFromPayload
+      startedAt.value = startedFromPayload;
     }
-    const uptimeFromPayload = healthRes.payload?.['uptime_seconds']
+    const uptimeFromPayload = healthRes.payload?.['uptime_seconds'];
     if (typeof uptimeFromPayload === 'number') {
-      uptimeSeconds.value = uptimeFromPayload
+      uptimeSeconds.value = uptimeFromPayload;
     }
 
-    lastRefreshedAt.value = new Date().toISOString()
+    lastRefreshedAt.value = new Date().toISOString();
   } finally {
-    refreshing.value = false
+    refreshing.value = false;
   }
 }
 
-const overall = computed<{ tone: 'ok' | 'degraded' | 'down'; label: string; description: string }>(() => {
-  const probes = [health.value, ready.value, statsProbe.value]
-  const known = probes.filter((p): p is ProbeResult => p !== null)
+const overall = computed<{
+  tone: 'ok' | 'degraded' | 'down' | 'pending';
+  label: string;
+  description: string;
+}>(() => {
+  const probes = [health.value, ready.value, statsProbe.value];
+  const known = probes.filter((p): p is ProbeResult => p !== null);
   if (known.length === 0) {
-    return { tone: 'degraded', label: '正在检测', description: '正在向后端核心接口发起健康检查。' }
+    return {
+      tone: 'pending',
+      label: '正在检查服务',
+      description: '正在向后端核心接口发起健康检查。',
+    };
   }
-  const failed = known.filter((p) => !p.ok)
+  const failed = known.filter((p) => !p.ok);
   if (failed.length === 0) {
     return {
       tone: 'ok',
-      label: '一切正常',
+      label: '三项服务检查均已通过',
       description: '核心接口可达，响应正常。',
-    }
+    };
   }
   if (failed.length === known.length) {
     return {
       tone: 'down',
-      label: '服务不可用',
+      label: '三项服务检查均未通过',
       description: '当前所有探测端点都未返回成功，请稍后重试或查看部署状态。',
-    }
+    };
   }
   return {
     tone: 'degraded',
-    label: '部分降级',
+    label: '部分服务检查未通过',
     description: `${failed.length} / ${known.length} 个探测端点未通过，部分功能可能受影响。`,
-  }
-})
+  };
+});
 
 interface ProbeCard {
-  key: 'health' | 'ready' | 'stats'
-  title: string
-  subtitle: string
-  endpoint: string
-  result: ProbeResult | null
+  key: 'health' | 'ready' | 'stats';
+  title: string;
+  subtitle: string;
+  endpoint: string;
+  result: ProbeResult | null;
 }
 
 const probes = computed<ProbeCard[]>(() => [
@@ -151,116 +199,122 @@ const probes = computed<ProbeCard[]>(() => [
     endpoint: 'GET /api/v1/market/stats',
     result: statsProbe.value,
   },
-])
+]);
 
 const counters = computed(() => {
-  const s = stats.value
-  if (!s) return []
+  const s = stats.value;
+  if (!s) return [];
   return [
-    { label: '已上架插件', value: s.published_plugins ?? s.plugins_total ?? 0 },
-    { label: '插件总数', value: s.plugins_total ?? 0 },
-    { label: '版本总数', value: s.versions_total ?? 0 },
-    { label: '作者数量', value: s.authors_total ?? 0 },
-    { label: '评分总数', value: s.ratings_total ?? 0 },
-    { label: '订阅总数', value: s.likes_total ?? 0 },
-    { label: '评论总数', value: s.comments_total ?? 0 },
-    { label: '安装记录', value: s.downloads_total ?? 0 },
-  ]
-})
+    { label: '已上架插件', value: s.published_plugins },
+    { label: '插件总数', value: s.plugins_total },
+    { label: '版本总数', value: s.versions_total },
+    { label: '作者数量', value: s.authors_total },
+    { label: '评分总数', value: s.ratings_total },
+    { label: '订阅总数', value: s.likes_total },
+    { label: '评论总数', value: s.comments_total },
+    { label: '安装记录', value: s.downloads_total },
+  ];
+});
 
 const uptimeText = computed(() => {
   if (uptimeSeconds.value !== null) {
-    return formatUptime(uptimeSeconds.value)
+    return formatUptime(uptimeSeconds.value);
   }
   if (startedAt.value) {
-    const parsed = parseApiDate(startedAt.value)
+    const parsed = parseApiDate(startedAt.value);
     if (parsed) {
-      return formatUptime(Math.max(0, (Date.now() - parsed.getTime()) / 1000))
+      return formatUptime(Math.max(0, (now.value - parsed.getTime()) / 1000));
     }
   }
-  return null
-})
+  return null;
+});
 
 function relative(value: string | null | undefined): string {
-  const parsed = parseApiDate(value)
-  if (!parsed) return '—'
-  const diff = Math.max(0, Date.now() - parsed.getTime())
-  if (diff < 1000) return '刚刚'
-  if (diff < 60000) return `${Math.floor(diff / 1000)} 秒前`
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
-  return parsed.toLocaleTimeString()
+  const parsed = parseApiDate(value);
+  if (!parsed) return '—';
+  const diff = Math.max(0, now.value - parsed.getTime());
+  if (diff < 1000) return '刚刚';
+  if (diff < 60000) return `${Math.floor(diff / 1000)} 秒前`;
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
+  return parsed.toLocaleTimeString();
 }
 
-function probeTone(result: ProbeResult | null): 'ok' | 'degraded' | 'down' | 'pending' {
-  if (!result) return 'pending'
-  if (result.ok) return 'ok'
-  if (result.status === null) return 'down'
-  return 'degraded'
+function probeTone(
+  result: ProbeResult | null,
+): 'ok' | 'degraded' | 'down' | 'pending' {
+  if (!result) return 'pending';
+  if (result.ok) return 'ok';
+  if (result.status === null) return 'down';
+  return 'degraded';
 }
 
 function probeLabel(result: ProbeResult | null): string {
-  if (!result) return '检测中'
-  if (result.ok) return '正常'
-  if (result.status === null) return '不可达'
-  return `异常 · ${result.status}`
+  if (!result) return '检测中';
+  if (result.ok) return '正常';
+  if (result.status === null) return '不可达';
+  return `异常 · ${result.status}`;
 }
 
 onMounted(() => {
-  void refreshAll()
+  void refreshAll();
   if (typeof window !== 'undefined') {
     timer = window.setInterval(() => {
-      void refreshAll()
-    }, REFRESH_INTERVAL_MS)
+      void refreshAll();
+    }, REFRESH_INTERVAL_MS);
     uptimeTimer = window.setInterval(() => {
+      now.value = Date.now();
       if (uptimeSeconds.value !== null) {
-        uptimeSeconds.value += 1
+        uptimeSeconds.value += 1;
       }
-    }, 1000)
+    }, 1000);
   }
-})
+});
 
 onBeforeUnmount(() => {
+  disposed = true;
+  pendingControllers.forEach((controller) => controller.abort());
+  pendingControllers.clear();
   if (timer !== null && typeof window !== 'undefined') {
-    window.clearInterval(timer)
-    timer = null
+    window.clearInterval(timer);
+    timer = null;
   }
   if (uptimeTimer !== null && typeof window !== 'undefined') {
-    window.clearInterval(uptimeTimer)
-    uptimeTimer = null
+    window.clearInterval(uptimeTimer);
+    uptimeTimer = null;
   }
-})
+});
 </script>
 
 <template>
-  <div class="status-page">
+  <div class="page-wrap status-page">
     <header class="status-hero" :data-tone="overall.tone">
+      <div class="bulletin-imprint"><b>服务公报</b><span>公开监测 · 每 {{ REFRESH_INTERVAL_MS / 1000 }} 秒更新</span></div>
       <div class="status-hero-copy">
-        <span class="status-kicker">Service Status</span>
-        <h1>服务状态</h1>
+        <span class="status-kicker"><i aria-hidden="true"></i>{{ refreshing && lastRefreshedAt ? '上次检测 · 正在复查' : '本次检测' }}</span>
+        <h1 aria-live="polite">{{ overall.label }}</h1>
         <p class="status-summary">{{ overall.description }}</p>
         <div class="status-meta">
           <span>最近更新：{{ relative(lastRefreshedAt) }}</span>
           <span v-if="uptimeText">运行时长：{{ uptimeText }}</span>
-          <span>每 {{ REFRESH_INTERVAL_MS / 1000 }}s 自动刷新</span>
         </div>
       </div>
       <div class="status-hero-side">
-        <div class="status-pill" :data-tone="overall.tone">
-          <span class="status-dot" />
-          <strong>{{ overall.label }}</strong>
-        </div>
+        <span>通过的检查</span>
+        <strong class="probe-tally">{{ lastRefreshedAt ? probes.filter(card => card.result?.ok).length : '—' }}<small> / {{ probes.length }}</small></strong>
         <button
           class="btn btn-sm"
           type="button"
           :disabled="refreshing"
           @click="refreshAll"
-        >{{ refreshing ? '刷新中…' : '立即刷新' }}</button>
+        >
+          {{ refreshing ? '刷新中…' : '立即刷新' }}
+        </button>
       </div>
     </header>
 
     <section class="status-section">
       <div class="section-head compact-head">
-        <h2>核心探测</h2>
+        <h2><span class="section-number">01</span> 核心服务</h2>
         <p>对外可访问的关键接口实时探测结果。</p>
       </div>
       <div class="probe-grid">
@@ -283,7 +337,9 @@ onBeforeUnmount(() => {
           <dl class="probe-card-body">
             <div>
               <dt>端点</dt>
-              <dd><code>{{ card.endpoint }}</code></dd>
+              <dd>
+                <code>{{ card.endpoint }}</code>
+              </dd>
             </div>
             <div>
               <dt>HTTP</dt>
@@ -291,7 +347,14 @@ onBeforeUnmount(() => {
             </div>
             <div>
               <dt>响应时延</dt>
-              <dd>{{ card.result?.latencyMs !== null && card.result?.latencyMs !== undefined ? `${card.result.latencyMs} ms` : '—' }}</dd>
+              <dd>
+                {{
+                  card.result?.latencyMs !== null &&
+                  card.result?.latencyMs !== undefined
+                    ? `${card.result.latencyMs} ms`
+                    : '—'
+                }}
+              </dd>
             </div>
             <div>
               <dt>最近探测</dt>
@@ -307,27 +370,37 @@ onBeforeUnmount(() => {
 
     <section class="status-section">
       <div class="section-head compact-head">
-        <h2>市场数据</h2>
-        <p>来自 <code>/api/v1/market/stats</code> 的公共统计指标。</p>
+        <h2><span class="section-number">02</span> 市场数据</h2>
+        <p>当前公开的市场规模与社区参与情况。</p>
       </div>
       <div v-if="counters.length" class="counter-grid">
         <div v-for="item in counters" :key="item.label" class="counter-card">
           <span class="counter-label">{{ item.label }}</span>
-          <strong class="counter-value">{{ formatNumber(item.value) }}</strong>
+          <strong class="counter-value">{{ typeof item.value === 'number' ? formatNumber(item.value) : '—' }}</strong>
         </div>
       </div>
+      <p v-else-if="!statsProbe" class="stats-pending" role="status">等候本次市场数据检查。</p>
       <p v-else class="probe-detail">暂未获取到市场统计数据，请稍后再试。</p>
     </section>
 
     <section class="status-section status-tips">
       <div class="section-head compact-head">
-        <h2>遇到问题？</h2>
+        <h2><span class="section-number">03</span> 需要帮助</h2>
         <p>如果状态长期处于异常或降级，可以尝试以下操作。</p>
       </div>
       <ul class="tip-list">
         <li>刷新页面或稍后再试，瞬时网络抖动可能造成单次探测失败。</li>
-        <li>检查浏览器是否因登录态失效而被拦截，必要时重新登录。</li>
-        <li>到 GitHub 仓库 <a href="https://github.com/MoFox-Studio" target="_blank" rel="noreferrer noopener">MoFox-Studio</a> 反馈持续不可用的问题。</li>
+        <li>记录未通过的端点、HTTP 状态和最近探测时间，反馈问题时一并提供。</li>
+        <li>
+          到 GitHub 仓库
+          <a
+            href="https://github.com/MoFox-Studio"
+            target="_blank"
+            rel="noreferrer noopener"
+            >MoFox-Studio</a
+          >
+          反馈持续不可用的问题。
+        </li>
       </ul>
     </section>
   </div>
@@ -335,243 +408,175 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .status-page {
-  width: min(var(--shell-max), 100%);
-  margin: 0 auto;
-  padding: var(--space-7) var(--space-7) var(--space-16);
   display: grid;
-  gap: var(--space-7);
+  gap: 36px;
 }
-@media (max-width: 768px) {
-  .status-page { padding: var(--space-5) var(--space-4) var(--space-12); }
-}
-
 .status-hero {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-6);
-  align-items: center;
-  padding: var(--space-7);
-  border-radius: var(--radius-lg);
-  border: 1.5px solid var(--line);
-  background: var(--surface);
-  box-shadow: var(--shadow-2);
-  overflow: hidden;
+  display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 22px 36px;
+  align-items: end; padding-bottom: 26px; border-bottom: 3px double var(--ink-700);
 }
-.status-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: .25;
-  background: var(--halftone);
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, .85), transparent 80%);
+.bulletin-imprint {
+  grid-column: 1/-1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 0; border-top: 2px solid var(--ink-900); border-bottom: 1px solid var(--line-strong);
+  font-size: 11px; letter-spacing: .08em;
 }
-.status-hero[data-tone="ok"] { background: linear-gradient(135deg, var(--success-soft), var(--surface) 70%); }
-.status-hero[data-tone="degraded"] { background: linear-gradient(135deg, var(--warning-soft), var(--surface) 70%); }
-.status-hero[data-tone="down"] { background: linear-gradient(135deg, var(--danger-soft), var(--surface) 70%); }
-
-.status-hero-copy {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: var(--space-2);
-}
-.status-kicker {
-  font-family: var(--font-brand);
-  letter-spacing: var(--letter-kicker);
-  text-transform: uppercase;
-  font-size: var(--fs-sm);
-  color: var(--ink-500);
-}
-.status-hero h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--fs-display-2);
-  line-height: var(--lh-tight);
-  font-weight: 900;
-  color: var(--ink-900);
-}
-.status-summary { margin: 0; color: var(--ink-700); font-size: var(--fs-lg); max-width: 56ch; }
-.status-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  color: var(--ink-500);
-  font-size: var(--fs-sm);
-  margin-top: var(--space-2);
-}
-.status-meta span { display: inline-flex; align-items: center; gap: 6px; }
-
-.status-hero-side {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: var(--space-3);
-  justify-items: end;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  border-radius: var(--radius-pill);
-  border: 1.5px solid currentColor;
-  background: var(--surface);
-  font-size: var(--fs-sm);
-  font-weight: 700;
-}
-.status-pill[data-tone="ok"] { color: var(--success-ink); background: var(--success-soft); }
-.status-pill[data-tone="degraded"] { color: var(--warning-ink); background: var(--warning-soft); }
-.status-pill[data-tone="down"] { color: var(--danger-ink); background: var(--danger-soft); }
-.status-pill strong { font-family: var(--font-display); }
-
+.bulletin-imprint b { color: var(--blue-700); }
+.status-hero-copy { padding: 6px 0; }
+.status-kicker { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-700); }
+.status-kicker i { width: 9px; height: 9px; background: var(--ink-500); }
+.status-hero[data-tone='ok'] .status-kicker i { background: var(--success-ink); }
+.status-hero[data-tone='degraded'] .status-kicker i { background: var(--warning-ink); }
+.status-hero[data-tone='down'] .status-kicker i { background: var(--danger-ink); }
+.status-hero h1 { margin: 14px 0; font: 800 clamp(35px, 4.7vw, 65px)/1.25 var(--font-editorial); letter-spacing: -.05em; text-wrap: balance; }
+.status-summary { margin: 0; color: var(--ink-700); line-height: 1.85; }
+.status-meta { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; color: var(--ink-500); font: 11px var(--font-mono); }
+.status-hero-side { align-self: stretch; display: grid; justify-items: start; align-content: center; gap: 7px; padding-left: 24px; border-left: 1px solid var(--line-strong); }
+.status-hero-side > span { color: var(--ink-500); font-size: 12px; }
+.probe-tally { font: 800 48px/1.15 var(--font-editorial); color: var(--blue-700); }
+.probe-tally small { color: var(--ink-500); font: 16px var(--font-mono); }
+.status-hero-side .btn { margin-top: 8px; }
+.stats-pending { margin: 0; color: var(--ink-500); padding: 18px 0; border-top: 1px solid var(--line); }
 .status-dot {
-  width: 10px;
-  height: 10px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 25%, transparent);
+  flex-shrink: 0;
 }
-
-@media (max-width: 720px) {
-  .status-hero { grid-template-columns: 1fr; }
-  .status-hero-side { justify-items: start; }
-}
-
-.status-section { display: grid; gap: var(--space-4); }
-.status-section .section-head.compact-head { display: grid; gap: 4px; }
-
-.probe-grid {
+.status-section {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: var(--space-4);
+  gap: 20px;
 }
-
-.probe-card {
+.section-head.compact-head {
   display: grid;
-  gap: var(--space-3);
-  padding: var(--space-5);
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-1);
-}
-.probe-card[data-tone="ok"] { border-color: color-mix(in srgb, var(--success) 40%, var(--line)); }
-.probe-card[data-tone="degraded"] { border-color: color-mix(in srgb, var(--warning) 50%, var(--line)); }
-.probe-card[data-tone="down"] { border-color: color-mix(in srgb, var(--danger) 50%, var(--line)); }
-
-.probe-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-.probe-card-head h3 {
+  gap: 7px;
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--fs-h3);
-  font-weight: 800;
-  color: var(--ink-900);
+}
+.section-head h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.section-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-500);
+}
+.section-number {
+  font: 11px var(--font-mono);
+  color: var(--blue-600);
+  margin-right: 9px;
+}
+.probe-grid { display: grid; border-top: 2px solid var(--ink-700); }
+.probe-card {
+  display: grid; grid-template-columns: minmax(215px, 1fr) minmax(0, 2fr); gap: 14px 30px;
+  padding: 19px 20px; border-bottom: 1px solid var(--line); background: var(--surface); min-width: 0;
+}
+.probe-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.probe-card .probe-card-body { grid-template-columns: minmax(100px, 1.5fr) repeat(3,minmax(0,1fr)); align-self: center; }
+.probe-card .probe-detail { grid-column: 1/-1; margin: 0; }
+.probe-card-head h3 {
+  font-size: 15px;
+  margin: 0 0 7px;
 }
 .probe-card-head p {
-  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 0;
   color: var(--ink-500);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-snug);
 }
-
 .probe-status {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  font-size: var(--fs-xs);
-  font-weight: 700;
+  align-items: center;
   white-space: nowrap;
-  background: var(--surface-soft);
+  font-size: 11px;
   color: var(--ink-500);
 }
-.probe-card[data-tone="ok"] .probe-status { background: var(--success-soft); color: var(--success-ink); }
-.probe-card[data-tone="degraded"] .probe-status { background: var(--warning-soft); color: var(--warning-ink); }
-.probe-card[data-tone="down"] .probe-status { background: var(--danger-soft); color: var(--danger-ink); }
-.probe-card[data-tone="pending"] .probe-status { background: var(--surface-soft); color: var(--ink-500); }
-
+.probe-card[data-tone='ok'] .probe-status {
+  color: var(--success-ink);
+}
+.probe-card[data-tone='down'] .probe-status,
+.probe-card[data-tone='degraded'] .probe-status {
+  color: var(--danger-ink);
+}
 .probe-card-body {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 12px;
   margin: 0;
 }
-.probe-card-body div { display: grid; gap: 2px; }
 .probe-card-body dt {
-  font-size: var(--fs-mini);
-  text-transform: uppercase;
-  letter-spacing: var(--letter-wide);
+  font-size: 10px;
   color: var(--ink-500);
+  margin-bottom: 7px;
 }
 .probe-card-body dd {
   margin: 0;
-  font-size: var(--fs-base);
-  font-weight: 600;
-  color: var(--ink-900);
-  word-break: break-all;
+  font: 12px var(--font-mono);
+  overflow-wrap: anywhere;
 }
 .probe-card-body code {
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-  background: var(--surface-soft);
-  padding: 2px 6px;
-  border-radius: var(--radius-xs);
+  font-size: 10px;
+  background: transparent;
+  padding: 0;
 }
-
 .probe-detail {
-  margin: 0;
-  padding: var(--space-3);
-  border-radius: var(--radius-sm);
   background: var(--danger-soft);
   color: var(--danger-ink);
-  font-size: var(--fs-sm);
+  font-size: 12px;
+  padding: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  margin: 16px 0 0;
 }
-
 .counter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
 }
 .counter-card {
-  display: grid;
-  gap: 6px;
-  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-1);
+  padding: 24px;
 }
 .counter-label {
-  font-size: var(--fs-mini);
-  text-transform: uppercase;
-  letter-spacing: var(--letter-wide);
   color: var(--ink-500);
+  font-size: 11px;
 }
 .counter-value {
-  font-family: var(--font-display);
-  font-size: 28px;
-  line-height: var(--lh-tight);
-  font-weight: 900;
-  color: var(--ink-900);
+  font: 30px/1 var(--font-mono);
+  letter-spacing: -0.06em;
 }
-
-.status-tips .tip-list {
+.status-tips {
+  border-top: 1px solid var(--line);
+  padding-top: 28px;
+}
+.tip-list {
   margin: 0;
-  padding-left: 1.2em;
-  display: grid;
-  gap: 6px;
-  color: var(--ink-700);
-  font-size: var(--fs-base);
-  line-height: var(--lh-base);
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--ink-500);
 }
-.status-tips a { color: var(--blue-700); text-decoration: underline; }
+.tip-list a {
+  color: var(--blue-600);
+  text-decoration: underline;
+}
+@media (max-width: 930px) {
+  .probe-card { grid-template-columns: 1fr; }
+  .status-hero { gap: 18px; }
+}
+@media (max-width: 620px) {
+  .status-hero { grid-template-columns: 1fr; }
+  .status-hero-side { border-left: 0; border-top: 1px solid var(--line); padding: 14px 0 0; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .status-hero-side .btn { margin: 0 0 0 auto; }
+  .probe-tally { font-size: 30px; }
+  .probe-card { padding: 16px; }
+  .probe-card .probe-card-body, .counter-grid { grid-template-columns: 1fr 1fr; }
+  .counter-card { padding: 18px; }
+}
 </style>

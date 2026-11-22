@@ -14,8 +14,13 @@ export default defineConfig({
     },
   },
   server: {
+    host: '127.0.0.1',
+    strictPort: true,
     proxy: {
-      '/api': 'http://127.0.0.1:8000',
+      '/api': { target: 'http://127.0.0.1:8787', changeOrigin: false, xfwd: true },
+      '/health': 'http://127.0.0.1:8787',
+      '/ready': 'http://127.0.0.1:8787',
+      '/plugin-media': 'http://127.0.0.1:8787',
     },
   },
   build: {

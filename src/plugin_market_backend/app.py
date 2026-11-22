@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urlparse
@@ -18,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from plugin_market_backend.auth import require_author_token, require_market_access_token
 from plugin_market_backend.caching import aget_or_set, cache_bus
@@ -104,6 +106,13 @@ from plugin_market_backend.schemas import (
 )
 from plugin_market_backend.seed import seed_rich_demo
 from plugin_market_backend.service import MarketService
+from plugin_market_backend.recommendation_schemas import (
+    RecommendationPreferences, RecommendationPreferencesUpdate,
+    RecommendationRequest, RecommendationResponse,
+)
+from plugin_market_backend.services.recommendation_service import (
+    RecommendationService, purge_expired_recommendation_feedback,
+)
 from plugin_market_backend.services import AnnouncementsService, BulkOpsService, CurationService, InboxService, InlineEditService, ProfileService, SkillService, synchronize_skill_storage
 from plugin_market_backend.session_auth import (
     author_schema,
@@ -222,6 +231,21 @@ async def _load_home_announcements(viewer: Any, viewer_has_plugin: bool) -> list
         return await AnnouncementsService(session).list_active(viewer, viewer_has_plugin=viewer_has_plugin)
 
 
+async def _expire_recommendation_feedback() -> None:
+    """Purge expired preferences even when their owner no longer visits."""
+    while True:
+        try:
+            async with session_scope() as session:
+                await purge_expired_recommendation_feedback(session)
+        except SQLAlchemyError:
+            # A temporary database outage must not permanently stop retention
+            # cleanup. Avoid logging preference values or SQL parameters.
+            logging.getLogger(__name__).warning("Recommendation feedback cleanup failed; retrying in one minute.")
+            await asyncio.sleep(60)
+        else:
+            await asyncio.sleep(3600)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     """Configure database resources on application startup."""
@@ -238,7 +262,13 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
             await seed_rich_demo(session)
     async with session_scope() as session:
         await synchronize_skill_storage(session)
-    yield
+    expiry_task = asyncio.create_task(_expire_recommendation_feedback())
+    try:
+        yield
+    finally:
+        expiry_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await expiry_task
 
 
 app = FastAPI(
@@ -464,6 +494,49 @@ async def market_home(request: Request) -> Response | MarketHome:
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     return JSONResponse(content=cached["body"], headers=headers)
+
+
+def _recommendation_private_headers(response: Response) -> None:
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = "Cookie, Authorization"
+
+
+@app.post("/api/v1/recommendations", response_model=RecommendationResponse)
+async def recommendations(payload: RecommendationRequest, request: Request, response: Response) -> RecommendationResponse:
+    """Return a separate discovery feed, without altering catalogue search."""
+    ensure_same_origin_browser_write(request)
+    _recommendation_private_headers(response)
+    viewer = await current_author_from_request(request)
+    async with session_scope() as session:
+        return await RecommendationService(session).recommend(payload, viewer.author_id if viewer else None)
+
+
+@app.get("/api/v1/me/recommendation-preferences", response_model=RecommendationPreferences)
+async def recommendation_preferences(response: Response, author_id: str = Depends(require_browser_author)) -> RecommendationPreferences:
+    _recommendation_private_headers(response)
+    async with session_scope() as session:
+        return await RecommendationService(session).preferences(author_id)
+
+
+@app.put("/api/v1/me/recommendation-preferences", response_model=RecommendationPreferences)
+async def update_recommendation_preferences(
+    payload: RecommendationPreferencesUpdate, request: Request, response: Response,
+    author_id: str = Depends(require_browser_author),
+) -> RecommendationPreferences:
+    ensure_same_origin_browser_write(request)
+    _recommendation_private_headers(response)
+    async with session_scope() as session:
+        return await RecommendationService(session).update_preferences(author_id, payload)
+
+
+@app.delete("/api/v1/me/recommendation-preferences", response_model=RecommendationPreferences)
+async def reset_recommendation_preferences(
+    request: Request, response: Response, author_id: str = Depends(require_browser_author),
+) -> RecommendationPreferences:
+    ensure_same_origin_browser_write(request)
+    _recommendation_private_headers(response)
+    async with session_scope() as session:
+        return await RecommendationService(session).update_preferences(author_id, RecommendationPreferencesUpdate(), reset=True)
 
 
 @app.get("/api/v1/plugins/{plugin_id}", response_model=Plugin)

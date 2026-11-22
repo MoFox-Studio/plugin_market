@@ -1,0 +1,365 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="machines-fine-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
+      <path d="M0 0v6" fill="none" stroke="currentColor" stroke-width=".9" opacity=".6"/>
+    </pattern>
+    <pattern id="machines-cross-hatch" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="m0 8 8-8M-4 4l8-8m0 16 8-8M0 0l8 8" fill="none" stroke="currentColor" stroke-width=".7" opacity=".55"/>
+    </pattern>
+    <g id="machines-rivet"><circle r="1.6" fill="currentColor" stroke="none"/></g>
+    <g id="machines-star" fill="none" stroke="currentColor" stroke-width=".7"><path d="M-5 0H5M0-5V5"/><circle r="1.2" fill="currentColor"/></g>
+  </defs>
+
+  <symbol id="t80bvm" viewBox="0 0 640 480" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <title>T-80BVM — étude de silhouette</title>
+    <defs>
+      <mask id="machines-t80-far-occlusion" maskUnits="userSpaceOnUse" x="60" y="180" width="520" height="230">
+        <rect x="60" y="180" width="520" height="230" fill="#fff" stroke="none"/>
+        <path d="m109 278 289-62 121 43 32 19-19 38-356 41-65-40-15-24Z" fill="#000" stroke="#000" stroke-width="3"/>
+      </mask>
+    </defs>
+    <!-- Loose ground strokes keep the vehicle grounded without a filled backdrop. -->
+    <g stroke-width=".8" opacity=".48">
+      <path d="m81 405 93-17m-48 27 89-16m-26 27 162-29m-92 27 124-23m-45 38 153-28m-40-5 109-20m-53 30 46-8M67 379l66-12m401-21 45-8"/>
+      <path d="m94 397 29-6m35 14 45-8m9 14 29-5m201-36 68-12m-24 34 41-8"/>
+    </g>
+    <!-- Far running gear and the visible rear shoulder. -->
+    <g mask="url(#machines-t80-far-occlusion)">
+    <path d="m113 278 294-57c26-5 46 10 48 29l-17 26-278 58-37-15-17-21Z" stroke-width="3.5" fill="url(#machines-cross-hatch)"/>
+    <g opacity=".8">
+      <g transform="translate(143 294) rotate(-11)"><ellipse rx="17" ry="18" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="12" ry="13" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+<g transform="translate(192 284) rotate(-11)"><ellipse rx="17" ry="18" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="12" ry="13" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+<g transform="translate(241 274) rotate(-11)"><ellipse rx="17" ry="18" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="12" ry="13" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+<g transform="translate(290 264) rotate(-11)"><ellipse rx="17" ry="18" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="12" ry="13" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+<g transform="translate(339 254) rotate(-11)"><ellipse rx="17" ry="18" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="12" ry="13" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+<g transform="translate(388 244) rotate(-11)"><ellipse rx="17" ry="18" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="12" ry="13" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+    </g>
+    <path d="m118 271 307-58 36 14-16 15-309 61-24-17Z" stroke-width="2.2" fill="currentColor" fill-opacity=".1"/>
+    </g>
+    <!-- Near continuous track, six road wheels and raised idler/sprocket. -->
+    <path d="M169 320 498 258q29-4 44 17l10 24q0 20-18 34L205 399q-26 6-40-13l-15-23q-10-22 19-43Z" stroke-width="4.4" fill="url(#machines-cross-hatch)"/>
+    <path d="m176 327 324-61q19-2 29 12l11 21q1 16-17 25l-319 65q-19 2-28-12l-13-18q-5-19 13-32Z" stroke-width="1.8"/>
+    <g><g transform="translate(210 361) rotate(-11)"><ellipse rx="24" ry="25" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="19" ry="20" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+<g transform="translate(266 350) rotate(-11)"><ellipse rx="24" ry="25" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="19" ry="20" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+<g transform="translate(322 339) rotate(-11)"><ellipse rx="24" ry="25" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="19" ry="20" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+<g transform="translate(378 328) rotate(-11)"><ellipse rx="24" ry="25" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="19" ry="20" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+<g transform="translate(434 317) rotate(-11)"><ellipse rx="24" ry="25" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="19" ry="20" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g>
+<g transform="translate(490 306) rotate(-11)"><ellipse rx="24" ry="25" stroke-width="3" fill="currentColor" fill-opacity=".11"/><ellipse rx="19" ry="20" stroke-width="1.25"/><ellipse rx="7" ry="7.5" stroke-width="2"/><path d="M0-18v7M0 11v7M-17 0h7M10 0h7m-29-12 5 5m14 14 5 5m-24 0 5-5m14-14 5-5" stroke-width="1.1"/><circle r="2" fill="currentColor"/></g></g>
+    <g stroke-width="1.4"><ellipse cx="176" cy="347" rx="12" ry="17" transform="rotate(-17 176 347)"/><ellipse cx="527" cy="289" rx="11" ry="17" transform="rotate(-17 527 289)"/></g>
+    <path d="M182 392l5-8m-7-63 6-7 M192 390.07l5-8m-7-63 6-7 M202 388.14l5-8m-7-63 6-7 M212 386.21l5-8m-7-63 6-7 M222 384.28l5-8m-7-63 6-7 M232 382.35l5-8m-7-63 6-7 M242 380.42l5-8m-7-63 6-7 M252 378.49l5-8m-7-63 6-7 M262 376.56l5-8m-7-63 6-7 M272 374.63l5-8m-7-63 6-7 M282 372.7l5-8m-7-63 6-7 M292 370.77l5-8m-7-63 6-7 M302 368.84l5-8m-7-63 6-7 M312 366.91l5-8m-7-63 6-7 M322 364.98l5-8m-7-63 6-7 M332 363.05l5-8m-7-63 6-7 M342 361.12l5-8m-7-63 6-7 M352 359.19l5-8m-7-63 6-7 M362 357.26l5-8m-7-63 6-7 M372 355.33l5-8m-7-63 6-7 M382 353.4l5-8m-7-63 6-7 M392 351.47l5-8m-7-63 6-7 M402 349.54l5-8m-7-63 6-7 M412 347.61l5-8m-7-63 6-7 M422 345.68l5-8m-7-63 6-7 M432 343.75l5-8m-7-63 6-7 M442 341.82l5-8m-7-63 6-7 M452 339.89l5-8m-7-63 6-7 M462 337.96l5-8m-7-63 6-7 M472 336.03l5-8m-7-63 6-7 M482 334.1l5-8m-7-63 6-7 M492 332.17l5-8m-7-63 6-7 M502 330.24l5-8m-7-63 6-7 M512 328.31l5-8m-7-63 6-7" stroke-width="1.1" opacity=".85"/>
+    <!-- Broad sloping hull, deck folds and stepped skirts. -->
+    <path d="m109 278 289-62 121 43-323 67Z" stroke-width="3.1" fill="currentColor" fill-opacity=".055"/>
+    <path d="m109 278 87 48-20 31-65-40-15-24Z" stroke-width="3" fill="url(#machines-fine-hatch)"/>
+    <path d="m196 326 323-67 32 19-332 68-43 11Z" stroke-width="2.5" fill="currentColor" fill-opacity=".15"/>
+    <path d="m123 277 80 36 294-59m-272 56 74-29 111-23m-229 6 32 14m-59-8 32 14m-49-6 32 15" stroke-width="1.2"/>
+    <path d="m123 297 51 25-8 13-46-24Z" fill="currentColor" fill-opacity=".45" stroke-width="1.4"/>
+    <path d="m112 308 15-5m4 12 15-5m4 12 15-5" stroke-width="1"/>
+    <path d="m194 297 37-7-1 29-37 8Z" stroke-width="1.7" fill="currentColor" fill-opacity="0.07"/><path d="m199 302 25-5m-25 10 24-5" stroke-width=".65"/>
+<path d="m235 289.6 37-7-1 29-37 8Z" stroke-width="1.7" fill="currentColor" fill-opacity="0.18"/><path d="m240 294.6 25-5m-25 10 24-5" stroke-width=".65"/>
+<path d="m276 282.2 37-7-1 29-37 8Z" stroke-width="1.7" fill="currentColor" fill-opacity="0.07"/><path d="m281 287.2 25-5m-25 10 24-5" stroke-width=".65"/>
+<path d="m317 274.8 37-7-1 29-37 8Z" stroke-width="1.7" fill="currentColor" fill-opacity="0.18"/><path d="m322 279.8 25-5m-25 10 24-5" stroke-width=".65"/>
+<path d="m358 267.4 37-7-1 29-37 8Z" stroke-width="1.7" fill="currentColor" fill-opacity="0.07"/><path d="m363 272.4 25-5m-25 10 24-5" stroke-width=".65"/>
+<path d="m399 260 37-7-1 29-37 8Z" stroke-width="1.7" fill="currentColor" fill-opacity="0.18"/><path d="m404 265 25-5m-25 10 24-5" stroke-width=".65"/>
+<path d="m440 252.6 37-7-1 29-37 8Z" stroke-width="1.7" fill="currentColor" fill-opacity="0.07"/><path d="m445 257.6 25-5m-25 10 24-5" stroke-width=".65"/>
+    <path d="m493 246 20-4 28 11-21 5Zm-10-7 20-4 28 11" stroke-width="1.5" fill="url(#machines-fine-hatch)"/>
+    <!-- Low turret with recognizable sloped reactive armour faces. -->
+    <path d="m201 232 43-39 71-23 66 9 44 32-10 33-121 29-75-14Z" stroke-width="3.2" fill="currentColor" fill-opacity=".09"/>
+    <path d="m201 232 88 12 136-33-10 33-121 29-75-14Z" stroke-width="2.1" fill="url(#machines-fine-hatch)"/>
+    <path d="m244 193 45 51m26-74 20 27 46-18m-92 65 46-47 53 13m-141-5 47-13" stroke-width="1.25"/>
+    <path d="m221 222 26-5 9 17-25 5Z" fill="currentColor" fill-opacity=".17" stroke-width="1.3"/><path d="m227 225 20-4" stroke-width=".7"/>
+<path d="m251 217 26-5 9 17-25 5Z" fill="currentColor" fill-opacity=".17" stroke-width="1.3"/><path d="m257 220 20-4" stroke-width=".7"/>
+<path d="m281 212 26-5 9 17-25 5Z" fill="currentColor" fill-opacity=".17" stroke-width="1.3"/><path d="m287 215 20-4" stroke-width=".7"/>
+<path d="m311 207 26-5 9 17-25 5Z" fill="currentColor" fill-opacity=".17" stroke-width="1.3"/><path d="m317 210 20-4" stroke-width=".7"/>
+<path d="m341 202 26-5 9 17-25 5Z" fill="currentColor" fill-opacity=".17" stroke-width="1.3"/><path d="m347 205 20-4" stroke-width=".7"/>
+    <path d="m373 198 24 6 15 14-25 5Zm-2 29 25-6 12 12-24 7Z" stroke-width="1.4" fill="currentColor" fill-opacity=".3"/>
+    <ellipse cx="325" cy="180" rx="24" ry="8" transform="rotate(-11 325 180)" stroke-width="2.1"/>
+    <path d="m303 177 4-7 38-8 5 12m-35-3 19-4m-12-6 1-9 13-2 2 10" stroke-width="1.4"/>
+    <path d="m374 182-1-13 17-4 7 11-3 12Zm1-11 14-3m-6 17 8-3" stroke-width="1.5" fill="currentColor" fill-opacity=".35"/>
+    <path d="m369 174 7-76m-4 39 3-3" stroke-width="1"/>
+    <path d="m272 199-39 1-17 15 21 16 40-8Z" stroke-width="2.4" fill="currentColor" fill-opacity=".24"/>
+    <!-- Long barrel with restrained collar breaks; no schematic annotations. -->
+    <path d="m235 211-162-52-11 5 1 9 165 53Z" stroke-width="3" fill="currentColor" fill-opacity=".07"/>
+    <path d="m74 162 156 50m-164-39 164 50m-135-49 4-10m37 22 4-10m43 25 4-11m-47-4 25 8-2 10-25-8Z" stroke-width="1.3"/>
+    <path d="m63 164 9 3-1 7-8-2Z" fill="currentColor" stroke-width="1.4"/>
+    <!-- Suspension accents, tow loops and light assemblies. -->
+    <path d="m193 339 14-10 19-2m36-8 17-9m38-2 18-9m40-3 20-9m36-1 17-10m38-2 14-8M120 303q-10-10-7-14t12 10m32 22q-10-10-7-14t12 10" stroke-width="1.45"/>
+    <path d="m144 281 11-4 7 7-11 4Zm20-4 9-3 7 7-9 4Z" stroke-width="1.2" fill="currentColor" fill-opacity=".25"/>
+    <g fill="currentColor" stroke="none"><circle cx="229" cy="308" r="1.7"/><circle cx="270" cy="300" r="1.7"/><circle cx="311" cy="293" r="1.7"/><circle cx="352" cy="285" r="1.7"/><circle cx="393" cy="278" r="1.7"/><circle cx="434" cy="270" r="1.7"/><circle cx="475" cy="263" r="1.7"/></g>
+    <path d="M44 202h36m-28-6h17m449-37h39m-19-9v18" stroke-width=".7" opacity=".45"/>
+  </symbol>
+
+  <symbol id="sr71" viewBox="0 0 640 480" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <title>Blackbird — a study in speed</title>
+    <g stroke-width=".75" opacity=".32">
+      <path d="M63 403 530 100M92 416 555 116M119 429 572 136m-459-210 119-76m201 300 84-56"/>
+      <ellipse cx="325" cy="249" rx="222" ry="133" transform="rotate(-17 325 249)" stroke-dasharray="1 8"/>
+      <path d="M65 191h29m-14-14v28m449-28h22m-11-11v22M131 112h27m-14-13v26"/>
+    </g>
+    <g transform="translate(14 12) rotate(-8 320 260) scale(.64)">
+      <defs>
+        <mask id="machines-blackbird-wings" maskUnits="userSpaceOnUse" x="100" y="190" width="850" height="400">
+          <rect x="100" y="190" width="850" height="400" fill="#fff" stroke="none"/>
+          <path d="M424 348q-10 10-9 30l40 9 156-78-4-28q-8-10-24-5Z M691 385q-13 13-9 33l40 6 141-80-7-33q-7-10-23-3Z" fill="#000" stroke="#000" stroke-width="4"/>
+        </mask>
+      </defs>
+      <!-- Long slender chines flow into a narrow wing. The two nacelles stand proud. -->
+      <g mask="url(#machines-blackbird-wings)">
+        <path d="M151 537 306 410 429 379 478 346 693 294q36-8 45 4l-23 20 187 29 29 13-201 64-109-25-77 31Z" stroke-width="4.1" fill="currentColor" fill-opacity=".13"/>
+        <path d="M151 537c154-77 296-126 424-185q74-42 159-54M151 537q91-98 175-129l127-24 111-47 129-43" stroke-width="2.2"/>
+        <path d="m430 380 64 5 179-70m-42 73 58 11 180-47m-195 56-31-11m-61-67 31 3m-79 14 32 3" stroke-width="1.8"/>
+        <path d="m169 524 198-94m-180 80 174-85m-151 63 147-68m-123 49 120-54m-96 35 91-40m-68 24 65-28m-44 15 39-18" stroke-width=".85" opacity=".7"/>
+        <path d="m497 369 149-60m-136 63 149-61m-136 64 150-62m-137 65 146-61m-133 64 144-61m-129 64 141-60m-126 64 129-55m-114 60 102-44" stroke-width=".85"/>
+        <path d="m733 349 122 13m-111-17 123 13m-105-17 113 13m-95-17 91 10m-129 25 55 10m-48-16 64 10" stroke-width=".85"/>
+        <path d="m302 410 13-22 19-6 20 14-13 17Z" stroke-width="2.4" fill="currentColor" fill-opacity=".85"/>
+        <path d="m314 392 10 12 14-14m-14 14-12 4" stroke-width="1.3"/>
+        <path d="m353 387 20-6 20 16-25 10Z" stroke-width="1.5" fill="currentColor" fill-opacity=".37"/>
+        <path d="m233 474 8-36m15-18 12-7m-20 34 31-7m151-33 30-10m-114 52 36-14" stroke-width="1.15"/>
+      </g>
+      <!-- Port engine: the dark intake surrounds a separate protruding cone. -->
+      <path d="M424 348 581 279q20-9 26 2l5 28-157 79-40-10q-1-19 9-30Z" stroke-width="3.6" fill="currentColor" fill-opacity=".12"/>
+      <path d="m434 343 150-65m-135 64 144-61m-139 66 143-62m-140 68 143-63m-142 69 143-64m-141 70 141-64" stroke-width="1" opacity=".7"/>
+      <path d="m442 382 159-77-1-12-151 67Z" fill="currentColor" fill-opacity=".42" stroke-width="1.5"/>
+      <ellipse cx="434" cy="362" rx="22" ry="25" transform="rotate(28 434 362)" stroke-width="2.3" fill="currentColor"/>
+      <path d="m434 351-52 48 57-22q17-13-5-26Z" stroke-width="2.1" fill="var(--surface, #fff)"/>
+      <path d="m382 399 54-35 8 6-5 7Z" fill="currentColor" fill-opacity=".65" stroke-width="1"/>
+      <path d="m473 326 9 27m4-33 10 27m53-50 9 27m7-34 9 27m8-32 9 27" stroke-width="2"/>
+      <path d="m510 318 17-8 5 14-17 8Z" fill="currentColor" fill-opacity=".7" stroke-width="1"/>
+      <path d="m512 319 3 10m4-12 3 10m4-13 3 10" stroke-width=".7"/>
+      <!-- Upright swept fin rises from the back of each nacelle. -->
+      <path d="m548 293 42-80 28-4-9 59Z" stroke-width="3" fill="currentColor" fill-opacity=".75"/>
+      <path d="m556 287 40-69 14-2-7 46Z" stroke-width="1.15"/>
+      <path d="m590 283 14-7 8 23-14 8Z" stroke-width="1.3" fill="currentColor" fill-opacity=".65"/>
+      <!-- Starboard engine is deliberately larger in perspective. -->
+      <path d="M691 385 831 309q22-12 25 2l7 33-141 81-40-6q-5-20 9-34Z" stroke-width="3.9" fill="currentColor" fill-opacity=".14"/>
+      <path d="m705 381 132-72m-120 70 125-68m-121 74 125-69m-123 75 125-69m-123 75 126-68m-125 75 126-70" stroke-width="1" opacity=".8"/>
+      <path d="m719 416 132-78 5-15-134 76Z" fill="currentColor" fill-opacity=".45" stroke-width="1.4"/>
+      <ellipse cx="704" cy="400" rx="25" ry="28" transform="rotate(28 704 400)" stroke-width="2.5" fill="currentColor"/>
+      <path d="m705 387-54 51 59-22q19-14-5-29Z" stroke-width="2.1" fill="var(--surface, #fff)"/>
+      <path d="m651 438 56-38 9 9-6 7Z" fill="currentColor" fill-opacity=".65" stroke-width="1"/>
+      <path d="m739 360 11 28m5-37 11 27m39-54 11 28m7-37 11 28m6-35 10 28" stroke-width="2"/>
+      <path d="m774 350 15-8 6 15-16 9Z" stroke-width="1" fill="currentColor" fill-opacity=".8"/>
+      <path d="m777 350 4 11m2-14 4 11m2-14 4 11" stroke-width=".7"/>
+      <path d="m802 326-1-81 25-12 14 76Z" stroke-width="3.2" fill="currentColor" fill-opacity=".75"/>
+      <path d="m809 319-1-70 13-6 12 62Z" stroke-width="1.15"/>
+      <path d="m838 315 13-8 10 26-13 8Z" stroke-width="1.3" fill="currentColor" fill-opacity=".65"/>
+      <path d="m423 387 28 3m247 36 25 1" stroke-width="1.5"/>
+    </g>
+  </symbol>
+
+  <symbol id="lunar-lander" viewBox="0 0 640 480" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <title>Stillness on the Sea of Tranquillity</title>
+    <g opacity=".45" stroke-width=".7">
+      <path d="m55 414 75-12 67 6 95-10 105 7 62-16 121 10m-518 24 66-5m286 1 117-7m-316 17 97-5m-43 17 67-7"/>
+      <ellipse cx="125" cy="383" rx="39" ry="9"/><path d="M91 384q32-16 65-2m327 46q26-10 59-2"/>
+      <path d="M81 84h6m-3-3v6" stroke-width=".8"/><circle cx="84" cy="84" r="1.2" fill="currentColor"/>
+<path d="M151 133h8m-4-4v8" stroke-width=".8"/><circle cx="155" cy="133" r="1.2" fill="currentColor"/>
+<path d="M524 105h8m-4-4v8" stroke-width=".8"/><circle cx="528" cy="105" r="1.2" fill="currentColor"/>
+<path d="M461 69h6m-3-3v6" stroke-width=".8"/><circle cx="464" cy="69" r="1.2" fill="currentColor"/>
+<path d="M572 208h6m-3-3v6" stroke-width=".8"/><circle cx="575" cy="208" r="1.2" fill="currentColor"/>
+    </g>
+    <circle cx="121" cy="88" r="28" stroke-width="1.15"/>
+    <path d="M111 62q29 14 14 52m-25-43 9 5-7 10 13 5-5 14m15-38 11 17-6 13" stroke-width=".9" fill="currentColor" fill-opacity=".1"/>
+    <!-- Four splayed legs and their cross braces sit behind the descent platform. -->
+    <path d="m270 274-98 94 12 5 115-77m59-22 104 89-12 9-120-74" stroke-width="3"/>
+    <path d="m199 337 69-6m140 3-57-5m-140 32 54-57m179 52-56-53" stroke-width="1.4"/>
+    <ellipse cx="172" cy="376" rx="36" ry="9" stroke-width="2.1" fill="currentColor" fill-opacity=".15"/>
+    <ellipse cx="460" cy="378" rx="36" ry="9" stroke-width="2.1" fill="currentColor" fill-opacity=".15"/>
+    <!-- Faceted descent stage and torn-metal engraving. -->
+    <path d="m223 237 109-24 79 25 14 71-103 34-109-35Z" stroke-width="2.8" fill="currentColor" fill-opacity=".06"/>
+    <path d="m223 237 99 31 89-30m-89 30v75m-109-35 37-17-27-54m188 1-28 28 42 43m-175-18 72-23 61-2-61 77" stroke-width="1.35"/>
+    <path d="m216 273 39 11 22-17 13 24 32 3m-102-1 33 7 37-9 18 38m38-55 29 9 11-25 24 20 13-7m-38 12 3 20-27 17m-55-23-29 7-23-5m-5-50 24-5" stroke-width=".9"/>
+    <path d="m219 284 14-7 6 13 15-6-5 16 19 3-9 16-33-8Zm116 7 29-12 7 20-21 19-18-9Z" fill="url(#machines-cross-hatch)" stroke-width=".8"/>
+    <path d="m238 242 49 15 1 12-53-17Z" fill="currentColor" fill-opacity=".75" stroke-width="1.3"/>
+    <path d="m341 251 51-15-1 13-49 15Z" fill="currentColor" fill-opacity=".6" stroke-width="1.3"/>
+    <!-- Angular ascent cabin: recessed windows, docking hatch and antenna. -->
+    <path d="m249 235-19-41 14-51 40-25 58 5 48 30 13 54-31 32-51 12Z" stroke-width="3" fill="currentColor" fill-opacity=".07"/>
+    <path d="m230 194 52-21 39 22 69-42m-146-10 38 30 2-55m37 77v56m69-98-16 55 29-1m-153 27 32-61" stroke-width="1.5"/>
+    <path d="m247 164 31 20-7 29-27-17Zm87 30 36-23 9 24-39 25Z" stroke-width="2.2" fill="currentColor" fill-opacity=".83"/>
+    <path d="m252 173 19 12-5 17m77-3 23-16 4 10" stroke-width="1" fill="none" opacity=".3"/>
+    <path d="m282 221 18-7 13 7v22l-16 6-15-7Z" stroke-width="1.6" fill="url(#machines-fine-hatch)"/>
+    <path d="m290 230 13-4m-9-6v20m18-45-18-7 3-16 11-7 16 11" stroke-width="1.15"/>
+    <path d="m284 118 9-18 34-3 15 26m-48-13 32-3m-27-15V74m-8 0h16" stroke-width="1.6"/>
+    <path d="m352 132 26-42m-16-12q13-18 35-12-6 27-25 30Zm7-1 23-9m-13 22 9-22m-65 13 2-39m-9 0h18" stroke-width="1.5"/>
+    <circle cx="323" cy="55" r="4" stroke-width="1.3"/>
+    <path d="m248 140-31-6-14 12m6-6-4-11-20 2v14l20-2m166 83 30-4 8 13" stroke-width="1.7"/>
+    <path d="m209 149-3 17m-9-18-2 16m180 49-3 8m13-13-3 7" stroke-width="1"/>
+    <!-- Foreground pads, leg pistons and the ladder. -->
+    <path d="m236 303-43 95 10 2 61-87m118-2 44 89 13-3-37-97" stroke-width="3.2"/>
+    <path d="m233 315 13 7-40 65-8-3m195-63 10-5 28 66-9 4m-209-43 76 7m87-6 66 4m-178-32 20 38m112-41-24 38" stroke-width="1.25"/>
+    <ellipse cx="192" cy="406" rx="45" ry="11" stroke-width="2.3" fill="currentColor" fill-opacity=".18"/>
+    <ellipse cx="438" cy="406" rx="45" ry="11" stroke-width="2.3" fill="currentColor" fill-opacity=".18"/>
+    <path d="m282 245-22 102h27l18-101m-25 16 22 1m-25 12 22 1m-25 12 23 1m-26 12 24 1m-26 12 23 1m-26 12 24 1m-26 12h24" stroke-width="1.6"/>
+    <path d="m314 340-9 27q16 10 34 0l-8-27m-20 21 24 1" stroke-width="1.5" fill="currentColor" fill-opacity=".3"/>
+    <g stroke-width=".7" opacity=".7"><path d="m251 221 13 5m-16 0 19 7m-10-91 20 15m-17-21 17 12m55-19 39 22m-32-23 38 22m-49-16 29 16M228 302l9 3m5 2 9 3m88 16 8-3m5-2 13-5m-91 106 13 2m42-23 10 2m110-1 16-2"/></g>
+  </symbol>
+
+  <symbol id="orrery" viewBox="0 0 640 480" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <title>The celestial cabinet</title>
+    <g opacity=".35" stroke-width=".65">
+      <path d="M76 423h488m-449 7h112m214 0h84"/>
+      <circle cx="320" cy="211" r="172" stroke-dasharray="1 8"/>
+      <path d="M91 168h8m-4-4v8" stroke-width=".8"/><circle cx="95" cy="168" r="1.2" fill="currentColor"/>
+<path d="M138 64h8m-4-4v8" stroke-width=".8"/><circle cx="142" cy="64" r="1.2" fill="currentColor"/>
+<path d="M480 82h6m-3-3v6" stroke-width=".8"/><circle cx="483" cy="82" r="1.2" fill="currentColor"/>
+<path d="M551 235h8m-4-4v8" stroke-width=".8"/><circle cx="555" cy="235" r="1.2" fill="currentColor"/>
+<path d="M457 325h6m-3-3v6" stroke-width=".8"/><circle cx="460" cy="325" r="1.2" fill="currentColor"/>
+    </g>
+    <!-- The pedestal is a turned spindle with carved scroll feet. -->
+    <path d="m306 280-4 43q-4 12-23 19l3 13q24-4 26 14l-4 19h32l-4-19q2-18 26-14l3-13q-19-7-23-19l-4-43Z" stroke-width="2.5" fill="url(#machines-fine-hatch)"/>
+    <ellipse cx="320" cy="281" rx="24" ry="7" stroke-width="1.8"/>
+    <ellipse cx="320" cy="323" rx="21" ry="5" stroke-width="1.5"/>
+    <ellipse cx="320" cy="350" rx="39" ry="9" stroke-width="2"/>
+    <path d="m292 352 5 12m9-10 3 13m11-12v12m10-13-1 12m12-13-3 13" stroke-width=".9"/>
+    <path d="M308 378c-20 5-29 17-54 17-20 0-29-5-39 0-14 7-4 24 6 19 8-4 0-13-5-9 4-5 10-2 16 4 16 13 52 9 88-7 36 16 72 20 88 7 6-6 12-9 16-4-5-4-13 5-5 9 10 5 20-12 6-19-10-5-19 0-39 0-25 0-34-12-54-17Z" stroke-width="2.3" fill="currentColor" fill-opacity=".1"/>
+    <path d="M245 407c18 5 42-5 58-15m34 0c16 10 40 20 58 15m-75-2v17m-9-1h18" stroke-width="1.3"/>
+    <!-- Raised ecliptic table, engraved rim, and eccentric orbit ellipses. -->
+    <ellipse cx="320" cy="223" rx="192" ry="73" stroke-width="2.7"/>
+    <path d="M128 223v10c0 40 86 73 192 73s192-33 192-73v-10" stroke-width="2.1" fill="currentColor" fill-opacity=".08"/>
+    <ellipse cx="320" cy="217" rx="183" ry="68" stroke-width="1.15"/>
+    <path d="M503.0 217.0 491.0 217.0" stroke-width="1.5"/>
+<path d="M502.3 222.9 495.3 222.7" stroke-width="0.75"/>
+<path d="M500.2 228.8 493.3 228.3" stroke-width="0.75"/>
+<path d="M496.8 234.6 490.0 233.8" stroke-width="0.75"/>
+<path d="M492.0 240.3 485.4 239.2" stroke-width="0.75"/>
+<path d="M485.9 245.7 479.5 244.5" stroke-width="0.75"/>
+<path d="M478.5 251.0 468.1 247.5" stroke-width="1.5"/>
+<path d="M469.9 256.0 464.2 254.3" stroke-width="0.75"/>
+<path d="M460.2 260.7 454.8 258.8" stroke-width="0.75"/>
+<path d="M449.4 265.1 444.5 263.0" stroke-width="0.75"/>
+<path d="M437.6 269.1 433.1 266.8" stroke-width="0.75"/>
+<path d="M425.0 272.7 420.9 270.2" stroke-width="0.75"/>
+<path d="M411.5 275.9 405.5 269.8" stroke-width="1.5"/>
+<path d="M397.3 278.6 394.4 275.9" stroke-width="0.75"/>
+<path d="M382.6 280.9 380.2 278.1" stroke-width="0.75"/>
+<path d="M367.4 282.7 365.6 279.8" stroke-width="0.75"/>
+<path d="M351.8 284.0 350.6 281.0" stroke-width="0.75"/>
+<path d="M335.9 284.7 335.3 281.8" stroke-width="0.75"/>
+<path d="M320.0 285.0 320.0 278.0" stroke-width="1.5"/>
+<path d="M304.1 284.7 304.7 281.8" stroke-width="0.75"/>
+<path d="M288.2 284.0 289.4 281.0" stroke-width="0.75"/>
+<path d="M272.6 282.7 274.4 279.8" stroke-width="0.75"/>
+<path d="M257.4 280.9 259.8 278.1" stroke-width="0.75"/>
+<path d="M242.7 278.6 245.6 275.9" stroke-width="0.75"/>
+<path d="M228.5 275.9 234.5 269.8" stroke-width="1.5"/>
+<path d="M215.0 272.7 219.1 270.2" stroke-width="0.75"/>
+<path d="M202.4 269.1 206.9 266.8" stroke-width="0.75"/>
+<path d="M190.6 265.1 195.5 263.0" stroke-width="0.75"/>
+<path d="M179.8 260.7 185.2 258.8" stroke-width="0.75"/>
+<path d="M170.1 256.0 175.8 254.3" stroke-width="0.75"/>
+<path d="M161.5 251.0 171.9 247.5" stroke-width="1.5"/>
+<path d="M154.1 245.7 160.5 244.5" stroke-width="0.75"/>
+<path d="M148.0 240.3 154.6 239.2" stroke-width="0.75"/>
+<path d="M143.2 234.6 150.0 233.8" stroke-width="0.75"/>
+<path d="M139.8 228.8 146.7 228.3" stroke-width="0.75"/>
+<path d="M137.7 222.9 144.7 222.7" stroke-width="0.75"/>
+<path d="M137.0 217.0 149.0 217.0" stroke-width="1.5"/>
+<path d="M137.7 211.1 144.7 211.3" stroke-width="0.75"/>
+<path d="M139.8 205.2 146.7 205.7" stroke-width="0.75"/>
+<path d="M143.2 199.4 150.0 200.2" stroke-width="0.75"/>
+<path d="M148.0 193.7 154.6 194.8" stroke-width="0.75"/>
+<path d="M154.1 188.3 160.5 189.5" stroke-width="0.75"/>
+<path d="M161.5 183.0 171.9 186.5" stroke-width="1.5"/>
+<path d="M170.1 178.0 175.8 179.7" stroke-width="0.75"/>
+<path d="M179.8 173.3 185.2 175.2" stroke-width="0.75"/>
+<path d="M190.6 168.9 195.5 171.0" stroke-width="0.75"/>
+<path d="M202.4 164.9 206.9 167.2" stroke-width="0.75"/>
+<path d="M215.0 161.3 219.1 163.8" stroke-width="0.75"/>
+<path d="M228.5 158.1 234.5 164.2" stroke-width="1.5"/>
+<path d="M242.7 155.4 245.6 158.1" stroke-width="0.75"/>
+<path d="M257.4 153.1 259.8 155.9" stroke-width="0.75"/>
+<path d="M272.6 151.3 274.4 154.2" stroke-width="0.75"/>
+<path d="M288.2 150.0 289.4 153.0" stroke-width="0.75"/>
+<path d="M304.1 149.3 304.7 152.2" stroke-width="0.75"/>
+<path d="M320.0 149.0 320.0 156.0" stroke-width="1.5"/>
+<path d="M335.9 149.3 335.3 152.2" stroke-width="0.75"/>
+<path d="M351.8 150.0 350.6 153.0" stroke-width="0.75"/>
+<path d="M367.4 151.3 365.6 154.2" stroke-width="0.75"/>
+<path d="M382.6 153.1 380.2 155.9" stroke-width="0.75"/>
+<path d="M397.3 155.4 394.4 158.1" stroke-width="0.75"/>
+<path d="M411.5 158.1 405.5 164.2" stroke-width="1.5"/>
+<path d="M425.0 161.3 420.9 163.8" stroke-width="0.75"/>
+<path d="M437.6 164.9 433.1 167.2" stroke-width="0.75"/>
+<path d="M449.4 168.9 444.5 171.0" stroke-width="0.75"/>
+<path d="M460.2 173.3 454.8 175.2" stroke-width="0.75"/>
+<path d="M469.9 178.0 464.2 179.7" stroke-width="0.75"/>
+<path d="M478.5 183.0 468.1 186.5" stroke-width="1.5"/>
+<path d="M485.9 188.3 479.5 189.5" stroke-width="0.75"/>
+<path d="M492.0 193.7 485.4 194.8" stroke-width="0.75"/>
+<path d="M496.8 199.4 490.0 200.2" stroke-width="0.75"/>
+<path d="M500.2 205.2 493.3 205.7" stroke-width="0.75"/>
+<path d="M502.3 211.1 495.3 211.3" stroke-width="0.75"/>
+    <ellipse cx="320" cy="217" rx="162" ry="58" stroke-width="1.2"/>
+    <ellipse cx="320" cy="217" rx="131" ry="45" stroke-width="1.1"/>
+    <ellipse cx="320" cy="217" rx="99" ry="33" stroke-width=".85"/>
+    <ellipse cx="320" cy="217" rx="65" ry="22" stroke-width=".85"/>
+    <ellipse cx="320" cy="217" rx="32" ry="11" stroke-width=".85"/>
+    <path d="m139 247 6 3m5 3 6 3m6 2 7 3m6 3 8 2m7 3 7 2m8 2 9 2m8 3 8 1m9 3 10 1m8 2 10 1m9 2 11 1m8 1 11 1m9 1 11 1m9 0 10 1m9-1 11 0m9-1 10 0m9-1 10-1m9-1 10-2m9-1 9-2m9-2 9-2m8-2 9-3m8-3 8-3m7-3 7-3m6-3 6-4" stroke-width=".85"/>
+    <!-- A hand-cut sun is the focus, with orbit arms and globe stands. -->
+    <path d="M320 216V143m-6 73v-48m12 48v-48m-12-17h12" stroke-width="2"/>
+    <circle cx="320" cy="119" r="28" stroke-width="2.4" fill="currentColor" fill-opacity=".16"/>
+    <path d="M306 95q-12 25 7 49m-2-51q-9 25 7 52m-1-53q-6 25 6 52m-1-52q0 24 7 49m-1-47q4 21 7 40" stroke-width=".85"/>
+    <path d="M320 77v-10m0 104v-11m42-41h11m-106 0h11m12-30-7-8m67 68 7 7m-7-66 8-8m-67 67-8 8m19-76-3-9m37 91 4 10m23-67 10-4m-97 37-10 4m77-60 4-10m-37 97-4 9m-19-63-10-4m97 37 9 4" stroke-width="1.25"/>
+    <path d="m320 217-102-35m102 35 99-2m-99 2-37 33m37-33 135-40" stroke-width="1.8"/>
+    <path d="M218 182v-54m201 87v-42m-136 77v-23m172-50v-58m-261 86v-13" stroke-width="1.3"/>
+    <circle cx="218" cy="115" r="14" stroke-width="1.8" fill="currentColor" fill-opacity=".2"/>
+    <path d="m210 104q-7 11 5 23m-1-25q-4 12 5 26m-1-27q-1 13 6 24" stroke-width=".8"/>
+    <circle cx="419" cy="156" r="18" stroke-width="1.9" fill="currentColor" fill-opacity=".12"/>
+    <path d="m407 143 6 5-2 8 10 3 2 10m-1-28 9 7-4 7m-23 4 7 2" stroke-width="1"/>
+    <ellipse cx="420" cy="156" rx="28" ry="7" transform="rotate(-19 420 156)" stroke-width="1.45"/>
+    <circle cx="283" cy="219" r="8" stroke-width="1.5" fill="currentColor" fill-opacity=".4"/>
+    <circle cx="455" cy="102" r="17" stroke-width="1.8" fill="currentColor" fill-opacity=".12"/>
+    <path d="m440 95q16 8 30 2m-32 5q16 9 34 3m-30 4q15 8 28 3" stroke-width=".9"/>
+    <circle cx="194" cy="183" r="6" stroke-width="1.3" fill="currentColor" fill-opacity=".5"/>
+    <!-- Gears visible under the rim and a small crank. -->
+    <path d="m272 292 4 12 10 3 4 9h11l5-8 11-1 6 6 10-5-1-9 8-9m-38 13h25m17-8 20 8 17-5 8 9 13-4 3-9" stroke-width="1.6"/>
+    <path d="m467 273 23 10 24-9v-20m-6-2 12-3v9l-12 3Z" stroke-width="1.8" fill="currentColor" fill-opacity=".3"/>
+    <path d="M114 216h-8m4-4v8m416-4h8m-4-4v8" stroke-width="1"/>
+  </symbol>
+
+  <symbol id="observatory" viewBox="0 0 640 480" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <title>Observatory at the edge of night</title>
+    <g stroke-width=".75" opacity=".54">
+      <path d="m61 276 57-63 34 25 35-64 35 44 38-75 19 22m130 33 38-47 48 71 24-15 59 68"/>
+      <path d="m104 236 15-12 15 19 16 6m35-62-6 41-18 30m58-40 4 27m37-89-14 44m-68 39 20 24m241-100 10 47 26 26m-7-44-4 36m47-15-7 20 25 27"/>
+      <path d="M88 99h8m-4-4v8" stroke-width=".8"/><circle cx="92" cy="99" r="1.2" fill="currentColor"/>
+<path d="M168 72h8m-4-4v8" stroke-width=".8"/><circle cx="172" cy="72" r="1.2" fill="currentColor"/>
+<path d="M490 68h6m-3-3v6" stroke-width=".8"/><circle cx="493" cy="68" r="1.2" fill="currentColor"/>
+<path d="M546 143h8m-4-4v8" stroke-width=".8"/><circle cx="550" cy="143" r="1.2" fill="currentColor"/>
+<path d="M398 48h6m-3-3v6" stroke-width=".8"/><circle cx="401" cy="48" r="1.2" fill="currentColor"/>
+      <circle cx="501" cy="108" r="20"/>
+      <path d="M509 90q-20 21 4 34" fill="currentColor" fill-opacity=".35"/>
+      <path d="M74 155h23m-11-11v22m459-78h23m-11-11v22"/>
+    </g>
+    <!-- Ridgeline is carved into bands of dry-needle strokes. -->
+    <path d="m56 405 83-62 52 3 44-32 48 17 75-14 69 29 38-5 117 68-109-24-76 23-77-18-60 17-72-14Z" stroke-width="2.3" fill="currentColor" fill-opacity=".05"/>
+    <path d="m72 399 69-42 39 6 53-32 23 23 63-12 33-16 70 35 42-7 91 45m-373-36-27 28m77-60-13 58m36-35 25 31m38-43-13 36m46-52 12 67m58-32 17 24m34-31 29 30" stroke-width="1.3"/>
+    <g stroke-width=".7" opacity=".74">
+      <path d="m85 397 57-32m-43 33 43-24m-29 22 30-16m-17 16 17-10m46-19-18 24m25-27-17 29m24-32-17 32m25-36-15 36m23-41-14 43m23-44-9 43m21-20 10 22m-3-27 10 24m-4-29 10 25m-3-29 11 26m17-37-4 29m11-32-5 34m12-38-5 36m11-38-4 35m12-35 6 37m1-34 7 31m0-27 8 27m0-23 7 22m17-13 14 17m-7-19 15 17m-7-19 16 16m25-25 24 24m-17-25 27 23m-17-22 30 23"/>
+    </g>
+    <!-- Thick drum walls, rail, arched door and rotated observation dome. -->
+    <path d="M229 208v123c0 24 177 24 177 0V208" stroke-width="3" fill="currentColor" fill-opacity=".055"/>
+    <path d="M229 208c0 27 177 27 177 0m-177 13c0 27 177 27 177 0m-177 87c0 27 177 27 177 0" stroke-width="1.5"/>
+    <path d="M229 291c0 27 177 27 177 0m-177-38c0 27 177 27 177 0" stroke-width=".8" opacity=".55"/>
+    <path d="M241 225v98m12-93v98m132-98v98m11-103v98" stroke-width="1.1"/>
+    <path d="M276 337v-58q19-22 38 0v66" stroke-width="2.3" fill="currentColor" fill-opacity=".65"/>
+    <path d="M282 337v-56q13-15 26 0v60m-13-67v67m-13-48h26" stroke-width="1.1"/>
+    <path d="M344 286v-16q13-14 26 0v16Z" stroke-width="1.9" fill="currentColor" fill-opacity=".65"/>
+    <path d="m350 271 14-2m-7-4v16" stroke-width=".8"/>
+    <path d="M221 208c3-75 36-128 96-128s93 53 97 128c-24 34-168 34-193 0Z" stroke-width="3.2" fill="currentColor" fill-opacity=".05"/>
+    <path d="M222 195c25 33 167 33 191 0m-186-22c28 29 149 29 181 0M241 137c29 22 117 22 153 0m-136-27c30 13 78 13 116 0" stroke-width="1"/>
+    <path d="M317 80c-39 13-65 64-64 142m64-142c-17 25-27 79-26 148m26-148c20 25 29 79 27 148m-27-148c40 13 65 64 66 142" stroke-width="1.35"/>
+    <!-- A wide open slit and a telescope create an unmistakable silhouette. -->
+    <path d="M321 80q37 9 57 53l17 74-27 17-14-80q-17-43-33-64Z" stroke-width="2.1" fill="currentColor" fill-opacity=".78"/>
+    <path d="m355 179 55-55 15 12-58 58Z" stroke-width="2.1" fill="currentColor" fill-opacity=".1"/>
+    <path d="m406 123 7-8 20 16-8 8Zm-50 56 13 12m25-55 14 12m-44 16 13 12" stroke-width="1.3"/>
+    <path d="M321 83c8 20 13 45 15 73m-31-70c-10 22-18 46-22 72m-10-57c-11 20-21 50-25 68m-12-28-9 39m17-38-10 45m17-43-8 46m17-43-7 47m17-43-5 47m17-45-3 46m17-45-1 47m17-46v47m-89-25-4 19m15-16-2 20m14-17-1 21m14-18v20m14-18 1 20m14-19 2 20m14-19 2 20m14-19 3 19" stroke-width=".65" opacity=".7"/>
+    <!-- Terrace and balustrade. -->
+    <path d="M207 325v18c0 34 223 34 223 0v-18m-223 0c0 34 223 34 223 0m-223 18c0 34 223 34 223 0" stroke-width="1.8"/>
+    <path d="m214 337v14m13-7v13m14-7v12m15-8v12m16-9v12m17-10v13m18-12v13m18-13v13m18-14v13m17-16v13m17-17v12m16-18v12m15-19v12m14-20v13" stroke-width="1.2"/>
+    <path d="m276 350-36 21 83 9 23-21m-88 3 76 9m-87 0 78 9m-78-9v5l78 9 21-19" stroke-width="1.6"/>
+    <!-- A spare pylon and a cypress provide scale. -->
+    <path d="m177 339 10-63 10 64m-16-29h12m-10-14h8m-6-13h4m-11 43 18 0m-17-16 16 16m-13-30 11 14m-8-27 6 13m-4-21v-18m-8 9h16" stroke-width="1"/>
+    <path d="m461 358-4-77m4 56-17-13 12 4-16-22 13 9-12-26 13 16-5-31 10 17 4-34 6 34 9-15-4 29 12-13-10 26 13-9-13 22 11-5-15 17" stroke-width="1.1" fill="currentColor" fill-opacity=".4"/>
+    <path d="M119 435h402m-344 7h97m71 0h121" stroke-width=".7" opacity=".4"/>
+  </symbol>
+</svg>

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="pass" viewBox="0 0 220 116">
+    <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 83 30 61 46 66 75 32 90 44 108 17 131 52 147 42 172 68 181 62 212 85" stroke-width="1.6"/>
+      <path d="m32 62 1 12 12-4 29-33-9 23 14-9 10-4m10-10 9-15 3 20 8-3 11 17 14-11 6 15 8 5m8 2 8 17m-76-44-9 22-13 10m25-48 8 29 17 16" stroke-width=".8"/>
+      <path d="M6 93c28-16 46-1 68-14s40-16 54-8 23 8 47 4 27 12 36 11M9 98c20-11 42 0 63-7" stroke-width=".8"/>
+      <path d="M78 87c13-16 38-8 39-21s-19-7-14-17l7-11" stroke-dasharray="2 3"/>
+      <path d="M108 16V6l12 2-12 5m64 14h15m-7-7v14M5 11v11m-4-5h8M5 105h210m-210-5v5m10-3v3m10-3v3m10-3v3m10-5v5m10-3v3m10-3v3m10-3v3m10-5v5" stroke-width=".8"/>
+    </g>
+    <g fill="currentColor" stroke="none" font-family="monospace" font-size="7" letter-spacing="1">
+      <text x="15" y="19">MOFOX FIELD NOTES</text><text x="132" y="16">PASS 07 / 1840 M</text><text x="123" y="115">RIDGELINE SECTION</text>
+    </g>
+  </symbol>
+  <symbol id="chart" viewBox="0 0 220 116">
+    <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 86Q59 3 142 13t67 39M12 96q62-91 169-62" stroke-width=".7" stroke-dasharray="2 5"/>
+      <path d="m22 76 36-28 27 9 25-35 30 18 18-7 36 35-46 12-34-15-29-8-23 29" stroke-width="1.35"/>
+      <path d="m110 22 4 43 26-25m8 40 10-47M7 9v12m-6-6h12m185 77v10m-5-5h10m-191 7h111" stroke-width=".7"/>
+      <path d="m56 44 2-4 1 4 4 3-4 2-1 4-2-4-4-2Zm52-25 2-5 2 5 4 3-4 2-2 5-2-5-4-2Zm38 59 2-4 1 4 4 2-4 2-1 4-2-4-4-2Z" fill="currentColor" stroke="none"/>
+      <g fill="currentColor"><circle cx="22" cy="76" r="2"/><circle cx="85" cy="57" r="2.4"/><circle cx="140" cy="40" r="2"/><circle cx="158" cy="33" r="2"/><circle cx="194" cy="68" r="2.4"/><circle cx="114" cy="65" r="1.6"/><circle cx="62" cy="86" r="1.7"/></g>
+    </g>
+    <g fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1"><text x="19" y="14">CATALOG ASTRAL</text><text x="17" y="90">α3</text><text x="115" y="17">N.04</text><text x="126" y="108">TRACE / CYGNUS</text></g>
+  </symbol>
+  <symbol id="proof" viewBox="0 0 220 116">
+    <g fill="none" stroke="currentColor" stroke-linecap="square">
+      <path d="M3 22h9V8m0 14h9m174 0h13V8m0 14h9M4 90h8v13m0-13h9m174 0h13v13m0-13h9" stroke-width=".9"/>
+      <path d="M32 36h42v39H32zm5-4h42v39H37zM88 70l19-35 18 35Zm6 0 14-26 14 26Z" stroke-width="1.1"/>
+      <path d="M135 32v44m4-44v44m6-44v44m8-44v44m10-44v44m12-44v44m15-44v44M22 83h174" stroke-width="1"/>
+      <path d="M35 65 63 37m-24 33 30-30m-21 30 20-20m-10 20 10-10" stroke-width=".7"/>
+      <path d="M96 18h26m-13-7v14m-5-11 10 8m0-8-10 8" stroke-width=".65"/>
+    </g>
+    <g fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1"><text x="22" y="18">PROOF 03</text><text x="134" y="18">REG. / FRONT</text><text x="22" y="97">A. OVERPRINT</text><text x="121" y="97">B. LINE WEIGHT</text></g>
+  </symbol>
+  <symbol id="relay" viewBox="0 0 220 116">
+    <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 93h187m-146 0 17-65 19 65m-32-13 28-1-23-21h17L71 42m2-17h5m-3-1V12m-5 4 5-6 5 6M34 93v-8l10-5 11 4v9" stroke-width="1.3"/>
+      <path d="M85 25q18-9 30-6m-31 12q19-5 31 0m-30 5q16-1 27 5" stroke-width=".8"/>
+      <path d="M101 69h14l5-7 4 14 7-30 5 35 6-17 4 6h22l4-5 5 10 6-16 5 9h17m-98-14v30m-4-6h99" stroke-width="1"/>
+      <path d="M7 13h13m-6-6v13m167 3h12m-6-6v12m-86 74h103" stroke-width=".8"/>
+    </g>
+    <g fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1"><text x="24" y="17">FIELD RELAY</text><text x="115" y="16">STATION / 09</text><text x="113" y="104">SIGNAL RECORD</text></g>
+  </symbol>
+</svg>

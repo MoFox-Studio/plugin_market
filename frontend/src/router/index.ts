@@ -1,6 +1,12 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import type { RouteRecordRaw } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { createRouter, createWebHistory } from 'vue-router';
+import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import {
+  startNavigation,
+  finishNavigation,
+  navigationEpoch,
+} from '@/composables/useLoadingState';
+import { keepsReadingPosition, restoreRouteScroll } from '@/composables/useScrollRestoration';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -67,6 +73,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
+        name: 'admin-index',
         redirect: { name: 'admin-dashboard' },
       },
       {
@@ -85,7 +92,8 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/AdminPlaceholderView.vue'),
         props: {
           title: '版本治理',
-          description: '后续会拆出独立版本治理视图，承接版本审核与 yank/block 操作。',
+          description:
+            '后续会拆出独立版本治理视图，承接版本审核与 yank/block 操作。',
         },
       },
       {
@@ -128,7 +136,8 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/AdminPlaceholderView.vue'),
         props: {
           title: '系统状态',
-          description: '系统状态页已预留路由，后续会拆出服务运行态和依赖状态细分视图。',
+          description:
+            '系统状态页已预留路由，后续会拆出服务运行态和依赖状态细分视图。',
         },
       },
     ],
@@ -146,30 +155,50 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/NotFoundView.vue'),
     meta: { shellGroup: 'market' },
   },
-]
+];
 
+const navigationTasks = new WeakMap<RouteLocationNormalized, number>();
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior(_to, _from, savedPosition) {
-    if (savedPosition) return savedPosition
-    return { top: 0 }
+  scrollBehavior(to, from, savedPosition) {
+    return restoreRouteScroll({
+      hash: to.hash,
+      savedPosition,
+      keepPosition: keepsReadingPosition(to, from),
+      epoch: navigationTasks.get(to) ?? -1,
+      isCurrent: () => router.currentRoute.value === to,
+    });
   },
-})
+});
 
 router.beforeEach(async (to) => {
+  startNavigation();
+  navigationTasks.set(to, navigationEpoch.value);
   if (!to.meta.requiresAdmin) {
-    return true
+    return true;
   }
 
-  const auth = useAuthStore()
-  await auth.loadViewer()
+  const auth = useAuthStore();
+  await auth.loadViewer();
 
   if (auth.isAdmin) {
-    return true
+    return true;
   }
 
-  return { name: 'market' }
-})
+  // The admin layout shows the precise authentication/permission state without
+  // mounting private child views. Preserve the requested URL for sign-in/retry.
+  return true;
+});
 
-export default router
+router.afterEach((to, from) => {
+  finishNavigation();
+  document.title = `${({ home: '发现', market: '插件目录', skills: 'Skills', me: '工作台', inbox: '信箱', status: '服务状态' } as Record<string, string>)[String(to.name)] || '插件档案'} · MoFox`;
+  if (from.matched.length && to.path !== from.path)
+    requestAnimationFrame(() =>
+      document.getElementById('main-content')?.focus({ preventScroll: true }),
+    );
+});
+router.onError(() => finishNavigation('页面资源加载失败，请刷新重试。'));
+
+export default router;

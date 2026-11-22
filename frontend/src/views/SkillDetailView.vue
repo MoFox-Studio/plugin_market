@@ -1,338 +1,669 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import api from '@/api'
-import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
-import type { Skill, SkillVersion, SkillComment } from '@/types'
-
-const route = useRoute()
-const router = useRouter()
-const auth = useAuthStore()
-const toast = useToastStore()
-
-const skillId = computed(() => route.params.id as string)
-
-const skill = ref<Skill | null>(null)
-const versions = ref<SkillVersion[]>([])
-const comments = ref<SkillComment[]>([])
-const loading = ref(true)
-const rating = ref<{ distribution?: Record<string, number>; viewer_rating?: number }>({})
-const likeBusy = ref(false)
-
-const commentText = ref('')
-const commentBusy = ref(false)
-
-const latestVersion = computed(() => versions.value[0] || null)
+import { useMarketDialog } from '@/composables/useMarketDialog';
+const { confirm: confirmAction, prompt: promptAction } = useMarketDialog();
+import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { useRoute } from 'vue-router';
+import api from '@/api';
+import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import {
+  categoryLabel,
+  formatBytes,
+  formatDate,
+  formatNumber,
+  formatRelative,
+} from '@/utils/format';
+import type {
+  Skill,
+  SkillVersion,
+  SkillComment,
+  SkillRatingInfo,
+} from '@/types';
+import CatalogFrame from '@/components/catalog/CatalogFrame.vue';
+import DossierNavigation from '@/components/catalog/DossierNavigation.vue';
+import DossierLead from '@/components/catalog/DossierLead.vue';
+import ReadmeDocument from '@/components/catalog/ReadmeDocument.vue';
+import { dossierChapter } from '@/components/catalog/dossierChapter';
+import AppIcon from '@/components/AppIcon.vue';
+import CatalogState from '@/components/catalog/CatalogState.vue';
+import CatalogComment from '@/components/catalog/CatalogComment.vue';
+import { useCatalogResource } from '@/components/catalog/useCatalogResource';
+const route = useRoute(),
+  auth = useAuthStore(),
+  toast = useToastStore();
+const skillId = computed(() => String(route.params.id));
+const main = useCatalogResource<Skill | null>(() => null),
+  versions = useCatalogResource<SkillVersion[]>(() => []),
+  comments = useCatalogResource<SkillComment[]>(() => []),
+  rating = useCatalogResource<SkillRatingInfo>(() => ({}));
+const skill = computed(() => main.data),
+  tab = ref('overview'),
+  comment = ref(''),
+  likeBusy = ref(false),
+  ratingBusy = ref(false),
+  commentBusy = ref(false),
+  deleting = ref<number | null>(null);
+const latestVersion = computed(
+  () =>
+    versions.data.find((v) => v.version === skill.value?.latest_version) ||
+    versions.data[0],
+);
 const downloadUrl = computed(() =>
-  latestVersion.value
-    ? api.skills.downloadUrl(skillId.value, latestVersion.value.version)
-    : ''
-)
-
-async function loadSkill() {
-  loading.value = true
-  try {
-    const [s, v, c, r] = await Promise.all([
-      api.skills.get(skillId.value),
-      api.skills.versions(skillId.value).then(r => r.items).catch(() => []),
-      api.skills.comments(skillId.value).then(r => r.items).catch(() => []),
-      api.skills.rating(skillId.value).catch(() => ({})),
-    ])
-    skill.value = s
-    versions.value = v
-    comments.value = c
-    rating.value = r
-  } catch {
-    toast.show('Skill 不存在', 'error')
-    router.push({ name: 'skills' })
-  } finally {
-    loading.value = false
-  }
+  skill.value?.latest_version
+    ? api.skills.downloadUrl(skillId.value, skill.value.latest_version)
+    : '',
+);
+const ratingRows = computed(() => {
+  const total = Object.values(rating.data.distribution || {}).reduce(
+    (sum, count) => sum + Number(count),
+    0,
+  );
+  return [5, 4, 3, 2, 1].map((score) => {
+    const count = Number(rating.data.distribution?.[String(score)] || 0);
+    return {
+      score,
+      count,
+      percent: total ? Math.min(100, (count / total) * 100) : 0,
+    };
+  });
+});
+let epoch = 0;
+function loadVersions() {
+  const id = skillId.value;
+  return versions.load(() =>
+    api.skills.versions(id).then((res) => res.items || []),
+  );
 }
-
+function loadComments() {
+  const id = skillId.value;
+  return comments.load(() =>
+    api.skills.comments(id).then((res) => res.items || []),
+  );
+}
+function loadRating() {
+  const id = skillId.value;
+  return rating.load(() => api.skills.rating(id));
+}
+function load() {
+  const id = skillId.value;
+  void main.load(() => api.skills.get(id));
+  void loadVersions();
+  void loadComments();
+  void loadRating();
+}
+function requireLogin() {
+  if (auth.isAuthenticated) return false;
+  toast.show('登录后即可参与社区互动', 'error');
+  return true;
+}
 async function toggleLike() {
-  if (!auth.viewer) { toast.show('请先登录', 'error'); return }
-  if (!skill.value) return
-  likeBusy.value = true
+  if (likeBusy.value || requireLogin()) return;
+  const id = skillId.value,
+    current = epoch;
+  likeBusy.value = true;
   try {
-    await api.skills.toggleLike(skillId.value)
-    skill.value = await api.skills.get(skillId.value)
+    const result = await api.skills.toggleLike(id);
+    if (current === epoch && main.data)
+      main.data = {
+        ...main.data,
+        viewer_has_liked: result.liked,
+        likes_count: Math.max(
+          0,
+          main.data.likes_count + (result.liked ? 1 : -1),
+        ),
+      };
   } catch (e) {
-    toast.show((e as Error).message || '操作失败', 'error')
+    if (current === epoch) toast.show((e as Error).message, 'error');
   } finally {
-    likeBusy.value = false
+    if (current === epoch) likeBusy.value = false;
   }
 }
-
-async function postRating(score: number) {
-  if (!auth.viewer) { toast.show('请先登录', 'error'); return }
+async function rate(score: number | null) {
+  if (ratingBusy.value || requireLogin()) return;
+  const id = skillId.value,
+    current = epoch;
+  ratingBusy.value = true;
   try {
-    await api.skills.postRating(skillId.value, score)
-    rating.value = await api.skills.rating(skillId.value)
-    toast.show('评分成功', 'ok')
+    if (score === null) await api.skills.deleteRating(id);
+    else await api.skills.postRating(id, score);
+    if (current !== epoch) return;
+    await loadRating();
+    const updated = await api.skills.get(id);
+    if (current === epoch) {
+      main.data = updated;
+      toast.show(score === null ? '已清除评分' : '感谢你的评分', 'ok');
+    }
   } catch (e) {
-    toast.show((e as Error).message || '评分失败', 'error')
+    if (current === epoch) toast.show((e as Error).message, 'error');
+  } finally {
+    if (current === epoch) ratingBusy.value = false;
   }
 }
-
 async function postComment() {
-  if (!auth.viewer) { toast.show('请先登录', 'error'); return }
-  if (!commentText.value.trim()) return
-  commentBusy.value = true
+  if (commentBusy.value || !comment.value.trim() || requireLogin()) return;
+  const id = skillId.value,
+    current = epoch,
+    content = comment.value.trim();
+  commentBusy.value = true;
   try {
-    const c = await api.skills.postComment(skillId.value, { content: commentText.value })
-    comments.value.push(c)
-    commentText.value = ''
-    toast.show('评论发布成功', 'ok')
+    await api.skills.postComment(id, { content });
+    if (current !== epoch) return;
+    comment.value = '';
+    if (main.data)
+      main.data = {
+        ...main.data,
+        comments_count: main.data.comments_count + 1,
+      };
+    toast.show('评论已发布', 'ok');
+    await loadComments();
   } catch (e) {
-    toast.show((e as Error).message || '评论失败', 'error')
+    if (current === epoch) toast.show((e as Error).message, 'error');
   } finally {
-    commentBusy.value = false
+    if (current === epoch) commentBusy.value = false;
   }
 }
-
-async function recordDownload() {
+function canRemove(item: SkillComment) {
+  return (
+    !!auth.viewer &&
+    (auth.viewer.author_id === item.author.author_id || auth.isAdmin)
+  );
+}
+async function removeComment(commentId: number) {
+  if (deleting.value !== null || !(await confirmAction('确定删除这条评论吗？')))
+    return;
+  const id = skillId.value,
+    current = epoch;
+  deleting.value = commentId;
   try {
-    await api.skills.recordInstall(skillId.value)
-  } catch { /* silent */ }
+    await api.skills.deleteComment(id, commentId);
+    if (current !== epoch) return;
+    await loadComments();
+    const updated = await api.skills.get(id);
+    if (current === epoch) main.data = updated;
+  } catch (e) {
+    if (current === epoch) toast.show((e as Error).message, 'error');
+  } finally {
+    if (current === epoch) deleting.value = null;
+  }
 }
-
-onMounted(loadSkill)
+function recordDownload() {
+  const id = skillId.value,
+    current = epoch;
+  void api.skills
+    .recordInstall(id)
+    .then((result) => {
+      if (current === epoch && main.data)
+        main.data = { ...main.data, download_count: result.download_count };
+    })
+    .catch(() => {});
+}
+watch(
+  [skillId, () => auth.viewer?.author_id],
+  () => {
+    epoch++;
+    for (const resource of [main, versions, comments, rating]) resource.reset();
+    comment.value = '';
+    tab.value = dossierChapter(route.hash);
+    likeBusy.value =
+      ratingBusy.value =
+      commentBusy.value =
+      false;
+    deleting.value = null;
+    load();
+  },
+  { immediate: true },
+);
+watch(
+  () => route.hash,
+  () => {
+    tab.value = dossierChapter(route.hash);
+  },
+);
+onBeforeUnmount(() => {
+  epoch++;
+});
 </script>
-
 <template>
-  <div v-if="loading" class="skill-loading">加载中…</div>
+  <CatalogFrame class="dossier-page">
+    <nav class="catalog-breadcrumb" aria-label="位置">
+      <router-link to="/skills">技能资料库</router-link><span>/</span
+      ><span>{{ skill?.display_name || skillId }}</span>
+    </nav>
+    <CatalogState
+      :loading="main.loading"
+      :error="main.error"
+      :empty="!skill"
+      :count="2"
+      @retry="load"
+      ><template v-if="skill">
+        <DossierLead
+          class="skill-identity" kind="技能"
+          :title="skill.display_name" :identifier="skill.skill_id"
+          :summary="skill.description" :icon="skill.icon_url"
+          :author="skill.owner_display_name || skill.owner_login || skill.owner_id"
+          :author-id="skill.owner_id" :updated-at="skill.updated_at"
+          :version="skill.latest_version" :categories="skill.categories" :tags="skill.tags"
+          category-route="skills"
+        />
+        <div class="catalog-dossier article-columns">
+        <DossierNavigation
+          :active="tab"
+          :versions="versions.data.length"
+          :comments="skill.comments_count"
+          kind="技能"
+        />
+          <div class="catalog-main">
+            <section
+              v-show="tab === 'overview'"
+              id="overview"
+              class="catalog-panel dossier-chapter"
+            >
 
-  <div v-else-if="skill" class="skill-page">
-    <!-- header -->
-    <header class="skill-hero">
-      <div class="skill-hero-icon">
-        <img v-if="skill.icon_url" :src="skill.icon_url" :alt="skill.display_name">
-        <span v-else>{{ skill.display_name[0]?.toUpperCase() || '?' }}</span>
-      </div>
-      <div class="skill-hero-info">
-        <h1>{{ skill.display_name }}</h1>
-        <p class="skill-hero-author">
-          作者
-          <router-link :to="`/author/${encodeURIComponent(skill.owner_id)}`">
-            {{ skill.owner_display_name || skill.owner_login || skill.owner_id }}
-          </router-link>
-        </p>
-        <div class="skill-hero-meta">
-          <span v-if="skill.latest_version" class="badge">v{{ skill.latest_version }}</span>
-          <span>⭐ {{ skill.rating_avg?.toFixed(1) || '-' }}</span>
-          <span>⬇ {{ skill.download_count }} 下载</span>
-          <span>💬 {{ skill.comments_count }} 评论</span>
-        </div>
-      </div>
-      <div class="skill-hero-actions">
-        <a
-          v-if="downloadUrl"
-          :href="downloadUrl"
-          class="btn btn-primary"
-          @click="recordDownload"
-        >下载最新版本</a>
-        <button
-          class="btn"
-          :class="{ 'btn-primary': skill.viewer_has_liked }"
-          :disabled="likeBusy"
-          @click="toggleLike"
-        >{{ skill.viewer_has_liked ? '❤️ 已赞' : '🤍 点赞' }} {{ skill.likes_count }}</button>
-      </div>
-    </header>
+              <h2 class="section-offset">能力说明</h2>
+              <div class="catalog-document">
+                {{ skill.description || '作者尚未提供说明。' }}
+              </div>
 
-    <!-- SKILL.md preview -->
-    <section class="skill-section">
-      <h2>SKILL.md 预览</h2>
-      <pre class="skill-desc">{{ skill.readme_markdown || skill.description }}</pre>
-    </section>
+              <div
+                v-if="skill.categories?.length || skill.tags?.length"
+                class="catalog-tags section-offset"
+              >
+                <router-link
+                  v-for="cat in skill.categories || []"
+                  :key="cat"
+                  :to="{ name: 'skills', query: { category: cat } }"
+                  >{{ categoryLabel(cat) }}</router-link
+                ><router-link
+                  v-for="tag in skill.tags || []"
+                  :key="tag"
+                  :to="{ name: 'skills', query: { tag } }"
+                  >#{{ tag }}</router-link
+                >
+              </div>
+            </section>
+            <section
+              v-show="tab === 'readme'"
+              id="readme"
+              class="catalog-panel dossier-chapter documentation-panel"
+            >
 
-    <!-- versions -->
-    <section v-if="versions.length" class="skill-section">
-      <h2>版本历史（{{ versions.length }}）</h2>
-      <div class="skill-version-list">
-        <div v-for="v in versions" :key="v.version" class="skill-version-row">
-          <div class="skill-version-info">
-            <strong>v{{ v.version }}</strong>
-            <small>{{ v.created_at }}</small>
-            <small v-if="v.package_size">{{ (v.package_size / 1024).toFixed(1) }} KB</small>
+              <div class="document-header">
+                <h2>SKILL.md</h2>
+                <span>作者原文</span>
+              </div>
+              <ReadmeDocument
+                :source="
+                  skill.readme_markdown ||
+                  skill.description ||
+                  '作者尚未提供详细说明。'
+                "
+              />
+            </section>
+            <section
+              v-show="tab === 'versions'"
+              id="versions"
+              class="catalog-panel dossier-chapter release-ledger"
+            >
+
+              <div class="document-header">
+                <h2>版本记录</h2>
+                <span>{{ versions.data.length }} 个版本</span>
+              </div>
+              <p class="catalog-muted">
+                按更新时间阅读迭代记录，获取与你的 MoFox 兼容的技能包。
+              </p>
+              <CatalogState
+                :loading="versions.loading"
+                :error="versions.error"
+                :empty="!versions.data.length"
+                :count="2"
+                title="暂无公开版本"
+                message="作者还没有发布可获取的版本。"
+                @retry="loadVersions"
+                ><article
+                  v-for="version in versions.data"
+                  :key="version.version"
+                  class="skill-release"
+                  :class="{
+                    'is-selected': version.version === skill.latest_version,
+                  }"
+                  :id="`version-${version.version}`"
+                >
+                  <header>
+                    <strong>v{{ version.version }}</strong
+                    ><span
+                      v-if="version.version === skill.latest_version"
+                      class="release-selected"
+                      >最新版本</span
+                    ><time>{{ formatDate(version.created_at) }}</time>
+                  </header>
+                  <p>
+                    {{ version.release_notes || '此版本没有附加更新说明。' }}
+                  </p>
+                  <div class="release-bottom">
+                    <span
+                      >{{ formatBytes(version.package_size)
+                      }}<template v-if="version.min_mofox_version">
+                        · MoFox ≥ {{ version.min_mofox_version }}</template
+                      ></span
+                    ><a
+                      class="btn btn-sm"
+                      :href="api.skills.downloadUrl(skillId, version.version)"
+                      @click="recordDownload"
+                      ><AppIcon name="download" :size="14" /> 获取此版本</a
+                    >
+                  </div>
+                </article></CatalogState
+              >
+            </section>
+            <section
+              v-show="tab === 'comments'"
+              id="comments"
+              class="catalog-panel dossier-chapter discussion-panel"
+            >
+              <div class="catalog-kicker">
+                第四章　讨论 · {{ skill.comments_count }} 条
+              </div>
+              <h2 class="section-offset">交流使用体验</h2>
+              <form
+                v-if="auth.isAuthenticated"
+                class="skill-comment-form"
+                @submit.prevent="postComment"
+              >
+                <textarea
+                  v-model="comment"
+                  aria-label="评论内容"
+                  placeholder="分享你的使用体验…"
+                  maxlength="2000"
+                  rows="4"
+                  :disabled="commentBusy"
+                ></textarea>
+                <div>
+                  <span>{{ comment.length }} / 2000</span
+                  ><button
+                    class="btn btn-primary btn-sm"
+                    :disabled="commentBusy || !comment.trim()"
+                  >
+                    {{ commentBusy ? '发布中…' : '发布评论' }}
+                  </button>
+                </div>
+              </form>
+              <div v-else class="catalog-empty-note">
+                {{
+                  auth.loading ? '正在确认登录状态…' : '登录后可以发表评论。'
+                }}
+                <a
+                  v-if="!auth.loading"
+                  class="catalog-link"
+                  :href="auth.getLoginUrl()"
+                  >GitHub 登录 ↗</a
+                >
+              </div>
+              <CatalogState
+                :loading="comments.loading"
+                :error="comments.error"
+                :empty="!comments.data.length"
+                :count="2"
+                title="讨论从这里开始"
+                message="还没有评论，欢迎分享你的体验。"
+                @retry="loadComments"
+                ><CatalogComment
+                  v-for="item in comments.data"
+                  :key="item.id"
+                  :comment="item"
+                  :removable="canRemove(item)"
+                  :deleting="deleting === item.id"
+                  @remove="removeComment(item.id)"
+              /></CatalogState>
+            </section>
           </div>
-          <p v-if="v.release_notes" class="skill-version-notes">{{ v.release_notes }}</p>
-          <a
-            :href="api.skills.downloadUrl(skillId, v.version)"
-            class="btn btn-sm"
+          <aside class="catalog-aside">
+            <section class="catalog-panel acquisition">
+              <div class="acquisition-label">
+                <span>获取技能</span><small>安装与兼容</small>
+              </div>
+              <h2 class="section-offset">
+                {{
+                  skill.latest_version
+                    ? `v${skill.latest_version}`
+                    : '暂无可获取版本'
+                }}
+              </h2>
+              <p class="catalog-muted">下载技能包，按说明加入你的 MoFox。</p>
+              <div class="catalog-actions">
+                <a
+                  v-if="downloadUrl"
+                  class="btn btn-primary"
+                  :href="downloadUrl"
+                  @click="recordDownload"
+                  ><AppIcon name="download" :size="16" /> 下载技能包</a
+                ><button v-else class="btn btn-primary" disabled>
+                  等待作者发布</button
+                ><button
+                  class="btn"
+                  :disabled="likeBusy || auth.loading"
+                  @click="toggleLike"
+                >
+                  {{
+                    likeBusy
+                      ? '更新中…'
+                      : skill.viewer_has_liked
+                        ? '已点赞 ✓'
+                        : '喜欢这个技能 ＋'
+                  }}
+                </button>
+              </div>
+              <div class="catalog-stat-row">
+                <div>
+                  <b>{{ formatNumber(skill.download_count) }}</b
+                  ><span>累计下载</span>
+                </div>
+                <div>
+                  <b>{{ formatNumber(skill.likes_count) }}</b
+                  ><span>喜欢</span>
+                </div>
+                <div>
+                  <b>{{
+                    skill.rating_count
+                      ? Number(skill.rating_avg).toFixed(1)
+                      : '—'
+                  }}</b
+                  ><span>{{ skill.rating_count }} 条评分</span>
+                </div>
+              </div>
+              <dl class="catalog-facts">
+                <div>
+                  <dt>宿主版本</dt>
+                  <dd>
+                    {{
+                      latestVersion?.min_mofox_version
+                        ? `MoFox ≥ ${latestVersion.min_mofox_version}`
+                        : '兼容性待确认'
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>安装包大小</dt>
+                  <dd>
+                    {{
+                      latestVersion
+                        ? formatBytes(latestVersion.package_size)
+                        : '—'
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>最近发布</dt>
+                  <dd>
+                    {{
+                      latestVersion ? formatDate(latestVersion.created_at) : '—'
+                    }}
+                  </dd>
+                </div>
+              </dl>
+              <p v-if="versions.error" class="catalog-muted">
+                版本信息未加载，<button
+                  class="catalog-link"
+                  @click="loadVersions"
+                >
+                  重试
+                </button>
+              </p>
+            </section>
+            <section class="catalog-panel community-rating">
+
+              <h2 class="section-offset">社区评分</h2>
+              <CatalogState
+                :loading="rating.loading"
+                :error="rating.error"
+                :count="1"
+                @retry="loadRating"
+                ><div
+                  v-for="row in ratingRows"
+                  :key="row.score"
+                  class="catalog-rating-row"
+                  :aria-label="`${row.score}星：${row.count}人`"
+                >
+                  <span>{{ row.score }}★</span
+                  ><span class="catalog-rating-track"
+                    ><i :style="{ width: `${row.percent}%` }"></i></span
+                  ><span>{{ row.count }}</span>
+                </div>
+                <div class="catalog-stars">
+                  <button
+                    v-for="score in 5"
+                    :key="score"
+                    :class="{
+                      active: (rating.data.viewer_rating || 0) >= score,
+                    }"
+                    :aria-label="`评 ${score} 星`"
+                    :aria-pressed="rating.data.viewer_rating === score"
+                    :disabled="ratingBusy || auth.loading"
+                    @click="rate(score)"
+                  >
+                    ★</button
+                  ><button
+                    v-if="rating.data.viewer_rating"
+                    class="clear-rating"
+                    :disabled="ratingBusy"
+                    @click="rate(null)"
+                  >
+                    清除
+                  </button>
+                </div>
+                <p class="catalog-caption">
+                  {{
+                    rating.data.viewer_rating
+                      ? `我的评分：${rating.data.viewer_rating} 星`
+                      : '点击星星，为技能评分'
+                  }}
+                </p></CatalogState
+              ><a
+                v-if="!auth.isAuthenticated && !auth.loading"
+                class="login-link"
+                :href="auth.getLoginUrl()"
+                >GitHub 登录后参与互动 ↗</a
+              >
+            </section>
+          </aside>
+        </div>
+        <div v-if="downloadUrl" class="mobile-acquire">
+          <span
+            >{{ skill.display_name
+            }}<small>v{{ skill.latest_version }}</small></span
+          ><a
+            class="btn btn-primary"
+            :href="downloadUrl"
             @click="recordDownload"
-          >下载</a>
+            ><AppIcon name="download" :size="16" /> 下载技能包</a
+          >
         </div>
-      </div>
-    </section>
-
-    <!-- rating -->
-    <section class="skill-section">
-      <h2>评分</h2>
-      <div class="skill-rating-row">
-        <span v-if="rating.viewer_rating" class="skill-rating-my">
-          我的评分：{{ '⭐'.repeat(rating.viewer_rating) }}
-        </span>
-        <div class="skill-rating-stars">
-          <button
-            v-for="s in 5"
-            :key="s"
-            class="skill-star-btn"
-            :class="{ active: rating.viewer_rating && rating.viewer_rating >= s }"
-            :title="`${s} 星`"
-            @click="postRating(s)"
-          >{{ '⭐' }}</button>
-        </div>
-      </div>
-      <div v-if="rating.distribution" class="skill-rating-dist">
-        <div v-for="(count, score) in rating.distribution" :key="score" class="skill-rating-bar">
-          <span>{{ score }}★</span>
-          <div class="bar-track"><div class="bar-fill" :style="{ width: `${Math.max(1, Number(count) * 10)}%` }"></div></div>
-          <span>{{ count }}</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- comments -->
-    <section class="skill-section">
-      <h2>评论（{{ comments.length }}）</h2>
-
-      <div v-if="auth.viewer" class="skill-comment-form">
-        <textarea
-          v-model="commentText"
-          placeholder="写下你的评论…"
-          rows="3"
-          maxlength="2000"
-        ></textarea>
-        <button class="btn btn-primary btn-sm" :disabled="commentBusy || !commentText.trim()" @click="postComment">
-          {{ commentBusy ? '发布中…' : '发布评论' }}
-        </button>
-      </div>
-      <p v-else class="skill-comment-login">
-        <a :href="`/api/v1/auth/github/login?redirect_to=/skill/${encodeURIComponent(skillId)}`">登录</a> 后可以评论
-      </p>
-
-      <div v-if="comments.length" class="skill-comment-list">
-        <div v-for="c in comments" :key="c.id" class="skill-comment-item">
-          <div class="skill-comment-head">
-            <strong>{{ c.author.display_name }}</strong>
-            <small>{{ c.created_at }}</small>
-          </div>
-          <p class="skill-comment-body">{{ c.is_deleted ? '[已删除]' : c.content }}</p>
-        </div>
-      </div>
-      <p v-else class="skill-empty">暂无评论</p>
-    </section>
-  </div>
+      </template></CatalogState
+    >
+  </CatalogFrame>
 </template>
-
 <style scoped>
-.skill-page {
-  width: min(900px, 100%);
-  margin: 0 auto;
-  padding: var(--space-6) var(--space-7) var(--space-16);
-  display: grid; gap: var(--space-6);
+.section-offset {
+  margin-top: 18px !important;
 }
-.skill-loading { text-align: center; padding: var(--space-12) 0; color: var(--ink-500); }
-
-.skill-hero {
-  display: flex; gap: var(--space-4); flex-wrap: wrap;
+.skill-document {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 14px/1.9 var(--font-sans);
+  color: var(--ink-700);
+}
+.skill-release {
+  padding: 24px 0;
+  border-bottom: 1px solid var(--line);
+}
+.skill-release:last-child {
+  border: 0;
+  padding-bottom: 0;
+}
+.skill-release header {
+  display: flex;
   align-items: center;
-  padding: var(--space-5);
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-lg);
+  justify-content: space-between;
+  gap: 14px;
 }
-.skill-hero-icon {
-  width: 72px; height: 72px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--coral), var(--lemon));
-  display: grid; place-items: center;
-  font-family: var(--font-display); font-weight: 900; font-size: 28px;
-  color: var(--ink-900);
-  overflow: hidden;
-  flex-shrink: 0;
+.skill-release header strong {
+  font: 20px var(--font-mono);
+  color: var(--blue-700);
 }
-.skill-hero-icon img { width: 100%; height: 100%; object-fit: cover; }
-.skill-hero-info { flex: 1; min-width: 0; }
-.skill-hero-info h1 {
-  margin: 0;
-  font-family: var(--font-display); font-weight: 900; font-size: 28px; line-height: 1.1;
+.skill-release time {
+  font: 11px var(--font-mono);
+  color: var(--ink-500);
 }
-.skill-hero-author { margin: 4px 0 0; font-size: 13px; color: var(--ink-500); }
-.skill-hero-author a { color: var(--blue-600); text-decoration: none; }
-.skill-hero-author a:hover { text-decoration: underline; }
-.skill-hero-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; color: var(--ink-600); }
-.skill-hero-actions { display: flex; gap: 8px; flex-shrink: 0; }
-
-.skill-section {
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: var(--space-5);
+.skill-release p {
+  font-size: 13px;
+  color: var(--ink-700);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
-.skill-section h2 {
-  margin: 0 0 var(--space-3);
-  font-family: var(--font-display); font-weight: 900; font-size: 18px;
+.release-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--ink-500);
 }
-
-.skill-desc {
-  margin: 0;
-  font-size: 13.5px; line-height: 1.7; color: var(--ink-700);
-  white-space: pre-wrap; word-break: break-word;
-  font-family: inherit;
-  background: var(--surface-soft);
-  padding: var(--space-4);
-  border-radius: var(--radius-sm);
+.skill-comment-form {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
 }
-
-.skill-version-list { display: grid; gap: 8px; }
-.skill-version-row {
-  display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap;
-  padding: 10px 12px;
-  background: var(--surface-soft);
-  border-radius: var(--radius-sm);
-}
-.skill-version-info { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.skill-version-info strong { font-family: var(--font-mono); font-size: 14px; }
-.skill-version-info small { color: var(--ink-500); font-size: 12px; }
-.skill-version-notes { flex: 1; margin: 0; font-size: 12.5px; color: var(--ink-600); min-width: 200px; }
-
-.skill-rating-row { display: flex; gap: var(--space-4); align-items: center; flex-wrap: wrap; }
-.skill-rating-my { font-size: 13px; color: var(--ink-600); }
-.skill-rating-stars { display: flex; gap: 4px; }
-.skill-star-btn { background: none; border: none; font-size: 22px; cursor: pointer; opacity: 0.3; padding: 2px; }
-.skill-star-btn.active, .skill-star-btn:hover { opacity: 1; }
-
-.skill-rating-dist { display: grid; gap: 6px; margin-top: var(--space-3); max-width: 300px; }
-.skill-rating-bar { display: grid; grid-template-columns: 30px 1fr 30px; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-600); }
-.bar-track { height: 8px; background: var(--surface-soft); border-radius: 4px; overflow: hidden; }
-.bar-fill { height: 100%; background: var(--lemon); border-radius: 4px; }
-
-.skill-comment-form { display: grid; gap: 8px; }
 .skill-comment-form textarea {
-  padding: 10px 12px;
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-sm);
-  font-size: 13px; resize: vertical;
-  background: var(--surface);
-  font-family: inherit;
-}
-.skill-comment-form textarea:focus { outline: none; border-color: var(--blue-500); box-shadow: var(--ring); }
-.skill-comment-login { font-size: 13px; color: var(--ink-500); }
-.skill-comment-login a { color: var(--blue-600); }
-
-.skill-comment-list { display: grid; gap: 8px; margin-top: var(--space-3); }
-.skill-comment-item {
-  padding: 10px 12px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 3px;
   background: var(--surface-soft);
-  border-radius: var(--radius-sm);
+  padding: 14px;
+  font-size: 14px;
+  line-height: 1.75;
 }
-.skill-comment-head { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
-.skill-comment-head strong { font-size: 13px; }
-.skill-comment-head small { font-family: var(--font-mono); font-size: 11px; color: var(--ink-500); }
-.skill-comment-body { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink-700); }
-.skill-empty { font-size: 13px; color: var(--ink-500); }
+.skill-comment-form > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.skill-comment-form span {
+  font: 11px var(--font-mono);
+  color: var(--ink-500);
+}
+.catalog-stars .clear-rating {
+  font-size: 11px;
+  padding: 6px;
+  margin-left: 5px;
+}
+.login-link {
+  display: block;
+  margin-top: 17px;
+  font-size: 11px;
+  color: var(--blue-600);
+}
 </style>
