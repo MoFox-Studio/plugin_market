@@ -358,9 +358,9 @@ async def test_comment_submit_accepts_forwarded_https_origin(client: AsyncClient
         "/api/v1/plugins/sample_plugin/comments",
         json={"content": "看起来不错。"},
         headers={
-            "Origin": "https://market.mofox-sama.com",
+            "Origin": "https://market.mofox.chat",
             "X-Forwarded-Proto": "https",
-            "X-Forwarded-Host": "market.mofox-sama.com",
+            "X-Forwarded-Host": "market.mofox.chat",
             "Host": "127.0.0.1:8787",
         },
     )
