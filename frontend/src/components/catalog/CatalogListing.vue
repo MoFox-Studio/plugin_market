@@ -32,8 +32,8 @@ watch(() => props.icon, () => { broken.value = false; });
       </div>
     </figure>
     <div class="entry-copy">
-      <p class="entry-credit"><span v-if="source">{{ source }} · </span>{{ author }}</p>
       <h3>{{ title }}</h3>
+      <p class="entry-credit"><span v-if="source">{{ source }} · </span>{{ author }}</p>
       <p class="entry-description" :title="description || undefined">{{ description || '作者尚未填写简介。' }}</p>
       <p v-if="version || labels?.length" class="entry-reference">
         <code v-if="version">v{{ version }}</code>
@@ -47,14 +47,22 @@ watch(() => props.icon, () => { broken.value = false; });
 <style scoped>
 .edition-entry { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; padding: 20px 0; color: var(--ink-900); border-bottom: 1px solid var(--line); }
 .entry-figure { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
-.entry-number { font: 400 17px/1 var(--font-reading); color: var(--blue-700); font-variant-numeric: tabular-nums; }
-.entry-specimen { width: 30px; height: 30px; flex: none; display: grid; place-items: center; background: var(--surface-soft); color: var(--blue-700); font: 700 18px var(--font-editorial); }
+.entry-number { font: 500 12px/1 var(--font-mono); color: var(--ink-500); font-variant-numeric: tabular-nums; }
+.entry-specimen { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border: 1px solid var(--blue-200); background: var(--surface-soft); color: var(--blue-700); font: 700 21px var(--font-editorial); }
 .entry-specimen img { width: 100%; height: 100%; object-fit: contain; }
 .entry-copy { display: flex; flex-direction: column; min-width: 0; }
 .entry-credit, .entry-reference, .entry-edition { font-size: 12px; line-height: 1.6; color: var(--ink-500); overflow-wrap: anywhere; }
-.entry-credit { margin: 0 0 5px; }
-.entry-copy h3 { margin: 0; font: 800 clamp(21px, 2vw, 30px)/1.3 var(--font-editorial); overflow-wrap: anywhere; }
-.entry-description { min-height: 3.6em; margin: 10px 0; font: 400 15px/1.8 var(--font-reading); overflow-wrap: anywhere; }
+.entry-credit { margin: 4px 0 0; }
+.entry-credit span { color: var(--blue-700); font-weight: 650; }
+.entry-copy h3 {
+  margin: 0;
+  font: 700 clamp(19px, 1.7vw, 25px) / 1.35 var(--font-sans);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  text-box: trim-both cap alphabetic;
+  overflow-wrap: anywhere;
+}
+.entry-description { min-height: 3.6em; margin: 10px 0; color: var(--ink-700); font: 400 15px/1.8 var(--font-reading); overflow-wrap: anywhere; }
 .entry-reference, .entry-edition { display: flex; flex-wrap: wrap; gap: 5px 12px; }
 .entry-reference { margin: auto 0 0; padding-top: 12px; }
 .entry-reference > * { min-width: 0; max-width: 100%; }

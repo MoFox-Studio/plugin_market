@@ -42,8 +42,6 @@
 
 .market-shell .market-stage .page-wrap h3,
 .market-shell .market-stage .catalog-frame .catalog-panel h3,
-.market-shell .market-stage .plugin-card .plugin-card-heading h3,
-.market-shell .market-stage .edition-entry .entry-copy h3,
 .market-shell .market-stage .recommendation-card .recommendation-identity h3,
 .market-shell .market-stage .release-list .release-row h3 {
   font-family: var(--font-docs-reading);
@@ -53,9 +51,23 @@
   letter-spacing: -0.005em;
 }
 
-.market-shell .market-stage .edition-entry.is-lead .entry-copy h3 {
-  font-size: 24px;
+.market-shell .market-stage .plugin-card .plugin-card-heading h3 {
+  color: var(--ink-900);
+  font-family: var(--font-docs-reading);
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+}
+
+.market-shell .market-stage .edition-entry .entry-copy h3 {
+  font-size: clamp(19px, 1.7vw, 23px);
+  font-weight: 700;
   line-height: 1.35;
+}
+
+.market-shell .market-stage .edition-entry.is-lead .entry-copy h3 {
+  font-size: clamp(24px, 2.4vw, 32px);
 }
 
 .market-shell .market-stage .catalog-frame .catalog-section-heading,
@@ -216,4 +228,53 @@
 .market-shell .print-collection,
 .market-shell .print-artwork figcaption {
   --font-reading: var(--font-art-reading);
+}
+
+/* 首页区块标题：栏目眉题负责焦点，区块名称和副标题退居说明层。 */
+.market-shell .market-stage .discovery .discovery-body .section-title .eyebrow {
+  display: block;
+  margin: 0;
+  color: var(--ink-900);
+  font: 800 clamp(24px, 2.4vw, 36px) / 1.2 var(--font-editorial);
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.market-shell .market-stage .discovery .discovery-body .section-title h2 {
+  margin: 7px 0 0;
+  color: var(--ink-700);
+  font: 650 clamp(18px, 1.8vw, 25px) / 1.35 var(--font-docs-reading);
+  letter-spacing: -0.01em;
+}
+.market-shell .market-stage .discovery .discovery-body .section-title h2 small {
+  display: inline-block;
+  margin-inline-start: 10px;
+  color: var(--ink-500);
+  font: 600 12px/1.5 var(--font-docs-reading);
+  letter-spacing: 0;
+  vertical-align: baseline;
+}
+.market-shell .market-stage .discovery .spotlight-section .selection-heading > p {
+  margin: 0;
+  color: var(--ink-900);
+  font: 800 clamp(24px, 2.4vw, 36px) / 1.2 var(--font-editorial);
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.market-shell .market-stage .discovery .spotlight-section .selection-heading h2 {
+  margin: 7px 0 0;
+  color: var(--ink-700);
+  font: 650 clamp(18px, 1.8vw, 25px) / 1.35 var(--font-docs-reading);
+  letter-spacing: -0.01em;
+}
+.market-shell .market-stage .discovery .spotlight-section .selection-heading span {
+  color: var(--ink-500);
+  font: 600 12px/1.5 var(--font-docs-reading);
+}
+.market-shell .market-stage .discovery .discovery-body .category-index.is-discovery .category-index__head h2 {
+  font: 700 clamp(26px, 2.6vw, 36px) / 1.25 var(--font-editorial);
+  letter-spacing: -0.025em;
+}
+.market-shell .market-stage .discovery .discovery-body .market-topics.is-discovery .market-topics__head h2 {
+  font: 700 clamp(24px, 2.4vw, 32px) / 1.3 var(--font-editorial);
+  letter-spacing: -0.02em;
 }

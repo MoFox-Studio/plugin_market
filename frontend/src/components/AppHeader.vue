@@ -56,7 +56,7 @@ async function logout() {
 }
 </script>
 <template>
-  <header class="market-header">
+  <header class="market-header" :class="{ 'is-home': route.name === 'home' }">
     <button
       class="header-menu icon-button"
       aria-label="打开导航"
@@ -72,7 +72,7 @@ async function logout() {
         >MoFox 市场报</i
       >{{ label }}</span
     >
-    <form class="header-search" role="search" @submit.prevent="onSearch">
+    <form v-if="route.name !== 'home'" class="header-search" role="search" @submit.prevent="onSearch">
       <AppIcon name="search" :size="16" /><input
         v-model="searchQuery"
         name="q"
@@ -120,6 +120,9 @@ async function logout() {
   </header>
 </template>
 <style scoped>
+.is-home .header-actions {
+  margin-inline-start: auto;
+}
 .header-theme {
   display: inline-flex;
   flex: none;

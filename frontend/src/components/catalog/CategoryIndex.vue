@@ -57,20 +57,19 @@ const entries = computed(() =>
     >
       <button
         v-if="!discovery"
+        type="button"
         class="category-entry category-entry--all"
         :class="{ active: !modelValue }"
         :aria-pressed="!modelValue"
         @click="$emit('update:modelValue', '')"
       >
-        <span class="category-entry__number">全部</span
-        ><span class="category-entry__copy"
-          ><strong>全部内容</strong><small>查看所有分类</small></span
-        ><span class="category-entry__arrow" aria-hidden="true">↗</span>
+        <span class="category-entry__label">全部</span>
       </button>
       <component
         :is="discovery ? 'router-link' : 'button'"
         v-for="entry in entries"
         :key="entry.value"
+        :type="discovery ? undefined : 'button'"
         class="category-entry"
         :class="{ active: !discovery && modelValue === entry.value }"
         :to="
@@ -80,15 +79,20 @@ const entries = computed(() =>
         "
         :aria-pressed="discovery ? undefined : modelValue === entry.value"
         @click="!discovery && $emit('update:modelValue', entry.value)"
-        ><span class="category-entry__number">{{
-          String(entry.index + 1).padStart(2, '0')
-        }}</span
-        ><span class="category-entry__copy"
-          ><strong>{{ entry.label }}</strong
-          ><small>{{ entry.value }}</small></span
-        ><span class="category-entry__arrow" aria-hidden="true"
-          >↗</span
-        ></component
+      >
+        <template v-if="discovery">
+          <span class="category-entry__number">{{
+            String(entry.index + 1).padStart(2, '0')
+          }}</span
+          ><span class="category-entry__copy"
+            ><strong>{{ entry.label }}</strong
+            ><small>{{ entry.value }}</small></span
+          ><span class="category-entry__arrow" aria-hidden="true"
+            >↗</span
+          >
+        </template>
+        <span v-else class="category-entry__label">{{ entry.label }}</span>
+      </component
       >
     </nav>
     <p v-if="loading && !unique.length" class="category-index__empty">
@@ -223,6 +227,42 @@ const entries = computed(() =>
 .category-entry.active .category-entry__arrow {
   opacity: 1;
 }
+.category-index:not(.is-discovery) .category-index__items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 16px;
+}
+.category-index:not(.is-discovery) .category-entry {
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  text-align: center;
+}
+.category-index:not(.is-discovery) .category-entry:before,
+.category-index:not(.is-discovery) .category-entry__number,
+.category-index:not(.is-discovery) .category-entry__copy,
+.category-index:not(.is-discovery) .category-entry__arrow {
+  display: none;
+}
+.category-index:not(.is-discovery) .category-entry__label {
+  max-width: 100%;
+  color: inherit;
+  font: 600 12px/1.4 var(--font-sans);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.category-index:not(.is-discovery) .category-entry.active {
+  border-color: var(--blue-500);
+  background: var(--blue-50);
+}
 .category-index__empty {
   font-size: 12px;
   line-height: 1.8;
@@ -268,17 +308,14 @@ const entries = computed(() =>
     display: flex;
   }
   .category-index:not(.is-discovery) .category-index__items {
-    display: flex;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    gap: 8px;
-    padding: 12px 0 5px;
+    overflow: visible;
+    padding: 14px 0 5px;
   }
   .category-index:not(.is-discovery) .category-entry {
-    min-width: 138px;
-    padding: 12px;
+    min-width: 0;
+    padding: 8px 12px;
     border: 1px solid var(--line);
-    flex: none;
+    flex: 0 1 auto;
   }
   .category-index:not(.is-discovery) .category-entry__arrow {
     display: none;

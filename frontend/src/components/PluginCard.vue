@@ -247,7 +247,7 @@ const tags = computed(() => [
 .plugin-card-summary {
   font-size: 15px;
   line-height: 1.8;
-  color: var(--ink-500);
+  color: var(--ink-700);
   min-height: 3.6em;
   flex-shrink: 0;
   margin: 17px 0;
