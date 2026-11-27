@@ -10,11 +10,12 @@ import AsyncSection from '@/components/AsyncSection.vue';
 import PageSkeleton from '@/components/PageSkeleton.vue';
 import HomePlate from '@/components/HomePlate.vue';
 import HomeFinder from '@/components/HomeFinder.vue';
-import HomePluginShelf from '@/components/HomePluginShelf.vue';
+import HomeIndex from '@/components/HomeIndex.vue';
 import ColophonSeal from '@/components/ColophonSeal.vue';
 import { drawImpression } from '@/composables/rareImpressions';
 import CategoryIndex from '@/components/catalog/CategoryIndex.vue';
 import MarketTopicGroups from '@/components/catalog/MarketTopicGroups.vue';
+import ContentScrollRail from '@/components/ContentScrollRail.vue';
 const home = useHomeStore(),
   auth = useAuthStore(),
   taxonomy = useTaxonomyStore();
@@ -25,11 +26,6 @@ const featured = computed(() => {
 });
 const stats = computed(() => home.data?.stats);
 const rarePrint = drawImpression();
-const samples = computed(() => [
-  ...latest.value,
-  ...featured.value,
-  ...(home.data?.top_rated || []),
-]);
 const creators = computed(() => {
   const selected = home.showcase
     .filter((x) => x.author)
@@ -54,6 +50,16 @@ const creators = computed(() => {
       })),
   ].slice(0, 4);
 });
+const railItems = [
+  { id: 'home-start', label: '首页开篇' },
+  { id: 'home-index', label: '插件与技能' },
+  { id: 'featured', label: '值得一试' },
+  { id: 'for-you', label: '猜你喜欢' },
+  { id: 'home-topics', label: '分类与主题' },
+  { id: 'latest', label: '最新发布' },
+  { id: 'creators', label: '幕后创作者' },
+  { id: 'publish-guide', label: '创作者工作台' },
+];
 watch(
   () => auth.viewer?.author_id,
   () => void home.loadHome(),
@@ -68,8 +74,10 @@ function date(value: string) {
 }
 </script>
 <template>
-  <div class="discovery">
-    <header class="gazette-masthead">
+  <div class="discovery discovery-with-scroll-rail">
+    <ContentScrollRail :items="railItems" aria-label="首页分段导航" />
+    <div class="discovery-main">
+      <header id="home-start" class="gazette-masthead" tabindex="-1">
       <div class="masthead-line">
         <div class="mast-wing"><b>MOFOX STUDIO</b><small>社区出品</small></div>
         <div class="mast-title" lang="zh-CN"><i>MoFox</i> 市场报</div>
@@ -99,12 +107,12 @@ function date(value: string) {
         </div>
         <h1 id="discovery-title">拓展边界，<br />让灵感运行<b>。</b></h1>
       </div>
-      <HomeFinder class="hero-finder" :categories="taxonomy.categories" />
+      <HomeFinder class="hero-finder" />
       <HomePlate />
     </section>
-    <HomePluginShelf :candidates="samples" />
+    <HomeIndex id="home-index" tabindex="-1" :categories="taxonomy.categories" />
     <div class="discovery-body">
-      <section id="featured" aria-label="值得一试">
+      <section id="featured" tabindex="-1" aria-label="值得一试">
         <AsyncSection
           :loading="home.loading && !home.data"
           :error="home.error"
@@ -123,7 +131,8 @@ function date(value: string) {
           <SpotlightFeature :items="featured" />
         </AsyncSection>
       </section>
-      <RecommendationSection id="for-you" />
+      <RecommendationSection id="for-you" tabindex="-1" />
+      <div id="home-topics" tabindex="-1" role="region" aria-label="按分类与主题查阅">
       <p v-if="taxonomy.error" class="catalog-caption" role="status">
         {{ taxonomy.error }}
         <button class="text-link" @click="taxonomy.load(true)">重试分类</button>
@@ -134,7 +143,8 @@ function date(value: string) {
         discovery
       />
       <MarketTopicGroups :tags="taxonomy.tags" discovery />
-      <section class="news-section" aria-labelledby="latest-title">
+      </div>
+      <section id="latest" class="news-section" tabindex="-1" aria-labelledby="latest-title">
         <header class="section-title">
           <div>
             <span class="eyebrow">03 / 最新发布</span>
@@ -183,7 +193,7 @@ function date(value: string) {
           </div>
         </AsyncSection>
       </section>
-      <section class="creators-section" aria-labelledby="people-title">
+      <section id="creators" class="creators-section" tabindex="-1" aria-labelledby="people-title">
         <header class="section-title">
           <div>
             <span class="eyebrow">04 / 幕后创作者</span>
@@ -223,6 +233,7 @@ function date(value: string) {
       <aside
         id="publish-guide"
         class="publish-guide"
+        tabindex="-1"
         :class="{ 'has-impression': rarePrint }"
         aria-labelledby="publish-title"
       >
@@ -251,14 +262,31 @@ function date(value: string) {
         </div>
         <ColophonSeal v-if="rarePrint" :print="rarePrint" />
       </aside>
+      </div>
     </div>
   </div>
 </template>
 <style scoped>
 .discovery {
-  width: min(100%, 1600px);
-  margin-inline: auto;
-  padding: 0 clamp(20px, 4vw, 56px) 54px;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  margin-inline: 0;
+  padding: 0 clamp(18px, 2vw, 32px) 54px;
+}
+.discovery-with-scroll-rail {
+  display: grid;
+  grid-template-columns: minmax(92px, 112px) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(20px, 3vw, 42px);
+}
+.discovery-main {
+  min-width: 0;
+}
+.discovery-with-scroll-rail :deep(#home-start),
+.discovery-with-scroll-rail :deep(#home-index),
+.discovery-with-scroll-rail :deep(#home-topics) {
+  scroll-margin-top: 78px;
 }
 .masthead-line {
   display: grid;
@@ -340,6 +368,8 @@ function date(value: string) {
 }
 .mast-register > a {
   justify-self: end;
+  color: var(--blue-700);
+  font-weight: 650;
 }
 .discovery-hero {
   display: grid;
@@ -395,6 +425,62 @@ function date(value: string) {
 .discovery-body {
   padding-top: clamp(28px, 2.4vw, 46px);
 }
+.discovery-body :deep(.category-index.is-discovery) {
+  padding-block: 36px 42px;
+  border-bottom: 3px double var(--line-strong);
+}
+.discovery-body :deep(.category-index.is-discovery .category-index__head) {
+  margin-bottom: 16px;
+}
+.discovery-body :deep(.category-index.is-discovery .category-index__head > div > span) {
+  font-size: 12px;
+}
+.discovery-body :deep(.category-index.is-discovery .category-index__head h2) {
+  font: 700 clamp(26px, 2.6vw, 36px) / 1.25 var(--font-editorial);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.discovery-body :deep(.category-index.is-discovery .category-index__head > small) {
+  font: 11px/1.4 var(--font-mono);
+}
+.discovery-body :deep(.category-index.is-discovery .category-entry__number) {
+  font-size: 11px;
+}
+.discovery-body :deep(.category-index.is-discovery .category-entry__copy strong) {
+  font: 700 16px/1.45 var(--font-docs-reading);
+}
+.discovery-body :deep(.category-index.is-discovery .category-entry__copy small) {
+  font-size: 10px;
+}
+.discovery-body :deep(.market-topics.is-discovery) {
+  padding-block: 34px 40px;
+  border-bottom: 3px double var(--line-strong);
+}
+.discovery-body :deep(.market-topics.is-discovery .market-topics__head > span) {
+  font-size: 12px;
+}
+.discovery-body :deep(.market-topics.is-discovery .market-topics__head h2) {
+  font: 700 clamp(24px, 2.4vw, 32px) / 1.3 var(--font-editorial);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.discovery-body :deep(.market-topics.is-discovery .market-topics__head p) {
+  margin-top: 9px;
+  color: var(--ink-700);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.discovery-body :deep(.market-topics.is-discovery .market-topics__groups) {
+  border-top: 3px double var(--line-strong);
+}
+.discovery-body :deep(.market-topics.is-discovery .market-topic__toggle) {
+  padding-block: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.discovery-body :deep(.market-topics.is-discovery .market-topic__tags > *) {
+  font-size: 11px;
+}
 .discovery-body > section,
 #publish-guide {
   scroll-margin-top: 78px;
@@ -426,8 +512,10 @@ function date(value: string) {
 }
 .text-link {
   color: var(--blue-700);
-  font-weight: 600;
-  font-size: 13px;
+  font-weight: 650;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .release-row {
   display: grid;
@@ -535,6 +623,11 @@ function date(value: string) {
   margin-top: 16px;
   color: var(--blue-700);
   font-weight: 600;
+}
+@media (max-width: 980px) {
+  .discovery-with-scroll-rail {
+    grid-template-columns: 1fr;
+  }
 }
 @media (max-width: 700px) {
   .discovery {
