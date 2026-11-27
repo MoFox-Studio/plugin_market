@@ -1,5 +1,24 @@
+<script setup lang="ts">
+import ContentScrollRail from '@/components/ContentScrollRail.vue';
+import type { ContentScrollRailItem } from '@/types/contentScrollRail';
+
+const props = defineProps<{
+  railItems?: ContentScrollRailItem[];
+}>();
+</script>
+
 <template>
-  <div class="catalog-frame"><slot /></div>
+  <div class="catalog-frame" :class="{ 'has-scroll-rail': props.railItems?.length }">
+    <ContentScrollRail
+      v-if="props.railItems?.length"
+      :items="props.railItems"
+      aria-label="目录页面分段导航"
+    />
+    <div v-if="props.railItems?.length" class="catalog-frame__content">
+      <slot />
+    </div>
+    <slot v-else />
+  </div>
 </template>
 <style scoped>
 .catalog-frame {
@@ -9,6 +28,32 @@
   display: grid;
   gap: 28px;
   min-width: 0;
+}
+.catalog-frame.has-scroll-rail {
+  grid-template-columns: minmax(92px, 112px) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(20px, 3vw, 42px);
+}
+.catalog-frame__content {
+  display: grid;
+  gap: 28px;
+  min-width: 0;
+}
+.catalog-frame.has-scroll-rail :deep(#market-overview),
+.catalog-frame.has-scroll-rail :deep(#market-filters),
+.catalog-frame.has-scroll-rail :deep(#market-results),
+.catalog-frame.has-scroll-rail :deep(#skills-overview),
+.catalog-frame.has-scroll-rail :deep(#skills-filters),
+.catalog-frame.has-scroll-rail :deep(#skills-results) {
+  scroll-margin-top: calc(var(--topbar-h, 64px) + 24px);
+}
+.catalog-frame.archive-page {
+  width: 100%;
+  max-width: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding-inline: clamp(18px, 2vw, 32px);
 }
 .catalog-frame :deep(.catalog-kicker) {
   display: flex;
@@ -1061,5 +1106,10 @@
 @media(max-width: 620px) {
   .catalog-frame :deep(.edition-index:not(.list-view)) { grid-template-columns: 1fr; }
   .catalog-frame :deep(.query-console) { padding: 0; }
+}
+@media (max-width: 980px) {
+  .catalog-frame.has-scroll-rail {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
