@@ -1,0 +1,87 @@
+# 前端 PR 预览 · 第一阶段：构建
+#
+# 这个工作流运行在 pull_request 事件里，可能来自 fork。它只获得 contents: read
+# 权限，没有任何仓库 secret，因此即使 PR 修改了 package.json、vite.config.js 或
+# 工作流本身，也无法写入仓库或窃取凭据。
+#
+# 构建产物会作为 artifact 上传，由可信的第二阶段工作流
+# （pr-frontend-preview-publish.yml）负责发布到 GitHub Pages 并回复 PR。
+#
+# 这样 fork PR 也能获得预览，同时不会把写权限交给 PR 里运行的代码。
+
+name: 前端预览构建
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/pr-frontend-preview-build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-preview-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  UMBRELLA_DIR: pr-preview
+
+jobs:
+  build:
+    name: 构建前端
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装前端依赖
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      # GitHub Pages 的网址与仓库类型有关：
+      #   owner/repo              -> https://owner.github.io/repo/
+      #   owner/owner.github.io   -> https://owner.github.io/
+      # 这里和 pr-preview-action 使用同一套推导规则，保证 --base 与预览地址一致。
+      - name: 计算部署路径
+        id: base
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY%%/*}"
+          name="${GITHUB_REPOSITORY#*/}"
+          if [ "$name" = "${owner}.github.io" ]; then
+            base="/${UMBRELLA_DIR}/pr-${PR_NUMBER}/"
+          else
+            base="/${name}/${UMBRELLA_DIR}/pr-${PR_NUMBER}/"
+          fi
+          echo "path=${base}" >> "$GITHUB_OUTPUT"
+
+      - name: 构建前端（内置模拟数据）
+        working-directory: frontend
+        env:
+          VITE_PREVIEW_MOCK: '1'
+          VITE_ROUTER_MODE: hash
+          VITE_PR_NUMBER: ${{ github.event.pull_request.number }}
+          VITE_PR_URL: ${{ github.event.pull_request.html_url }}
+        run: >
+          npm run build --
+          --outDir dist
+          --base "${{ steps.base.outputs.path }}"
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-preview
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 7
