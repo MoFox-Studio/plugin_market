@@ -1,0 +1,1 @@
+import{s as t,M as l,m as s,D as n,a2 as o}from"./index-_AOjMCnn.js";const m=t({__name:"TrustBadge",props:{level:{type:String,default:"community"}},setup(e){const a={official:"官方",verified:"认证",community:"社区"};return(c,i)=>(l(),s("span",{class:n(["badge",`trust-${e.level}`])},o(a[e.level]||e.level),3))}});export{m as _};
