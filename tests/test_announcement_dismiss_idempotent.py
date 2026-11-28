@@ -1,4 +1,4 @@
-"""Property tests for announcement dismissal idempotence."""
+"""公告关闭操作幂等性的属性测试。"""
 
 from __future__ import annotations
 
@@ -49,8 +49,8 @@ async def _run_case(repeats: int) -> None:
         service = AnnouncementsService(session)
         created = await service.create(
             AnnouncementCreate(
-                title='Dismiss me',
-                body_markdown='body',
+                title='关闭此公告',
+                body_markdown='正文',
                 display_mode='banner',
                 audience='logged_in',
                 dismissible=True,

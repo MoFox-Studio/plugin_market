@@ -1,4 +1,4 @@
-"""API tests for inbox browser endpoints (task 13)."""
+"""收件箱浏览器端点的 API 测试（任务 13）。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ async def _seed_message(
     *,
     type: str = "mention",
     status: str = "unread",
-    preview: str = "hello",
+    preview: str = "你好",
     related_plugin_id: str | None = None,
 ) -> int:
     async with session_scope() as session:
@@ -37,9 +37,9 @@ async def test_inbox_list_and_unread_count_scope_to_browser_user(client: AsyncCl
     viewer_session = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", viewer_session, path="/")
 
-    await _seed_message("mock-author", type="mention", preview="first")
-    await _seed_message("mock-author", type="reply", preview="second")
-    await _seed_message("mock-admin", type="system", preview="other-user")
+    await _seed_message("mock-author", type="mention", preview="第一条消息")
+    await _seed_message("mock-author", type="reply", preview="第二条消息")
+    await _seed_message("mock-admin", type="system", preview="其他用户的消息")
 
     listed = await client.get("/api/v1/inbox/messages")
     unread = await client.get("/api/v1/inbox/unread-count")
@@ -56,8 +56,8 @@ async def test_inbox_mark_read_and_mark_all_read(client: AsyncClient) -> None:
     viewer_session = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", viewer_session, path="/")
 
-    first = await _seed_message("mock-author", preview="first")
-    await _seed_message("mock-author", preview="second")
+    first = await _seed_message("mock-author", preview="第一条消息")
+    await _seed_message("mock-author", preview="第二条消息")
 
     marked = await client.post(f"/api/v1/inbox/messages/{first}/read")
     after_one = await client.get("/api/v1/inbox/unread-count")
@@ -76,7 +76,7 @@ async def test_inbox_mark_read_rejects_other_users_message(client: AsyncClient) 
     viewer_session = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", viewer_session, path="/")
 
-    foreign_message_id = await _seed_message("mock-admin", preview="foreign")
+    foreign_message_id = await _seed_message("mock-admin", preview="他人的消息")
     response = await client.post(f"/api/v1/inbox/messages/{foreign_message_id}/read")
 
     assert response.status_code == 403

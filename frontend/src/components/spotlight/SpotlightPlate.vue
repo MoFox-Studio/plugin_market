@@ -2,51 +2,24 @@
 import { computed, ref } from 'vue';
 import type { Plugin } from '@/types';
 import EditionArtwork from '../EditionArtwork.vue';
-import { useMarketPointerReveal } from '@/composables/useMarketPointerReveal';
 import { folios } from './folioCatalogue';
 
 const props = defineProps<{ plugin: Plugin; index: number }>();
-const art = ref<HTMLElement>();
 const plate = computed(() => folios[props.index]);
 const number = computed(() => String(props.index + 1).padStart(2, '0'));
-useMarketPointerReveal((pointer) => {
-  const el = art.value;
-  if (!el) return;
-  if (pointer.active && pointer.local) {
-    const box = el.getBoundingClientRect();
-    if (
-      box.width &&
-      box.height &&
-      pointer.x >= box.left &&
-      pointer.x <= box.right &&
-      pointer.y >= box.top &&
-      pointer.y <= box.bottom
-    ) {
-      el.style.setProperty('--reveal-x', pointer.x - box.left + 'px');
-      el.style.setProperty('--reveal-y', pointer.y - box.top + 'px');
-      el.style.setProperty('--reveal-radius', pointer.radius + 'px');
-      el.classList.add('is-revealing');
-      return;
-    }
-  }
-  el.classList.remove('is-revealing');
-});
 </script>
 
 <template>
   <div class="folio-column">
     <div
-      ref="art"
       class="spotlight-art"
-      data-pointer-reveal-local
       :data-plate="plate.id"
-      @pointerleave="art?.classList.remove('is-revealing')"
     >
       <div class="print-sheet">
         <div class="running-line">
-          <span>社区插件选刊</span><span>PLATE {{ number }} / 20</span>
+          <span>社区插件选刊</span><span>图版 {{ number }} / 20</span>
         </div>
-        <div class="print-masthead" lang="en">MoFox Gazette</div>
+        <div class="print-masthead" lang="zh-CN">MoFox 市场报</div>
         <div class="plate-edition">
           <span>精选图版</span><i>✦</i><span>社区出品</span>
         </div>
@@ -63,34 +36,8 @@ useMarketPointerReveal((pointer) => {
           </div>
         </div>
         <div class="plate-caption">
-          <i lang="en">Fig. {{ number }}</i
+          <i lang="zh-CN">图 {{ number }}</i
           ><b>{{ plate.title }}</b>
-        </div>
-      </div>
-      <div class="spotlight-reveal" aria-hidden="true">
-        <div class="running-line">
-          <span>背印藏书票</span><span>EX LIBRIS · {{ number }}</span>
-        </div>
-        <div class="back-title">
-          <i lang="en">Verso</i><b>{{ plate.reverse }}</b>
-        </div>
-        <svg
-          class="back-scene"
-          viewBox="0 0 320 200"
-          role="img"
-          :aria-label="plate.reverse"
-        >
-          <use :href="plate.back" width="320" height="200" />
-        </svg>
-        <div class="proof-byline">
-          <span>{{
-            plugin.owner_display_name || plugin.owner_login || plugin.owner_id
-          }}</span
-          ><small>{{
-            plugin.latest_version
-              ? 'v' + plugin.latest_version
-              : plugin.plugin_id
-          }}</small>
         </div>
       </div>
     </div>
@@ -114,8 +61,7 @@ useMarketPointerReveal((pointer) => {
   color: var(--ink-900);
   background: var(--paper);
 }
-.print-sheet,
-.spotlight-reveal {
+.print-sheet {
   padding: 15px clamp(14px, 1.9vw, 29px);
   display: grid;
   min-width: 0;
@@ -126,8 +72,7 @@ useMarketPointerReveal((pointer) => {
   background-size: 4px 4px;
 }
 .running-line,
-.plate-edition,
-.proof-byline {
+.plate-edition {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -196,52 +141,6 @@ useMarketPointerReveal((pointer) => {
 }
 .plate-caption b {
   font: 800 20px/1.3 var(--font-editorial);
-}
-.spotlight-reveal {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 5px;
-  color: var(--paper);
-  background: var(--blue-900);
-  background-image: repeating-linear-gradient(
-    135deg,
-    transparent 0 9px,
-    color-mix(in srgb, var(--paper) 6%, transparent) 9px 10px
-  );
-  clip-path: circle(0 at var(--reveal-x, 0px) var(--reveal-y, 0px));
-  pointer-events: none;
-}
-.is-revealing .spotlight-reveal {
-  clip-path: circle(
-    var(--reveal-radius, 110px) at var(--reveal-x) var(--reveal-y)
-  );
-}
-.back-title {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  padding: 4px 0;
-}
-.back-title i {
-  font: 30px/1 var(--font-script);
-}
-.back-title b {
-  font: 800 20px/1.2 var(--font-editorial);
-}
-.back-scene {
-  display: block;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-}
-.proof-byline {
-  padding-top: 6px;
-  border-top: 3px double currentColor;
-}
-.proof-byline span {
-  font: italic 16px/1.3 var(--font-reading);
 }
 @media (max-width: 600px) {
   .folio-column {

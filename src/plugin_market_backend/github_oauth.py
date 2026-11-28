@@ -1,4 +1,4 @@
-"""GitHub OAuth and user lookup helpers."""
+"""GitHub OAuth 与用户信息查询工具。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from plugin_market_backend.errors import ApiError
 
 @dataclass(frozen=True)
 class GitHubUser:
-    """Normalized GitHub user identity."""
+    """规范化的 GitHub 用户身份信息。"""
 
     github_user_id: str
     github_login: str
@@ -21,10 +21,9 @@ class GitHubUser:
 
 
 async def exchange_oauth_code(settings: Settings, code: str) -> str:
-    """Exchange a GitHub OAuth code for an access token."""
-
+    """用 GitHub OAuth 授权码换取访问令牌。"""
     if not settings.github_oauth_client_id or not settings.github_oauth_client_secret:
-        raise ApiError(503, "GITHUB_OAUTH_NOT_CONFIGURED", "GitHub OAuth is not configured.")
+        raise ApiError(503, "GITHUB_OAUTH_NOT_CONFIGURED", "尚未配置 GitHub OAuth。")
     try:
         async with httpx.AsyncClient(timeout=15, trust_env=settings.github_trust_env) as client:
             response = await client.post(
@@ -38,17 +37,16 @@ async def exchange_oauth_code(settings: Settings, code: str) -> str:
                 },
             )
     except httpx.RequestError as exc:
-        raise ApiError(503, "GITHUB_UNAVAILABLE", "GitHub OAuth is temporarily unavailable. Please retry.") from exc
+        raise ApiError(503, "GITHUB_UNAVAILABLE", "GitHub OAuth 暂时不可用，请重试。") from exc
     payload = response.json()
     token = payload.get("access_token")
     if response.status_code >= 400 or not token:
-        raise ApiError(401, "GITHUB_OAUTH_FAILED", "GitHub OAuth token exchange failed.", {"error": payload.get("error")})
+        raise ApiError(401, "GITHUB_OAUTH_FAILED", "GitHub OAuth 令牌交换失败。", {"error": payload.get("error")})
     return str(token)
 
 
 async def fetch_github_user(settings: Settings, access_token: str) -> GitHubUser:
-    """Fetch the GitHub user attached to an OAuth or personal access token."""
-
+    """查询 OAuth 令牌或个人访问令牌对应的 GitHub 用户。"""
     try:
         async with httpx.AsyncClient(timeout=15, trust_env=settings.github_trust_env) as client:
             response = await client.get(
@@ -56,15 +54,15 @@ async def fetch_github_user(settings: Settings, access_token: str) -> GitHubUser
                 headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {access_token}"},
             )
     except httpx.RequestError as exc:
-        raise ApiError(503, "GITHUB_UNAVAILABLE", "GitHub user lookup is temporarily unavailable. Please retry.") from exc
+        raise ApiError(503, "GITHUB_UNAVAILABLE", "GitHub 用户查询暂时不可用，请重试。") from exc
     if response.status_code == 401:
-        raise ApiError(401, "GITHUB_TOKEN_INVALID", "GitHub token is invalid.")
+        raise ApiError(401, "GITHUB_TOKEN_INVALID", "GitHub 令牌无效。")
     if response.status_code >= 400:
-        raise ApiError(response.status_code, "GITHUB_USER_LOOKUP_FAILED", "GitHub user lookup failed.")
+        raise ApiError(response.status_code, "GITHUB_USER_LOOKUP_FAILED", "GitHub 用户查询失败。")
     payload = response.json()
     login = str(payload.get("login") or "")
     if not login:
-        raise ApiError(401, "GITHUB_USER_LOOKUP_FAILED", "GitHub user payload did not include a login.")
+        raise ApiError(401, "GITHUB_USER_LOOKUP_FAILED", "GitHub 用户数据中缺少 login 字段。")
     return GitHubUser(
         github_user_id=str(payload.get("id") or login),
         github_login=login,

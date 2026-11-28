@@ -20,7 +20,7 @@
   font-weight: 800;
   font-display: swap;
 }
-/* The press voice is reserved for titles. Reading text and controls keep their UI type. */
+/* 报刊风格仅用于标题，正文和控件保留界面字体。 */
 #main-content > .page-wrap {
   width: min(100%, 1420px);
   margin-inline: auto;

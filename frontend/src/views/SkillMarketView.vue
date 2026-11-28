@@ -42,6 +42,11 @@ const pageSize = 24,
   totalPages = computed(() =>
     Math.max(1, Math.ceil(results.data.total / pageSize)),
   );
+const railItems = [
+  { id: 'skills-overview', label: '目录概览' },
+  { id: 'skills-filters', label: '分类与标签' },
+  { id: 'skills-results', label: '技能列表' },
+];
 const filtered = computed(() => !!(query.value || category.value || tag.value));
 function filter(partial: Record<string, string>) {
   const next = { ...route.query, ...partial };
@@ -65,7 +70,7 @@ async function load() {
       page_size: pageSize,
     },
     key = route.fullPath;
-  await results.load(async () => ({ ...await api.skills.list(params), loadedPage: params.page }));
+  await results.load(async (signal) => ({ ...await api.skills.list(params, { signal }), loadedPage: params.page }));
   if (key === route.fullPath && !results.loading && !results.error && page.value > totalPages.value)
     void router.replace({
       query: { ...route.query, page: String(totalPages.value) },
@@ -81,13 +86,14 @@ watch(
   { immediate: true },
 );
 onMounted(() => {
-  void categories.load(api.skills.categories);
-  void tags.load(api.skills.tags);
+  void categories.load((signal) => api.skills.categories({ signal }));
+  void tags.load((signal) => api.skills.tags({ signal }));
 });
 </script>
 <template>
-  <CatalogFrame class="archive-page">
-    <CatalogMasthead
+  <CatalogFrame class="archive-page" :rail-items="railItems">
+    <div id="skills-overview" tabindex="-1">
+      <CatalogMasthead
       title="技能总目"
 
       description="查阅社区技能、使用说明与可获取的技能包。"
@@ -178,9 +184,10 @@ onMounted(() => {
             </button>
           </div>
         </div>
-    </CatalogMasthead>
+      </CatalogMasthead>
+    </div>
     <div class="catalog-workspace">
-      <aside class="catalog-filter-rail">
+      <aside id="skills-filters" class="catalog-filter-rail" tabindex="-1">
         <CategoryIndex
           :loading="categories.loading"
           :categories="categories.data"
@@ -195,8 +202,8 @@ onMounted(() => {
           筛选索引暂未同步。<button
             class="catalog-link"
             @click="
-              categories.load(api.skills.categories);
-              tags.load(api.skills.tags);
+              categories.load((signal) => api.skills.categories({ signal }));
+              tags.load((signal) => api.skills.tags({ signal }));
             "
           >
             重新加载
@@ -210,7 +217,13 @@ onMounted(() => {
           <router-link to="/browse">探索插件目录 ↗</router-link>
         </div>
       </aside>
-      <section class="catalog-results" aria-label="技能检索结果" :aria-busy="results.loading">
+      <section
+        id="skills-results"
+        class="catalog-results"
+        tabindex="-1"
+        aria-label="技能检索结果"
+        :aria-busy="results.loading"
+      >
         <div class="workspace-result-head">
           <div>
             <span class="edition-index-label">本版目录</span>

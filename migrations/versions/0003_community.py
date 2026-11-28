@@ -1,4 +1,4 @@
-"""Add community tables: likes, ratings, comments, plus version download_count."""
+"""添加点赞、评分和评论等社区表，以及版本的 download_count 字段。"""
 
 from __future__ import annotations
 
@@ -12,8 +12,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Add community engagement tables."""
-
+    """添加社区互动表。"""
     op.add_column(
         "plugin_versions",
         sa.Column("download_count", sa.Integer(), nullable=False, server_default="0"),
@@ -58,8 +57,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove community engagement tables."""
-
+    """移除社区互动表。"""
     op.drop_index("ix_plugin_comments_created_at", table_name="plugin_comments")
     op.drop_index("ix_plugin_comments_parent_id", table_name="plugin_comments")
     op.drop_index("ix_plugin_comments_author_id", table_name="plugin_comments")

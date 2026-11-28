@@ -27,8 +27,8 @@ function installMatchMedia(matchesReduce: boolean): void {
 function buildPlugin(id: number): Plugin {
   return {
     plugin_id: `plug-${id}`,
-    display_name: `Plugin ${id}`,
-    summary: 'summary',
+    display_name: `插件 ${id}`,
+    summary: '摘要',
     status: 'published',
     trust_level: 'community',
     owner_id: 'owner',
@@ -43,7 +43,7 @@ function buildPlugin(id: number): Plugin {
   }
 }
 
-describe('reduced motion property', () => {
+describe('减少动态效果的属性测试', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     document.documentElement.dataset.reducedMotion = 'no-preference'
@@ -51,7 +51,7 @@ describe('reduced motion property', () => {
     vi.restoreAllMocks()
   })
 
-  test('reduced motion tokens stay within 80ms and carousel autoplay does not start', async () => {
+  test('减少动态效果时的时长变量不超过 80 毫秒，且不启动轮播自动播放', async () => {
     await fc.assert(
       fc.asyncProperty(
         fc.uniqueArray(fc.integer({ min: 1, max: 50 }), { maxLength: 8 }),

@@ -23,6 +23,14 @@ const dialogRef = ref<HTMLElement | null>(null);
 let releaseScrollLock: (() => void) | undefined;
 let disposed = false;
 
+const severityLabel = computed(() => {
+  const severity = props.announcement.severity;
+  if (severity === 'info') return '通知';
+  if (severity === 'warning') return '警告';
+  if (severity === 'critical') return '严重';
+  return severity;
+});
+
 const actionLabel = computed(() =>
   props.announcement.dismissible ? '知道了，不再提示' : '关闭',
 );
@@ -118,7 +126,7 @@ onBeforeUnmount(() => {
         <span
           class="announcement-modal-kicker"
           :class="`is-${announcement.severity}`"
-          >{{ announcement.severity }}</span
+          >{{ severityLabel }}</span
         >
         <button
           type="button"

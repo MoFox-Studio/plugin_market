@@ -1,4 +1,4 @@
-"""Database engine, session, and schema helpers."""
+"""数据库引擎、会话与表结构辅助工具。"""
 
 from __future__ import annotations
 
@@ -14,8 +14,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def configure_database(database_url: str, *, echo: bool = False) -> None:
-    """Configure the global async database engine."""
-
+    """配置全局异步数据库引擎。"""
     global _engine, _session_factory
     if _engine is not None:
         return
@@ -24,25 +23,34 @@ def configure_database(database_url: str, *, echo: bool = False) -> None:
 
 
 def get_engine() -> AsyncEngine:
-    """Return the configured database engine."""
+    """返回已配置的数据库引擎。
 
+    Raises:
+        RuntimeError: 数据库尚未配置。
+    """
     if _engine is None:
-        raise RuntimeError("Database is not configured.")
+        raise RuntimeError("数据库尚未配置。")
     return _engine
 
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Return the configured async session factory."""
+    """返回已配置的异步会话工厂。
 
+    Raises:
+        RuntimeError: 数据库尚未配置。
+    """
     if _session_factory is None:
-        raise RuntimeError("Database is not configured.")
+        raise RuntimeError("数据库尚未配置。")
     return _session_factory
 
 
 @asynccontextmanager
 async def session_scope() -> AsyncGenerator[AsyncSession, None]:
-    """Yield a transactional async session."""
+    """提供带事务管理的异步会话。
 
+    Yields:
+        异步数据库会话，正常退出时提交，发生异常时回滚。
+    """
     session_factory = get_session_factory()
     async with session_factory() as session:
         try:
@@ -54,8 +62,7 @@ async def session_scope() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_database() -> None:
-    """Create all tables for deployments that do not use migrations yet."""
-
+    """为尚未使用迁移的部署创建所有表。"""
     from plugin_market_backend.orm import Base
 
     async with get_engine().begin() as conn:
@@ -75,8 +82,7 @@ async def init_database() -> None:
 
 
 async def drop_database() -> None:
-    """Drop all tables. Intended for tests only."""
-
+    """删除所有表，仅供测试使用。"""
     from plugin_market_backend.orm import Base
 
     async with get_engine().begin() as conn:
@@ -84,8 +90,7 @@ async def drop_database() -> None:
 
 
 async def close_database() -> None:
-    """Dispose the configured engine and clear globals."""
-
+    """释放已配置的引擎并清空全局状态。"""
     global _engine, _session_factory
     if _engine is not None:
         await _engine.dispose()

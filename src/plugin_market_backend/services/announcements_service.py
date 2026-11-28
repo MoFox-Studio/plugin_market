@@ -1,20 +1,19 @@
-"""Announcement management, visibility, and dismissal service.
+"""提供公告管理、可见性判断和关闭记录服务。
 
-Implements Requirements 12 and 13 — admin-managed announcements with schedule,
-audience targeting, dismissal, and the single-modal property (Property 3).
+实现需求 12 和 13：由管理员管理公告，支持展示排期、受众定向、关闭操作，
+并保证单弹窗性质（性质 3）。
 
-Key design decisions:
+关键设计如下：
 
-* :func:`is_visible` is a **pure function** (Property 2). It does not read the
-  session; callers must precompute ``is_dismissed`` and ``viewer_has_plugin``.
-* :meth:`AnnouncementsService.list_active` enforces Property 3: at most one
-  ``display_mode='modal'`` announcement is returned per viewer, selected by
-  ``starts_at desc, id desc``.
-* :meth:`AnnouncementsService.dismiss` uses ``INSERT OR IGNORE`` semantics
-  (Property 9 — dismissal idempotence) via the unique constraint
-  ``(announcement_id, author_id, dismiss_token)``.
-* All write paths call :meth:`_audit` to append a ``ReviewRecordORM`` row
-  (Property 8 — audit trail completeness).
+* ``is_visible`` 是纯函数（性质 2），不读取数据库会话；调用方必须预先计算
+  ``is_dismissed`` 和 ``viewer_has_plugin``。
+* ``AnnouncementsService.list_active`` 保证性质 3：对每位访问者最多返回一条
+  ``display_mode='modal'`` 公告，按 ``starts_at desc, id desc`` 选择。
+* ``AnnouncementsService.dismiss`` 利用唯一约束
+  ``(announcement_id, author_id, dismiss_token)`` 实现 ``INSERT OR IGNORE``
+  语义，保证关闭操作的幂等性（性质 9）。
+* 公告管理写操作通过 ``_audit`` 追加 ``ReviewRecordORM`` 记录，
+  保证审计轨迹完整性（性质 8）。
 """
 
 from __future__ import annotations
@@ -46,25 +45,24 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Timezone helpers
+# 时区辅助函数
 # ---------------------------------------------------------------------------
 
 
 def _strip_tz(dt: datetime) -> datetime:
-    """Strip timezone info for safe comparison.
+    """移除时区信息，以便安全比较日期时间。
 
-    SQLite round-trips tz-aware datetimes as naive (no tzinfo). To avoid
-    ``TypeError: can't compare offset-naive and offset-aware datetimes``
-    we normalize both sides to naive UTC before comparing.
+    SQLite 会将存入的带时区日期时间读回为不带 ``tzinfo`` 的值。
+    比较前移除时区信息，可避免带时区与不带时区值混合比较导致的 ``TypeError``。
+    此操作不转换时间值，调用方应确保输入使用相同的时区基准。
     """
-
     if dt.tzinfo is not None:
         return dt.replace(tzinfo=None)
     return dt
 
 
 # ---------------------------------------------------------------------------
-# Pure visibility predicate (Property 2)
+# 纯函数可见性判断（性质 2）
 # ---------------------------------------------------------------------------
 
 
@@ -76,29 +74,24 @@ def is_visible(
     is_dismissed: bool = False,
     viewer_has_plugin: bool = False,
 ) -> bool:
-    """Return whether ``announcement`` should be shown to ``viewer`` at ``now``.
+    """判断是否应在 ``now`` 时刻向 ``viewer`` 展示 ``announcement``。
 
-    This is a **pure function** — it does not read the database session. All
-    side-effect-dependent inputs (``is_dismissed``, ``viewer_has_plugin``) must
-    be precomputed by the caller.
-
-    The predicate directly encodes Property 2 (Announcement Visibility):
-
-        visible iff enabled ∧ schedule_hit ∧ audience_match ∧ ¬dismissed
+    这是不读取数据库会话的纯函数。依赖外部状态的输入 ``is_dismissed`` 和
+    ``viewer_has_plugin`` 必须由调用方预先计算。
+    此判断直接实现性质 2（公告可见性）：公告可见，当且仅当已启用、
+    命中展示时间范围、受众匹配且未被关闭。
 
     Args:
-        announcement: The ORM row to evaluate.
-        viewer: The current authenticated author, or ``None`` for anonymous.
-        now: The server time to evaluate the schedule against.
-        is_dismissed: Whether the viewer has dismissed this announcement at
-            the current ``dismiss_token``.
-        viewer_has_plugin: Whether the viewer owns at least one plugin.
-            Required only when ``audience == 'authors_with_plugin'``.
+        announcement: 待判断的公告 ORM 记录。
+        viewer: 当前已认证作者，匿名访问时为 ``None``。
+        now: 用于判断展示排期的服务器时间。
+        is_dismissed: 访问者是否已在当前 ``dismiss_token`` 下关闭此公告。
+        viewer_has_plugin: 访问者是否拥有至少一个插件。
+            仅在 ``audience == 'authors_with_plugin'`` 时需要。
 
     Returns:
-        ``True`` if the announcement should be shown to the viewer.
+        应向访问者展示公告时返回 ``True``。
     """
-
     if not announcement.enabled:
         return False
     if announcement.starts_at is not None:
@@ -121,23 +114,22 @@ def is_visible(
 
 
 # ---------------------------------------------------------------------------
-# Service class
+# 服务类
 # ---------------------------------------------------------------------------
 
 
 class AnnouncementsService:
-    """Manage announcements and per-viewer dismissals.
+    """管理公告和每位访问者的关闭记录。
 
-    All write methods append an audit trail record via :meth:`_audit`.
+    公告管理写操作通过 ``_audit`` 追加审计记录。
     """
 
     def __init__(self, session: AsyncSession) -> None:
-        """Bind the service to one transactional async session."""
-
+        """将服务绑定到单个异步事务会话。"""
         self.session = session
 
     # ------------------------------------------------------------------
-    # Public query: active announcements for a viewer
+    # 公开查询：对访问者有效的公告
     # ------------------------------------------------------------------
 
     async def list_active(
@@ -147,26 +139,30 @@ class AnnouncementsService:
         now: datetime | None = None,
         viewer_has_plugin: bool = False,
     ) -> list[AnnouncementDTO]:
-        """Return announcements visible to ``viewer`` at ``now``.
+        """返回 ``now`` 时刻对 ``viewer`` 可见的公告。
 
-        Enforces **Property 3** (single-modal): if multiple modal
-        announcements are eligible, only the one with the most recent
-        ``starts_at`` (ties broken by highest ``id``) is included.
+        保证性质 3（单弹窗）：多个弹窗公告同时符合条件时，仅返回 ``starts_at``
+        最新的一条；时间相同时选择 ``id`` 最大的一条。
+        横幅公告按相同顺序（``starts_at desc, id desc``）返回，不限制数量。
 
-        Banner announcements are returned in the same order
-        (``starts_at desc, id desc``) without a cap.
+        Args:
+            viewer: 当前已认证作者，匿名访问时为 ``None``。
+            now: 判断可见性的时间，默认使用当前 UTC 时间。
+            viewer_has_plugin: 访问者是否拥有至少一个插件。
+
+        Returns:
+            按展示开始时间和 ID 降序排列的可见公告 DTO 列表。
         """
-
         if now is None:
             now = utc_now()
 
-        # Fetch all enabled announcements that are within schedule.
+        # 读取所有已启用公告，随后判断其展示时间范围。
         stmt = select(AnnouncementORM).where(AnnouncementORM.enabled.is_(True))
         rows: Sequence[AnnouncementORM] = list(
             (await self.session.scalars(stmt)).all()
         )
 
-        # Precompute dismissals for the viewer.
+        # 预先获取访问者的公告关闭记录。
         dismissed_set: set[tuple[int, int]] = set()
         if viewer is not None:
             dismiss_stmt = select(
@@ -176,7 +172,7 @@ class AnnouncementsService:
             for row in await self.session.execute(dismiss_stmt):
                 dismissed_set.add((row[0], row[1]))
 
-        # Filter through the pure visibility predicate.
+        # 使用纯函数可见性判断进行筛选。
         visible: list[AnnouncementORM] = []
         for ann in rows:
             dismissed = (ann.id, ann.dismiss_token) in dismissed_set
@@ -189,22 +185,22 @@ class AnnouncementsService:
             ):
                 visible.append(ann)
 
-        # Sort by starts_at desc (nulls last), id desc for deterministic order.
+        # 按 starts_at 降序（空值置后）、id 降序排列，保证顺序确定。
         def _sort_key(a: AnnouncementORM) -> tuple:
-            # Use a very old date for nulls so they sort last in desc order.
+            # 用最早日期替代空值，使其在降序排列时位于末尾。
             starts = a.starts_at if a.starts_at is not None else datetime.min
             return (starts, a.id)
 
         visible.sort(key=_sort_key, reverse=True)
 
-        # Property 3: at most one modal.
+        # 性质 3：最多展示一个弹窗。
         banners: list[AnnouncementORM] = []
         modal_picked: AnnouncementORM | None = None
         for ann in visible:
             if ann.display_mode == "modal":
                 if modal_picked is None:
                     modal_picked = ann
-                # Skip additional modals.
+                # 跳过其他弹窗公告。
             else:
                 banners.append(ann)
 
@@ -212,13 +208,13 @@ class AnnouncementsService:
         if modal_picked is not None:
             result.append(modal_picked)
 
-        # Re-sort the final list by starts_at desc, id desc.
+        # 再次按 starts_at 降序、id 降序排列最终列表。
         result.sort(key=_sort_key, reverse=True)
 
         return [_orm_to_dto(ann) for ann in result]
 
     # ------------------------------------------------------------------
-    # Admin: CRUD
+    # 管理员增删改查
     # ------------------------------------------------------------------
 
     async def create(
@@ -226,18 +222,17 @@ class AnnouncementsService:
         payload: AnnouncementCreate,
         operator_id: str,
     ) -> AnnouncementDTO:
-        """Create a new announcement and append an audit record.
+        """创建公告并追加审计记录。
 
         Args:
-            payload: Validated creation payload.
-            operator_id: The admin performing the action.
+            payload: 已校验的公告创建数据。
+            operator_id: 执行操作的管理员 ID。
 
         Returns:
-            The created announcement as a DTO.
+            新建公告的 DTO。
         """
-
-        # Legacy admin-token flows use a synthetic operator id. Ensure the
-        # author row exists before writing an announcement that references it.
+        # 旧版管理员令牌流程使用合成的操作者 ID。
+        # 写入引用该 ID 的公告前，先确保作者记录存在。
         from plugin_market_backend.service import MarketService
 
         await MarketService(self.session).ensure_author(operator_id, is_admin=True)
@@ -277,11 +272,21 @@ class AnnouncementsService:
         payload: AnnouncementUpdate,
         operator_id: str,
     ) -> AnnouncementDTO:
-        """Update an existing announcement and append an audit record.
+        """更新已有公告并追加审计记录。
 
-        Only fields explicitly set in ``payload`` are mutated.
+        仅修改 ``payload`` 中明确设置的字段。
+
+        Args:
+            announcement_id: 待更新公告的 ID。
+            payload: 已校验的公告更新数据。
+            operator_id: 执行操作的管理员 ID。
+
+        Returns:
+            更新后的公告 DTO。
+
+        Raises:
+            ApiError: 公告不存在时返回 404。
         """
-
         record = await self._get_or_404(announcement_id)
 
         update_data = payload.model_dump(exclude_unset=True)
@@ -303,12 +308,20 @@ class AnnouncementsService:
         announcement_id: int,
         operator_id: str,
     ) -> AnnouncementDTO:
-        """Disable (archive) an announcement immediately.
+        """立即停用并归档公告。
 
-        Sets ``enabled = False`` and appends an ``ARCHIVE_ANNOUNCEMENT``
-        audit record.
+        设置 ``enabled = False``，并追加 ``ARCHIVE_ANNOUNCEMENT`` 审计记录。
+
+        Args:
+            announcement_id: 待停用公告的 ID。
+            operator_id: 执行操作的管理员 ID。
+
+        Returns:
+            停用后的公告 DTO。
+
+        Raises:
+            ApiError: 公告不存在时返回 404。
         """
-
         record = await self._get_or_404(announcement_id)
         record.enabled = False
         record.updated_at = utc_now()
@@ -327,13 +340,21 @@ class AnnouncementsService:
         announcement_id: int,
         operator_id: str,
     ) -> AnnouncementDTO:
-        """Resurface an announcement by bumping its ``dismiss_token``.
+        """递增公告的 ``dismiss_token``，使公告重新展示。
 
-        This invalidates all existing dismissals so every viewer sees the
-        announcement again. The operation also re-enables the announcement
-        if it was disabled.
+        此操作使已有关闭记录失效，让访问者能够再次看到公告；
+        若公告已停用，也会重新启用。
+
+        Args:
+            announcement_id: 待重新展示公告的 ID。
+            operator_id: 执行操作的管理员 ID。
+
+        Returns:
+            更新后的公告 DTO。
+
+        Raises:
+            ApiError: 公告不存在时返回 404。
         """
-
         record = await self._get_or_404(announcement_id)
         record.dismiss_token += 1
         record.enabled = True
@@ -349,7 +370,7 @@ class AnnouncementsService:
         return _orm_to_dto(record)
 
     # ------------------------------------------------------------------
-    # Dismiss
+    # 关闭公告
     # ------------------------------------------------------------------
 
     async def dismiss(
@@ -357,19 +378,21 @@ class AnnouncementsService:
         announcement_id: int,
         viewer_id: str,
     ) -> tuple[int, int]:
-        """Record a dismissal for ``viewer_id`` on ``announcement_id``.
+        """记录 ``viewer_id`` 对 ``announcement_id`` 的关闭操作。
 
-        Uses INSERT OR IGNORE semantics (Property 9 — idempotence): if the
-        viewer has already dismissed this announcement at the current
-        ``dismiss_token``, the operation is a no-op.
+        使用 ``INSERT OR IGNORE`` 语义保证幂等性（性质 9）：
+        若访问者已在当前 ``dismiss_token`` 下关闭公告，则不执行额外操作。
+
+        Args:
+            announcement_id: 待关闭公告的 ID。
+            viewer_id: 执行关闭操作的访问者 ID。
 
         Returns:
-            A tuple of ``(announcement_id, dismiss_token)`` for the response.
+            用于响应的 ``(announcement_id, dismiss_token)`` 元组。
 
         Raises:
-            ApiError(404): if the announcement does not exist.
+            ApiError: 公告不存在时返回 404。
         """
-
         record = await self._get_or_404(announcement_id)
 
         dismissal = AnnouncementDismissalORM(
@@ -379,20 +402,19 @@ class AnnouncementsService:
             created_at=utc_now(),
         )
 
-        # Use a savepoint so the IntegrityError (duplicate dismiss) does not
-        # invalidate the outer transaction.
+        # 使用保存点，避免重复关闭导致的 IntegrityError 使外层事务失效。
         try:
             async with self.session.begin_nested():
                 self.session.add(dismissal)
         except IntegrityError:
-            # Unique constraint violation — already dismissed at this token.
-            # This is the expected idempotent path (Property 9).
+            # 违反唯一约束表示当前令牌下已有关闭记录。
+            # 这是预期的幂等处理分支（性质 9）。
             pass
 
         return (announcement_id, record.dismiss_token)
 
     # ------------------------------------------------------------------
-    # Admin: list all announcements (paginated)
+    # 管理员：分页列出所有公告
     # ------------------------------------------------------------------
 
     async def admin_list(
@@ -401,12 +423,15 @@ class AnnouncementsService:
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[AnnouncementDTO], int]:
-        """Return all announcements for the admin console (paginated).
+        """为管理员控制台分页返回所有公告。
+
+        Args:
+            offset: 分页起始偏移量。
+            limit: 单页最多返回的条目数。
 
         Returns:
-            A tuple of ``(items, total_count)``.
+            ``(items, total_count)`` 元组，分别为当前页公告和总数。
         """
-
         total = int(
             await self.session.scalar(
                 select(func.count()).select_from(AnnouncementORM)
@@ -424,18 +449,17 @@ class AnnouncementsService:
         return ([_orm_to_dto(row) for row in rows], total)
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # 内部辅助函数
     # ------------------------------------------------------------------
 
     async def _get_or_404(self, announcement_id: int) -> AnnouncementORM:
-        """Fetch an announcement by id or raise 404."""
-
+        """按 ID 获取公告，不存在时抛出 404 错误。"""
         record = await self.session.get(AnnouncementORM, announcement_id)
         if record is None:
             raise ApiError(
                 404,
                 "ANNOUNCEMENT_NOT_FOUND",
-                "Announcement not found.",
+                "未找到公告。",
                 {"announcement_id": announcement_id},
             )
         return record
@@ -448,12 +472,10 @@ class AnnouncementsService:
         operator_id: str,
         reason: str | None = None,
     ) -> None:
-        """Append a ``ReviewRecordORM`` row for an announcement write.
+        """为公告写操作追加一条 ``ReviewRecordORM`` 记录。
 
-        This is synchronous (no await) because it only adds the ORM object to
-        the session; the actual INSERT happens on the next ``flush()``.
+        此方法同步执行，只将 ORM 对象加入会话；实际 INSERT 在下次 ``flush()`` 时发生。
         """
-
         self.session.add(
             ReviewRecordORM(
                 target_type="announcement",
@@ -468,13 +490,12 @@ class AnnouncementsService:
 
 
 # ---------------------------------------------------------------------------
-# Module-level helpers
+# 模块级辅助函数
 # ---------------------------------------------------------------------------
 
 
 def _orm_to_dto(record: AnnouncementORM) -> AnnouncementDTO:
-    """Project an ``AnnouncementORM`` row into the API DTO."""
-
+    """将 ``AnnouncementORM`` 记录转换为 API DTO。"""
     return AnnouncementDTO(
         id=record.id,
         title=record.title,

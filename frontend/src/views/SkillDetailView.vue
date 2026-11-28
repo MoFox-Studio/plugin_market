@@ -70,23 +70,23 @@ const ratingRows = computed(() => {
 let epoch = 0;
 function loadVersions() {
   const id = skillId.value;
-  return versions.load(() =>
-    api.skills.versions(id).then((res) => res.items || []),
+  return versions.load((signal) =>
+    api.skills.versions(id, { signal }).then((res) => res.items || []),
   );
 }
 function loadComments() {
   const id = skillId.value;
-  return comments.load(() =>
-    api.skills.comments(id).then((res) => res.items || []),
+  return comments.load((signal) =>
+    api.skills.comments(id, undefined, { signal }).then((res) => res.items || []),
   );
 }
 function loadRating() {
   const id = skillId.value;
-  return rating.load(() => api.skills.rating(id));
+  return rating.load((signal) => api.skills.rating(id, { signal }));
 }
 function load() {
   const id = skillId.value;
-  void main.load(() => api.skills.get(id));
+  void main.load((signal) => api.skills.get(id, { signal }));
   void loadVersions();
   void loadComments();
   void loadRating();

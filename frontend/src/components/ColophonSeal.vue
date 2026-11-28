@@ -2,15 +2,13 @@
 import { computed, onBeforeUnmount, ref, useId } from 'vue';
 import ImpressionArt from './ImpressionArt.vue';
 import { impressions, type Impression } from '@/composables/rareImpressions';
-import { useMarketPointerReveal } from '@/composables/useMarketPointerReveal';
 import { lockBodyScroll } from '@/composables/bodyScrollLock';
 const titleId = useId();
 const descriptionId = useId();
 const props = defineProps<{ print: Impression }>();
 const plateNumber = computed(() => String(impressions.indexOf(props.print) + 1).padStart(2, '0'));
 const dialog = ref<HTMLDialogElement>(),
-  opener = ref<HTMLButtonElement>(),
-  field = ref<HTMLElement>();
+  opener = ref<HTMLButtonElement>();
 let releaseScroll: (() => void) | undefined;
 function open() {
   if (!dialog.value || dialog.value.open) return;
@@ -26,22 +24,6 @@ function afterClose() {
   opener.value?.focus({ preventScroll: true });
 }
 onBeforeUnmount(() => releaseScroll?.());
-useMarketPointerReveal((pointer) => {
-  const zone = field.value;
-  if (!zone) return;
-  if (pointer.active && pointer.local && !dialog.value?.open) {
-    const bounds = zone.getBoundingClientRect();
-    const x = pointer.x - bounds.left,
-      y = pointer.y - bounds.top;
-    if (x >= 0 && y >= 0 && x < bounds.width && y < bounds.height) {
-      zone.style.setProperty('--seal-x', x + 'px');
-      zone.style.setProperty('--seal-y', y + 'px');
-      zone.classList.add('is-revealing');
-      return;
-    }
-  }
-  zone.classList.remove('is-revealing');
-});
 </script>
 <template>
   <div class="colophon-seal">
@@ -53,15 +35,8 @@ useMarketPointerReveal((pointer) => {
       aria-haspopup="dialog"
       @click="open"
     >
-      <span
-        ref="field"
-        class="seal-window"
-        data-pointer-reveal-local
-        aria-hidden="true"
-        @pointerleave="field?.classList.remove('is-revealing')"
-      >
-        <span class="blank-imprint" lang="la">Ex libris</span>
-        <ImpressionArt class="secret-ink" :print="print" />
+      <span class="seal-window" aria-hidden="true">
+        <ImpressionArt class="seal-art" :print="print" />
       </span>
       <span class="seal-caption"
         ><small>刊末藏印 · {{ String(impressions.indexOf(print) + 1).padStart(2, '0') }}</small
@@ -78,25 +53,25 @@ useMarketPointerReveal((pointer) => {
     >
       <div class="print-sheet">
         <header>
-        <span>MOFOX GAZETTE <span class="print-series"> / THE HIDDEN ATLAS</span></span
+        <span>MoFox 市场报 <span class="print-series"> / 隐秘图集</span></span
           ><button type="button" aria-label="合上图版" autofocus @click="close">
             合上 ×
           </button>
         </header>
         <div class="print-spread">
           <figure class="print-artwork">
-            <div class="plate-registration" aria-hidden="true"><span>FIG. {{ plateNumber }}</span><span>PRIVATE IMPRESSION</span></div>
+            <div class="plate-registration" aria-hidden="true"><span>图 {{ plateNumber }}</span><span>私人藏印</span></div>
             <ImpressionArt class="collector-print" :print="print" />
             <figcaption>{{ print.detail }}</figcaption>
           </figure>
           <div class="print-editorial">
-            <span class="print-volume">EX LIBRIS <b>{{ plateNumber }}</b></span>
+            <span class="print-volume">藏书票 <b>{{ plateNumber }}</b></span>
             <span class="print-collection">{{ print.collection }}</span>
             <h2 :id="titleId">{{ print.name }}</h2>
             <p class="print-latin">{{ print.caption }}</p>
             <div class="print-rule" aria-hidden="true">✦</div>
             <p :id="descriptionId" class="print-description">{{ print.description }}</p>
-            <span class="print-signature">The hidden atlas</span>
+            <span class="print-signature">隐秘图集</span>
           </div>
         </div>
       </div>
@@ -143,26 +118,12 @@ useMarketPointerReveal((pointer) => {
   bottom: 6px;
   border-width: 0 1px 1px 0;
 }
-.blank-imprint {
-  color: var(--ink-500);
-  font: 26px/1 var(--font-script);
-}
-.is-revealing .blank-imprint {
-  visibility: hidden;
-}
-.secret-ink {
+.seal-art {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
-  clip-path: circle(0 at 0 0);
-}
-.is-revealing .secret-ink {
-  clip-path: circle(
-    calc(var(--market-pointer-radius, 110px) * 1.5) at var(--seal-x)
-      var(--seal-y)
-  );
 }
 .seal-caption {
   display: flex;

@@ -1,4 +1,4 @@
-"""Property tests for bulk operation commutativity across distinct plugins."""
+"""不同插件之间批量操作可交换性的属性测试。"""
 
 from __future__ import annotations
 
@@ -42,8 +42,8 @@ def _plugin_payload(plugin_id: str) -> PluginCreate:
     return PluginCreate(
         plugin_id=plugin_id,
         display_name=plugin_id,
-        summary=f'summary for {plugin_id}',
-        description=f'description for {plugin_id}',
+        summary=f'{plugin_id} 的摘要',
+        description=f'{plugin_id} 的说明',
         repository_url=f'https://github.com/MoFox-Studio/{plugin_id}',
         license='MIT',
         categories=['tool'],
@@ -92,9 +92,9 @@ async def _run_bulk(assignments: list[tuple[str, str]]) -> dict[str, tuple[bool,
         for action, plugin_ids in grouped.items():
             params = None
             if action == 'set_trust_level':
-                params = {'trust_level': 'official', 'reason': 'trusted'}
+                params = {'trust_level': 'official', 'reason': '可信'}
             elif action == 'delete':
-                params = {'reason': 'cleanup'}
+                params = {'reason': '清理'}
             await service.bulk_apply('admin', plugin_ids, action, params)
 
     return await _project_state()
@@ -119,11 +119,11 @@ async def _run_serial(assignments: list[tuple[str, str]], permutation: list[int]
                 plugin = await market._get_plugin_orm(plugin_id)
                 plugin.trust_level = TrustLevel.OFFICIAL
                 plugin.updated_at = utc_now()
-                await market._record('plugin', plugin_id, ReviewAction.BULK_SET_TRUST_LEVEL, None, TrustLevel.OFFICIAL, 'admin', 'trusted')
+                await market._record('plugin', plugin_id, ReviewAction.BULK_SET_TRUST_LEVEL, None, TrustLevel.OFFICIAL, 'admin', '可信')
                 await session.flush()
             elif action == 'delete':
                 await market.delete_plugin(plugin_id)
-                await market._record('plugin', plugin_id, ReviewAction.BULK_DELETE, None, None, 'admin', 'cleanup')
+                await market._record('plugin', plugin_id, ReviewAction.BULK_DELETE, None, None, 'admin', '清理')
                 await session.flush()
 
     return await _project_state()

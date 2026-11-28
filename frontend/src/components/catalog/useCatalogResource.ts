@@ -1,7 +1,7 @@
 import { onBeforeUnmount, shallowReactive } from 'vue';
 import { ApiError } from '@/api';
 
-/** Only the newest attempt may update a region, including after a route change. */
+/** 仅允许最新一次请求更新区域，路由切换后也不例外。 */
 export function useCatalogResource<T>(initial: () => T) {
   const state = shallowReactive({
     data: initial(),
@@ -10,28 +10,44 @@ export function useCatalogResource<T>(initial: () => T) {
     status: 0,
   });
   let attempt = 0;
-  function reset() {
+  let cancelPending: (() => void) | undefined;
+  function invalidate() {
     attempt++;
+    cancelPending?.();
+    cancelPending = undefined;
+  }
+  function reset() {
+    invalidate();
     state.data = initial();
     state.loading = false;
     state.error = '';
     state.status = 0;
   }
-  async function load(fetcher: () => Promise<T>) {
-    const current = ++attempt;
+  async function load(fetcher: (signal: AbortSignal) => Promise<T>) {
+    invalidate();
+    const current = attempt;
+    const controller = new AbortController();
     state.loading = true;
     state.error = '';
     state.status = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const interrupted = new Promise<never>((_, reject) => {
+      cancelPending = () => {
+        clearTimeout(timer);
+        reject(new DOMException('请求已取消。', 'AbortError'));
+        controller.abort();
+      };
+      // 在 fetcher/API 的计时器之前启动，并在中止传输之前拒绝请求。
+      // 即使中止操作立即使 fetch 失败，超时也必须保持为错误状态。
+      timer = setTimeout(() => {
+        reject(new ApiError('请求超时，请重试。', 408, 'REQUEST_TIMEOUT'));
+        controller.abort();
+      }, 12000);
+    });
     try {
       const result = await Promise.race([
-        fetcher(),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error('请求超时，请重试。')),
-            12000,
-          );
-        }),
+        interrupted,
+        fetcher(controller.signal),
       ]);
       if (current === attempt) state.data = result;
     } catch (error) {
@@ -46,12 +62,16 @@ export function useCatalogResource<T>(initial: () => T) {
               ? error.message
               : '暂时无法加载，请重试。';
     } finally {
-      if (timer) clearTimeout(timer);
-      if (current === attempt) state.loading = false;
+      clearTimeout(timer);
+      if (current === attempt) {
+        cancelPending = undefined;
+        state.loading = false;
+      }
     }
   }
   onBeforeUnmount(() => {
-    attempt++;
+    invalidate();
+    state.loading = false;
   });
   return Object.assign(state, { load, reset });
 }

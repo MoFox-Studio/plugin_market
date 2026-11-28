@@ -144,7 +144,7 @@ function exportCsv(): void {
         .map(
           (value) =>
             `"${String(value)
-              .replace(/^[=+@\-\t\r]/, "'$&")
+              .replace(/^[=+@\-\t\r]/, '\'$&')
               .replace(/"/g, '""')}"`,
         )
         .join(','),

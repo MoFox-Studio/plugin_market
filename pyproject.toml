@@ -1,7 +1,7 @@
 [project]
 name = "plugin-market-backend"
 version = "0.2.0"
-description = "Production-ready backend for the Neo-MoFox plugin market API."
+description = "用于 Neo-MoFox 插件市场 API 的生产级后端。"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -7,7 +7,7 @@
     </pattern>
     <symbol id="lycoris-radiata" viewBox="0 0 640 480">
       <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-        <!-- A single naked scape. The papery spathe is at the pedicel junction. -->
+        <!-- 一根无叶花葶。纸质总苞位于花梗汇合处。 -->
         <path d="M220 427c17-35 32-73 38-109 4-23 7-39 8-56m-39 165c15-36 28-72 34-110 4-23 7-39 8-54" stroke-width="1.7"/>
         <path d="M227 413c11-27 21-58 28-89m5-17 4-23m-31 113 8-20m1-11 8-24" stroke-width=".55"/>
         <path d="M265 266c-19-24-37-48-81-84m84 82c5-36 12-76 10-123m-8 121c24-30 58-58 96-85m-98 85c2-10 4-20 5-29m-2 28c27-44 52-93 74-143" stroke-width="1.45"/>
@@ -15,14 +15,14 @@
         <path d="M265 267c-9-10-18-15-32-18 9-2 23 3 34 12 1-13-2-23-8-34 13 8 17 19 13 32 12-9 22-13 36-13-11 6-20 13-36 19Z" fill="url(#lycoris-petal-hatch)" stroke-width="1.15"/>
         <path d="m241 251 20 10m3-23 4 17m13 4 16-9" stroke-width=".5"/>
 
-        <!-- The small, oblique bud retains a folded perianth. -->
+        <!-- 倾斜的小花苞仍保留着折叠的花被。 -->
         <g transform="translate(345 118)">
           <path d="M0 4c-1-19 2-40 10-58 4-9 10-17 15-16 4 1 1 13-3 23C16-29 8-10 0 4Z" fill="url(#lycoris-petal-hatch)" stroke-width="1.45"/>
           <path d="M2-4c7-20 16-38 21-56M4-10c0-23 5-43 13-55m-4 39 10-21M-1 3c-7-14-15-22-24-25 11-1 22 9 25 21" stroke-width=".8"/>
           <path d="M1 0c15-20 29-33 44-38 7-2 11 0 14 3" stroke-width=".7"/><ellipse cx="59" cy="-35" rx="3.4" ry=".95" transform="rotate(23 59 -35)" fill="currentColor" stroke="none"/>
         </g>
 
-        <!-- Upper flower, seen almost face-on. Its tepals turn away from the throat. -->
+        <!-- 上方花朵近乎正面朝向观者，花被片自喉部向外反卷。 -->
         <g transform="translate(278 141)">
           <g fill="url(#lycoris-petal-hatch)" stroke-width="1.35">
             <path d="M0 2c-18-13-26-32-29-51-3-17 0-29 7-30 7 0 9 8 6 13-2 4-5 7-9 7 6-6 9-11 5-13-5-1-6 8-4 19C-20-32-12-14 0 2Z"/>
@@ -45,7 +45,7 @@
           <g fill="currentColor" stroke="none"><ellipse cx="-40" cy="-87" rx="3.8" ry="1.1" transform="rotate(-69 -40 -87)"/><ellipse cx="-5" cy="-93" rx="3.6" ry="1.1" transform="rotate(-46 -5 -93)"/><ellipse cx="32" cy="-81" rx="3.7" ry="1.05" transform="rotate(-35 32 -81)"/><ellipse cx="70" cy="-68" rx="3.9" ry="1.1" transform="rotate(-14 70 -68)"/><ellipse cx="87" cy="-32" rx="3.8" ry="1.05" transform="rotate(11 87 -32)"/><ellipse cx="87" cy="4" rx="3.6" ry="1.05" transform="rotate(31 87 4)"/><circle cx="55" cy="-86" r="1.4"/></g>
         </g>
 
-        <!-- Left flower in profile: the long filaments reach outward into open paper. -->
+        <!-- 左侧花朵呈侧面，长花丝向外伸入纸面的留白。 -->
         <g transform="translate(184 182)">
           <g fill="url(#lycoris-petal-hatch)" stroke-width="1.45">
             <path d="M2 1c-2-18-13-36-26-45-12-8-23-8-26-2-3 6 2 12 7 12-5-4-5-8-1-9 8-3 19 5 25 13C-11-18-4-8 2 1Z"/>
@@ -60,7 +60,7 @@
           <g fill="currentColor" stroke="none"><ellipse cx="-95" cy="-12" rx="4" ry="1.1" transform="rotate(-13 -95 -12)"/><ellipse cx="-69" cy="-76" rx="3.6" ry="1.05" transform="rotate(43 -69 -76)"/><ellipse cx="-84" cy="-57" rx="3.8" ry="1.05" transform="rotate(25 -84 -57)"/><ellipse cx="-86" cy="26" rx="3.7" ry="1.05" transform="rotate(-38 -86 26)"/><ellipse cx="-59" cy="55" rx="3.8" ry="1.05" transform="rotate(-64 -59 55)"/><ellipse cx="-12" cy="68" rx="3.8" ry="1.05" transform="rotate(-81 -12 68)"/></g>
         </g>
 
-        <!-- The right flower is tilted toward the viewer, not a rotated copy. -->
+        <!-- 右侧花朵朝观者倾斜，并非旋转后的复制品。 -->
         <g transform="translate(366 177)">
           <g fill="url(#lycoris-petal-hatch)" stroke-width="1.45">
             <path d="M0 0c1-21 9-39 22-50 10-9 20-10 24-3 3 7-2 13-8 13 6-5 6-9 2-10-8-1-17 8-23 17C10-22 5-9 0 0Z"/>
@@ -75,7 +75,7 @@
           <g fill="currentColor" stroke="none"><ellipse cx="75" cy="-55" rx="3.9" ry="1.05" transform="rotate(-11 75 -55)"/><ellipse cx="99" cy="-33" rx="3.9" ry="1.1" transform="rotate(10 99 -33)"/><ellipse cx="106" cy="6" rx="4" ry="1.1" transform="rotate(26 106 6)"/><ellipse cx="86" cy="51" rx="3.8" ry="1.05" transform="rotate(49 86 51)"/><ellipse cx="48" cy="74" rx="3.8" ry="1.05" transform="rotate(76 48 74)"/><ellipse cx="2" cy="80" rx="3.8" ry="1.05" transform="rotate(-76 2 80)"/><circle cx="112" cy="-15" r="1.4"/></g>
         </g>
 
-        <!-- Lower floret is deliberately foreshortened, with an open throat. -->
+        <!-- 下方小花刻意采用透视缩短的画法，喉部敞开。 -->
         <g transform="translate(273 233)">
           <g fill="url(#lycoris-petal-hatch)" stroke-width="1.5">
             <path d="M-1-1c-13-12-26-17-39-13-12 3-18 11-14 16 4 5 10 2 12-3-6 4-10 4-8 0 6-9 21-10 49 0Z"/>
@@ -91,7 +91,7 @@
           <path d="M-3-2q3-4 6 0l-1 5h-3Z" stroke-width="1"/>
         </g>
 
-        <!-- Detached morphological details have their own breathing space. -->
+        <!-- 单独绘制的形态细节各自留有充足的留白。 -->
         <g transform="translate(451 378)">
           <path d="M-12 24c11-18 17-39 13-58-3-16-13-27-22-22-8 5-5 17 3 21-7-8-7-15-2-16 8-2 14 9 15 21 2 18-2 36-7 54Z" fill="url(#lycoris-petal-hatch)" stroke-width="1.4"/>
           <path d="M-9 14c6-18 8-33 4-48m-2 5-9-10m10 18-8-9m8 17-5-6" stroke-width=".6"/>
@@ -103,9 +103,9 @@
       </g>
       <g fill="currentColor" font-family="Georgia, 'Times New Roman', serif">
         <text x="69" y="41" font-size="12" letter-spacing="2.4">LYCORIS RADIATA</text>
-        <text x="69" y="57" font-size="8.5" letter-spacing="1.2" opacity=".7">AMARYLLIDACEAE · BOTANICAL STUDIES</text>
-        <text x="433" y="433" font-size="10" font-style="italic">a. perianth</text>
-        <text x="493" y="433" font-size="10" font-style="italic">b. stamen</text>
+        <text x="69" y="57" font-size="8.5" letter-spacing="1.2" opacity=".7">AMARYLLIDACEAE · 植物学研究</text>
+        <text x="433" y="433" font-size="10" font-style="italic">a. 花被</text>
+        <text x="493" y="433" font-size="10" font-style="italic">b. 雄蕊</text>
         <text x="559" y="176" font-size="11" font-style="italic">a.</text>
         <text x="569" y="464" text-anchor="end" font-size="17" font-style="italic">design by Lycoris radiata</text>
       </g>

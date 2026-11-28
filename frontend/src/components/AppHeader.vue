@@ -17,7 +17,7 @@ const label = computed(
   () =>
     (
       ({
-        home: '发现 / DISCOVER',
+        home: '发现',
         market: '插件目录',
         plugin: '插件档案',
         skills: '技能目录',
@@ -56,7 +56,7 @@ async function logout() {
 }
 </script>
 <template>
-  <header class="market-header">
+  <header class="market-header" :class="{ 'is-home': route.name === 'home' }">
     <button
       class="header-menu icon-button"
       aria-label="打开导航"
@@ -68,11 +68,11 @@ async function logout() {
       ><FoxMark :size="24" /><strong>MOFOX</strong></router-link
     >
     <span class="header-location"
-      ><i v-if="route.name !== 'home'" class="running-title" lang="en"
-        >MoFox Gazette</i
+      ><i v-if="route.name !== 'home'" class="running-title" lang="zh-CN"
+        >MoFox 市场报</i
       >{{ label }}</span
     >
-    <form class="header-search" role="search" @submit.prevent="onSearch">
+    <form v-if="route.name !== 'home'" class="header-search" role="search" @submit.prevent="onSearch">
       <AppIcon name="search" :size="16" /><input
         v-model="searchQuery"
         name="q"
@@ -83,11 +83,13 @@ async function logout() {
     </form>
     <div class="header-actions">
       <button
-        class="icon-button"
+        class="header-theme icon-button"
         :aria-label="dark ? '切换浅色主题' : '切换深色主题'"
+        :title="dark ? '切换到浅色模式' : '切换到深色模式'"
         @click="toggleTheme"
       >
         <AppIcon :name="dark ? 'sun' : 'moon'" />
+        <span>{{ dark ? '浅色' : '深色' }}</span>
       </button>
       <span
         v-if="auth.loading && !auth.loaded"
@@ -117,3 +119,29 @@ async function logout() {
     </div>
   </header>
 </template>
+<style scoped>
+.is-home .header-actions {
+  margin-inline-start: auto;
+}
+.header-theme {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  min-width: 70px;
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-900);
+  font: 500 12px/1.4 var(--font-sans);
+  white-space: nowrap;
+}
+.header-theme:focus-visible {
+  outline: 2px solid var(--blue-500);
+  outline-offset: 3px;
+}
+</style>

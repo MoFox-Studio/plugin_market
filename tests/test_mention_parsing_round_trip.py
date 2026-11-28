@@ -1,4 +1,4 @@
-"""Property tests for mention parsing round-trip stability."""
+"""提及内容解析与渲染往返稳定性的属性测试。"""
 
 from __future__ import annotations
 

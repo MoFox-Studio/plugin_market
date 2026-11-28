@@ -1,3 +1,74 @@
+<script lang="ts">
+type ThreeModule = typeof import('three');
+interface LogoPoints {
+  positions: Float32Array;
+  colors: Float32Array;
+  alphas: Float32Array;
+}
+
+// 源像素及其线性颜色不可变。跨路由访问复用原有的两种采样密度，
+// 避免为每个 WebGL 场景重复解码和采样同一标志。
+let logoImage: Promise<HTMLImageElement> | null = null;
+const pointCache = new Map<number, LogoPoints>();
+function loadLogo(): Promise<HTMLImageElement> {
+  if (!logoImage) {
+    logoImage = new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => {
+        image.onload = image.onerror = null;
+        resolve(image);
+      };
+      image.onerror = () => {
+        image.onload = image.onerror = null;
+        reject(new Error('标志图像不可用'));
+      };
+      image.src = `${import.meta.env.BASE_URL}logo.png`;
+    }).catch((error) => {
+      logoImage = null;
+      throw error;
+    });
+  }
+  return logoImage;
+}
+function logoPoints(image: HTMLImageElement, width: number, T: ThreeModule): LogoPoints {
+  const cached = pointCache.get(width);
+  if (cached) return cached;
+  const sample = document.createElement('canvas');
+  sample.width = width;
+  sample.height = Math.round((width * image.naturalHeight) / image.naturalWidth);
+  const context = sample.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('标志图像采样不可用');
+  context.drawImage(image, 0, 0, sample.width, sample.height);
+  const pixels = context.getImageData(0, 0, sample.width, sample.height).data;
+  const positions: number[] = [], colors: number[] = [], alphas: number[] = [];
+  const color = new T.Color();
+  for (let y = 0; y < sample.height; y++) {
+    for (let x = 0; x < sample.width; x++) {
+      const i = (y * sample.width + x) * 4;
+      const alpha = pixels[i + 3] / 255;
+      if (alpha < 0.05) continue;
+      const r = pixels[i] / 255, g = pixels[i + 1] / 255, b = pixels[i + 2] / 255;
+      const luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
+      positions.push(
+        (x / (sample.width - 1) - 0.5) * 4.2,
+        ((0.5 - y / (sample.height - 1)) * 4.2 * sample.height) / sample.width,
+        (0.5 - luminance) * 0.08,
+      );
+      color.setRGB(r, g, b, T.SRGBColorSpace);
+      colors.push(color.r, color.g, color.b);
+      alphas.push(alpha);
+    }
+  }
+  sample.width = sample.height = 0;
+  const points = {
+    positions: new Float32Array(positions),
+    colors: new Float32Array(colors),
+    alphas: new Float32Array(alphas),
+  };
+  pointCache.set(width, points);
+  return points;
+}
+</script>
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import FoxMark from './FoxMark.vue';
@@ -19,7 +90,6 @@ onMounted(() => {
   let frame = 0;
   let render: ((time: number) => void) | null = null;
   let releaseScene = () => {};
-  let cancelImage = () => {};
 
   function stop() {
     cancelAnimationFrame(frame);
@@ -43,81 +113,18 @@ onMounted(() => {
     playing.value = true;
     if (!frame) frame = requestAnimationFrame(tick);
   }
-  function loadLogo(): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      function clear() {
-        image.onload = null;
-        image.onerror = null;
-        cancelImage = () => {};
-      }
-      image.onload = () => {
-        clear();
-        resolve(image);
-      };
-      image.onerror = () => {
-        clear();
-        reject(new Error('Logo unavailable'));
-      };
-      cancelImage = () => {
-        clear();
-        image.src = '';
-        reject(new Error('Logo loading cancelled'));
-      };
-      image.src = `${import.meta.env.BASE_URL}logo.png`;
-    });
-  }
-  async function initialize() {
+async function initialize() {
     if (initializing || render || failed || !canAnimate()) return;
     initializing = true;
     try {
-      const image = await loadLogo();
-      if (!canAnimate()) return;
-      const T = await import('three');
+      // 两个网络请求互不依赖，应并发启动而非串行执行。
+      const [image, T] = await Promise.all([loadLogo(), import('three')]);
       if (!canAnimate()) return;
 
-      // Every particle comes from the original PNG's alpha and RGB pixels.
-      // No hand-drawn outline, replacement palette or generated fox geometry.
-      const sample = document.createElement('canvas');
+      // 每个粒子都来自原始 PNG 像素的透明度和 RGB 颜色。
+      // 不使用手绘轮廓、替代调色板或生成的狐狸几何模型。
       const width = window.innerWidth < 760 ? 88 : 128;
-      sample.width = width;
-      sample.height = Math.round(
-        (width * image.naturalHeight) / image.naturalWidth,
-      );
-      const context = sample.getContext('2d', { willReadFrequently: true });
-      if (!context) return;
-      context.drawImage(image, 0, 0, sample.width, sample.height);
-      const pixels = context.getImageData(
-        0,
-        0,
-        sample.width,
-        sample.height,
-      ).data;
-      const positions: number[] = [],
-        colors: number[] = [],
-        alphas: number[] = [];
-      const color = new T.Color();
-      for (let y = 0; y < sample.height; y++) {
-        for (let x = 0; x < sample.width; x++) {
-          const i = (y * sample.width + x) * 4;
-          const alpha = pixels[i + 3] / 255;
-          if (alpha < 0.05) continue;
-          const r = pixels[i] / 255,
-            g = pixels[i + 1] / 255,
-            b = pixels[i + 2] / 255;
-          const luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
-          positions.push(
-            (x / (sample.width - 1) - 0.5) * 4.2,
-            ((0.5 - y / (sample.height - 1)) * 4.2 * sample.height) /
-              sample.width,
-            (0.5 - luminance) * 0.08,
-          );
-          color.setRGB(r, g, b, T.SRGBColorSpace);
-          colors.push(color.r, color.g, color.b);
-          alphas.push(alpha);
-        }
-      }
-      sample.width = sample.height = 0;
+      const { positions, colors, alphas } = logoPoints(image, width, T);
       if (!positions.length) return;
 
       const renderer = new T.WebGLRenderer({
@@ -188,20 +195,32 @@ onMounted(() => {
       };
       geometry.setAttribute(
         'position',
-        new T.Float32BufferAttribute(positions, 3),
+        new T.BufferAttribute(positions, 3),
       );
-      geometry.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
+      geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
       geometry.setAttribute(
         'sourceAlpha',
-        new T.Float32BufferAttribute(alphas, 1),
+        new T.BufferAttribute(alphas, 1),
       );
       scene.add(new T.Points(geometry, material));
       root.appendChild(renderer.domElement);
       renderer.domElement.addEventListener('webglcontextlost', lost);
+      let resizePending = true;
+      let renderedWidth = 0, renderedHeight = 0;
       function resize() {
+        // 内容尺寸相同时，ResizeObserver 也可能重复触发。
+        // 下一次常规动画帧只调整一次尺寸并绘制一次。
+        resizePending = true;
+      }
+      function applyResize() {
+        if (!resizePending) return;
+        resizePending = false;
         if (disposed || released) return;
         const w = Math.max(1, root.clientWidth),
           h = Math.max(1, root.clientHeight);
+        if (w === renderedWidth && h === renderedHeight) return;
+        renderedWidth = w;
+        renderedHeight = h;
         const scale = (Math.min(w, h) * 0.82) / 4.2;
         renderer.setSize(w, h);
         camera.left = -w / (2 * scale);
@@ -209,14 +228,13 @@ onMounted(() => {
         camera.top = h / (2 * scale);
         camera.bottom = -h / (2 * scale);
         camera.updateProjectionMatrix();
-        renderer.render(scene, camera);
       }
       if (typeof ResizeObserver !== 'undefined') {
         resizeObserver = new ResizeObserver(resize);
         resizeObserver.observe(root);
       } else window.addEventListener('resize', resize);
-      resize();
       render = (time) => {
+        applyResize();
         material.uniforms.time.value = time * 0.001;
         renderer.render(scene, camera);
       };
@@ -270,7 +288,6 @@ onMounted(() => {
   document.addEventListener('visibilitychange', visibility);
   syncMotion();
   cleanup = () => {
-    cancelImage();
     stop();
     releaseScene();
     intersection?.disconnect();

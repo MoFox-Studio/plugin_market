@@ -33,13 +33,13 @@ onBeforeUnmount(() => clearTimeout(timer));
       </p></template
     >
     <div v-else-if="error" class="async-message" role="status">
-      <span class="eyebrow">REQUEST FAILED</span>
+      <span class="eyebrow">请求失败</span>
       <h3>{{ label }}加载失败</h3>
       <p>{{ error }}</p>
       <button class="btn" @click="$emit('retry')">重新加载 ↗</button>
     </div>
     <div v-else-if="empty" class="async-message">
-      <span class="eyebrow">NO RESULTS</span>
+      <span class="eyebrow">暂无结果</span>
       <h3>暂时没有{{ label }}</h3>
       <slot name="empty" />
     </div>

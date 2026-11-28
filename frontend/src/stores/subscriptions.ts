@@ -2,11 +2,11 @@ import { reactive } from 'vue'
 import { defineStore } from 'pinia'
 
 /**
- * Lightweight reactive overrides for plugin subscription state.
+ * 插件订阅状态的轻量响应式覆盖层。
  *
- * When a subscription is toggled outside of PluginCard (e.g. Me page),
- * we record the new state here so every PluginCard instance can react
- * without re-fetching data from the server.
+ * 在 PluginCard 之外（例如工作台页面）切换订阅时，
+ * 在此记录新状态，让所有 PluginCard 实例同步响应，
+ * 无需重新向服务器请求数据。
  */
 export const useSubscriptionStore = defineStore('subscriptions', () => {
   const overrides = reactive<Record<string, boolean>>({})

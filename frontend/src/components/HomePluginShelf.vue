@@ -18,15 +18,10 @@ const entries = computed(() => {
       )
         return [];
       seen.add(item.plugin_id);
-      const parts = item.display_name.split(/\s+·\s+/);
-      const title = parts.length === 2 ? parts[1] : item.display_name;
-      const caption =
-        parts.length === 2 ? parts[0] : categoryLabel(item.categories?.[0]);
       return [
         {
           item,
-          title,
-          caption,
+          caption: categoryLabel(item.categories?.[0]),
           path: '/plugin/' + encodeURIComponent(item.plugin_id),
         },
       ];
@@ -41,7 +36,7 @@ const entries = computed(() => {
     aria-labelledby="shelf-title"
   >
     <header>
-      <span aria-hidden="true" lang="en">INDEX</span>
+      <span aria-hidden="true" lang="zh-CN">索引</span>
       <h2 id="shelf-title">插件速览</h2>
     </header>
     <ul>
@@ -58,7 +53,7 @@ const entries = computed(() => {
               :tags="entry.item.tags"
           /></span>
           <span class="sample-title"
-            ><strong>{{ entry.title }}</strong
+            ><strong>{{ entry.item.display_name }}</strong
             ><small>{{ entry.caption }}</small></span
           >
         </router-link>
@@ -99,7 +94,7 @@ const entries = computed(() => {
 }
 .plugin-shelf header > span {
   color: var(--blue-700);
-  font: 600 10px/1 var(--font-mono);
+  font: 600 12px/1.4 var(--font-mono);
   letter-spacing: 0.15em;
 }
 .plugin-shelf h2 {
@@ -156,25 +151,29 @@ const entries = computed(() => {
 }
 .sample-title {
   display: grid;
+  flex: 1 1 auto;
+  align-content: center;
   gap: 3px;
   min-width: 0;
 }
 .sample-title strong,
 .sample-title small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .sample-title strong {
   color: var(--ink-900);
-  font: 800 clamp(16px, 1.6vw, 23px) / 1.3 var(--font-editorial);
+  font: 700 clamp(16px, 1.25vw, 20px) / 1.35 var(--font-sans);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  text-box: trim-both cap alphabetic;
 }
 .sample-title small {
   color: var(--ink-500);
-  font: italic 12px/1.35 var(--font-reading);
+  font: italic 12px/1.6 var(--font-reading);
 }
 .sample-tools {
   display: flex;
+  flex-shrink: 0;
   border-left: 1px solid var(--line);
   padding-left: 4px;
 }
@@ -187,7 +186,12 @@ const entries = computed(() => {
   min-width: 44px;
   min-height: 44px;
   color: var(--blue-700);
-  font: 600 11px/1.3 var(--font-sans);
+  font: 700 13px/1.4 var(--font-sans);
+}
+.sample-tools a span {
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
 }
 .sample-tools a:hover,
 .sample-tools a:focus-visible {

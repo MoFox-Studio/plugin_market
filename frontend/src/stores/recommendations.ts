@@ -164,8 +164,8 @@ export const useRecommendationsStore = defineStore('recommendations', () => {
   ) {
     const batch = state(context);
     if (batch.loading) return;
-    // Keep the user's batch on return; explicit feedback/identity/content
-    // mutations invalidate it, and advancing always revalidates on the server.
+    // 返回页面时保留用户当前批次；明确的反馈、身份或内容变更会使其失效。
+    // 获取下一批次时始终由服务器重新验证。
     if (batch.data && !options.force && !options.next) return;
     if (options.next && !batch.data?.next_cursor) {
       batch.exhausted = true;

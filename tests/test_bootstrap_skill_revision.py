@@ -1,4 +1,4 @@
-"""Regression tests for bootstrap revision detection around skill tables."""
+"""初始化时识别技能表迁移版本的回归测试。"""
 
 from __future__ import annotations
 
@@ -99,8 +99,7 @@ def _create_skill_tables(connection, *, with_readme: bool) -> None:
 
 
 def test_bootstrap_detects_skill_readme_revision_without_alembic_version() -> None:
-    """Existing skill tables should be detected as 0007, not mis-stamped to 0005."""
-
+    """已有技能表应识别为 0007，而不是误标为 0005。"""
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
         _create_base_market_tables(connection)
@@ -110,8 +109,7 @@ def test_bootstrap_detects_skill_readme_revision_without_alembic_version() -> No
 
 
 def test_bootstrap_upgrades_stale_alembic_version_to_skill_readme_revision() -> None:
-    """A database marked 0005 but already containing skill tables should be re-stamped to 0007."""
-
+    """已标记为 0005 但包含技能表的数据库应重新标记为 0007。"""
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
         _create_base_market_tables(connection)
@@ -131,8 +129,7 @@ def test_bootstrap_upgrades_stale_alembic_version_to_skill_readme_revision() -> 
 
 
 def test_bootstrap_detects_pre_readme_skill_revision() -> None:
-    """Skill tables without readme_markdown should map to 0006."""
-
+    """缺少 readme_markdown 的技能表应对应 0006。"""
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
         _create_base_market_tables(connection)

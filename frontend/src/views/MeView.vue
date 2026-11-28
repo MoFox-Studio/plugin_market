@@ -74,7 +74,7 @@ const subscriptionsBusy = ref(false);
 const follows = ref<MyFollowItem[]>([]);
 const followsBusy = ref(false);
 
-// --- skills ---
+// --- Skill 管理 ---
 const mySkills = ref<Skill[]>([]);
 const skillsBusy = ref(false);
 const skillPublishOpen = ref(false);
@@ -103,7 +103,7 @@ async function copyText(value: string, successMessage: string) {
       ta.select();
       const copied = document.execCommand('copy');
       document.body.removeChild(ta);
-      if (!copied) throw new Error('Copy failed');
+      if (!copied) throw new Error('复制失败');
     }
     toast.show(successMessage, 'ok');
   } catch {
@@ -416,7 +416,7 @@ async function unfollow(authorId: string) {
   }
 }
 
-// --- skills ---
+// --- Skill 管理 ---
 async function loadMySkills() {
   const owner = identityVersion;
   skillsBusy.value = true;
@@ -916,7 +916,7 @@ onBeforeUnmount(() => {
           </section>
         </div>
 
-        <!-- My Skills -->
+        <!-- 我的 Skill -->
         <section v-show="activeTab === 'skills'" class="me-card">
           <div class="me-section-head">
             <h2>我的 Skills</h2>
@@ -991,7 +991,7 @@ onBeforeUnmount(() => {
           class="me-layout"
           data-anim="enter-4"
         >
-          <!-- Plugin list (left) -->
+          <!-- 插件列表（左侧） -->
           <aside class="me-plugin-list">
             <div class="me-section-head">
               <h2>我的插件</h2>
@@ -1052,7 +1052,7 @@ onBeforeUnmount(() => {
             />
           </aside>
 
-          <!-- Main detail -->
+          <!-- 主要详情 -->
           <div class="me-main">
             <PageSkeleton v-if="snapshotLoading" type="detail" :count="3" />
             <div
@@ -1199,7 +1199,7 @@ onBeforeUnmount(() => {
                           statusText(v.status)
                         }}</span>
                         <span v-if="v.is_yanked" class="badge status-blocked"
-                          >已 yank</span
+                          >已撤回</span
                         >
                       </div>
                       <p>{{ v.release_title || v.version }}</p>
@@ -1207,7 +1207,7 @@ onBeforeUnmount(() => {
                         >{{ formatDate(v.published_at) }} ·
                         {{ formatBytes(v.file_size) }} ·
                         {{ formatNumber(v.download_count) }} 下载 · API
-                        {{ v.plugin_api_version }} · Host >=
+                        {{ v.plugin_api_version }} · 宿主 >=
                         {{ v.min_host_version
                         }}{{
                           v.max_host_version ? ` <= ${v.max_host_version}` : ''
@@ -1220,7 +1220,7 @@ onBeforeUnmount(() => {
                         :href="v.release_url"
                         target="_blank"
                         rel="noreferrer noopener"
-                        >Release</a
+                        >发布页</a
                       >
                       <button
                         v-if="!v.is_yanked"
@@ -1284,7 +1284,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-      <!-- Metadata editor modal -->
+      <!-- 资料编辑弹窗 -->
       <div
         v-if="metadataOpen"
         class="me-modal-backdrop"
@@ -1301,7 +1301,7 @@ onBeforeUnmount(() => {
         >
           <header class="me-modal-head">
             <div>
-              <span class="kicker">EDIT METADATA</span>
+              <span class="kicker">编辑资料</span>
               <h2>编辑插件资料</h2>
             </div>
             <button
@@ -1392,7 +1392,7 @@ onBeforeUnmount(() => {
         </section>
       </div>
 
-      <!-- Skill publish modal -->
+      <!-- Skill 发布弹窗 -->
       <div
         v-if="skillPublishOpen"
         class="me-modal-backdrop"
@@ -1409,7 +1409,7 @@ onBeforeUnmount(() => {
         >
           <header class="me-modal-head">
             <div>
-              <span class="kicker">PUBLISH SKILL</span>
+              <span class="kicker">发布 Skill</span>
               <h2>发布新 Skill</h2>
             </div>
             <button

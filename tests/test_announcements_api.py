@@ -1,4 +1,4 @@
-"""API tests for announcement routes (task 14)."""
+"""公告路由的 API 测试（任务 14）。"""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ async def test_admin_create_list_and_public_active_announcements(client: AsyncCl
     created = await client.post(
         "/api/v1/admin/announcements",
         json={
-            "title": "Maintenance Window",
-            "body_markdown": "Tonight",
+            "title": "维护时段",
+            "body_markdown": "今晚",
             "display_mode": "banner",
             "audience": "all",
         },
@@ -25,20 +25,20 @@ async def test_admin_create_list_and_public_active_announcements(client: AsyncCl
     active = await client.get("/api/v1/announcements/active")
 
     assert created.status_code == 200
-    assert created.json()["title"] == "Maintenance Window"
+    assert created.json()["title"] == "维护时段"
     assert listed.status_code == 200
     assert listed.json()["total"] >= 1
-    assert any(item["title"] == "Maintenance Window" for item in listed.json()["items"])
+    assert any(item["title"] == "维护时段" for item in listed.json()["items"])
     assert active.status_code == 200
-    assert any(item["title"] == "Maintenance Window" for item in active.json())
+    assert any(item["title"] == "维护时段" for item in active.json())
 
 
 async def test_announcement_dismiss_hides_for_same_browser_user(client: AsyncClient) -> None:
     created = await client.post(
         "/api/v1/admin/announcements",
         json={
-            "title": "Dismiss Me",
-            "body_markdown": "Body",
+            "title": "关闭此公告",
+            "body_markdown": "正文",
             "display_mode": "banner",
             "audience": "logged_in",
             "dismissible": True,
@@ -64,8 +64,8 @@ async def test_admin_update_disable_and_resurface_announcement(client: AsyncClie
     created = await client.post(
         "/api/v1/admin/announcements",
         json={
-            "title": "Original",
-            "body_markdown": "Body",
+            "title": "原始标题",
+            "body_markdown": "正文",
             "display_mode": "modal",
             "audience": "all",
         },
@@ -75,7 +75,7 @@ async def test_admin_update_disable_and_resurface_announcement(client: AsyncClie
 
     updated = await client.put(
         f"/api/v1/admin/announcements/{announcement_id}",
-        json={"title": "Updated"},
+        json={"title": "更新后的标题"},
         headers=ADMIN_HEADERS,
     )
     disabled = await client.post(
@@ -88,7 +88,7 @@ async def test_admin_update_disable_and_resurface_announcement(client: AsyncClie
     )
 
     assert updated.status_code == 200
-    assert updated.json()["title"] == "Updated"
+    assert updated.json()["title"] == "更新后的标题"
     assert disabled.status_code == 200
     assert disabled.json()["enabled"] is False
     assert resurfaced.status_code == 200

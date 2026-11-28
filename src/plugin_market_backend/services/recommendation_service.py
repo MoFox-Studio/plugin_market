@@ -1,9 +1,8 @@
-"""Opt-in, explainable content recommendations without browsing history.
+"""提供由用户自愿启用、不使用浏览历史的可解释内容推荐。
 
-There is deliberately no result cache: every request rechecks publication,
-version eligibility and account preferences. Signed cursors bind a stable
-ranking timestamp, account, conditions and data revision, never a user ID
-supplied by the browser. Public catalogue changes invalidate old cursors.
+服务刻意不缓存结果：每个请求都会重新检查发布状态、版本资格和账户偏好。
+签名游标绑定固定的排序时间戳、账户、条件与数据修订版本，
+而不采用浏览器提供的用户 ID。公开目录变化会使旧游标失效。
 """
 
 from __future__ import annotations
@@ -107,7 +106,7 @@ def similarity(left: dict[str, float], right: dict[str, float]) -> float:
 
 
 async def purge_expired_recommendation_feedback(session: AsyncSession) -> None:
-    """Also called hourly by the application; expired feedback is never applied."""
+    """清理过期推荐反馈；应用也会每小时调用，避免继续使用过期反馈。"""
     await session.execute(delete(RecommendationFeedbackORM).where(RecommendationFeedbackORM.expires_at <= utc_now()))
 
 
@@ -290,7 +289,7 @@ class RecommendationService:
         add_source("chosen_interests", features(interests.categories, interests.tags), 5)
         if viewer_id and prefs.personalization_enabled:
             for plugin_id in sorted(subscriptions | set(ratings)):
-                # A subscription and the legacy likes fields are the same action.
+                # 订阅与旧版点赞字段对应同一个操作。
                 weight = max(4 if plugin_id in subscriptions else 0, {4: 3, 5: 4}.get(ratings.get(plugin_id), 0))
                 if weight:
                     add_source("subscription_similarity" if plugin_id in subscriptions else "rating_similarity",
@@ -320,8 +319,8 @@ class RecommendationService:
                 candidates.append({"plugin": plugin, "version": version, "stats": stats[plugin.plugin_id],
                                    "vector": vectors[plugin.plugin_id], "categories": categories,
                                    "primary_category": (plugin.categories[0].strip().casefold() if plugin.categories else "")})
-        # Bind both eligibility and ranking inputs. No process cache can retain
-        # a revoked plugin, a changed rating or another account's preferences.
+        # 同时绑定资格判断与排序的输入，避免进程缓存保留已撤回的插件、
+        # 已变更的评分或其他账户的偏好。
         state = digest({
             "candidates": [{
                 "id": c["plugin"].plugin_id, "owner": c["plugin"].owner_id,
@@ -344,8 +343,8 @@ class RecommendationService:
         if offset > len(ordered):
             raise ApiError(422, "INVALID_RECOMMENDATION_CURSOR", "推荐批次无效。")
         batch: list[dict[str, Any]] = []
-        # Keeping boundaries preserves diversity and stable pagination even
-        # when the browser adds recently displayed IDs to its exclusions.
+        # 保留批次边界，即使浏览器将最近展示的 ID 加入排除列表，
+        # 也能维持多样性和稳定分页。
         while offset < len(ordered) and not batch:
             batch = [c for c in ordered[offset:offset + request.limit] if c["plugin"].plugin_id not in request.exclude_ids]
             offset += request.limit
@@ -357,8 +356,8 @@ class RecommendationService:
         items = []
         for candidate in batch:
             plugin = self.market._plugin_schema(candidate["plugin"], candidate["stats"])
-            # Cards must advertise the eligible stable version, not a newer
-            # pre-release returned by the general catalogue serializer.
+            # 卡片必须展示符合条件的稳定版本，而不是通用目录序列化器
+            # 返回的较新预发布版本。
             plugin.latest_version = candidate["version"].version
             plugin.latest_version_published_at = candidate["version"].published_at
             items.append(RecommendationItem(
@@ -376,8 +375,8 @@ class RecommendationService:
     def _score(candidates, all_stats, profile, sources, followed, reduced, as_of):
         total_ratings = sum(s["rating_count"] for s in all_stats.values())
         mean = sum(s["rating_avg"] * s["rating_count"] for s in all_stats.values()) / total_ratings if total_ratings else 3.0
-        # Capped logarithmic counters limit the influence of cumulative,
-        # unauthenticated install counters; they do not prove installation.
+        # 使用设有上限的对数计数，限制未经认证的累计安装计数的影响；
+        # 这些计数不能证明实际安装。
         def heat(stats):
             return min(1.0, math.log1p(max(0, stats["downloads_count"])) / math.log1p(10000)) * 0.7 + min(
                 1.0, math.log1p(max(0, stats["likes_count"])) / math.log1p(1000)
@@ -429,12 +428,18 @@ class RecommendationService:
             return item["primary_category"]
 
         def select_batch(seed, target_categories):
-            """Small min-cost flow can reassign early choices to respect caps.
+            """通过小规模最小费用流调整先前选择，以满足数量上限。
 
-            Greedy selection can consume the only author/category slot needed
-            by another candidate even when a valid full batch exists. At most
-            six augmentations select the best feasible batch. Coverage rewards
-            stop after the required three categories, then ranking scores win.
+            即使存在有效的完整批次，贪心选择也可能占用其他候选项唯一可用的
+            作者或分类名额。最多六次增广即可选择最佳可行批次；
+            分类覆盖奖励在满足所需的三个分类后停止，此后由排序分数决定优先级。
+
+            Args:
+                seed: 预先选定的探索候选项，没有时为 ``None``。
+                target_categories: 本批次期望覆盖的分类数量。
+
+            Returns:
+                包含种子项并满足当前容量约束的候选项列表。
             """
             selected = [seed] if seed else []
             authors = Counter(item["plugin"].owner_id for item in selected)
@@ -499,8 +504,8 @@ class RecommendationService:
 
         while remaining:
             target_categories = min(3, limit, len({category(item) for item in remaining if category(item)}))
-            # Prefer the highest scoring exploration item that permits a full,
-            # diverse batch. Same author/category options are interchangeable.
+            # 优先选择得分最高且允许组成完整、多样批次的探索项。
+            # 作者和分类相同的候选项可以相互替代。
             seeds = []
             groups = set()
             if has_interests and limit >= 2:
@@ -520,8 +525,8 @@ class RecommendationService:
                     break
             chosen_ids = {item["plugin"].plugin_id for item in batch}
             remaining = [item for item in remaining if item["plugin"].plugin_id not in chosen_ids]
-            # Only impossible diversity constraints relax; eligibility and hard
-            # filters were already applied before entering this function.
+            # 仅放宽无法满足的多样性约束；资格判断和硬性过滤条件
+            # 已在进入此函数前应用。
             while remaining and len(batch) < limit:
                 batch.append(remaining.pop(0))
             ordered.extend(sorted(batch, key=lambda c: (-c["score"], c["plugin"].plugin_id)))

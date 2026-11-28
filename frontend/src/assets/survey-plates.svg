@@ -8,7 +8,7 @@
       <path d="M108 16V6l12 2-12 5m64 14h15m-7-7v14M5 11v11m-4-5h8M5 105h210m-210-5v5m10-3v3m10-3v3m10-3v3m10-5v5m10-3v3m10-3v3m10-3v3m10-5v5" stroke-width=".8"/>
     </g>
     <g fill="currentColor" stroke="none" font-family="monospace" font-size="7" letter-spacing="1">
-      <text x="15" y="19">MOFOX FIELD NOTES</text><text x="132" y="16">PASS 07 / 1840 M</text><text x="123" y="115">RIDGELINE SECTION</text>
+      <text x="15" y="19">MOFOX 野外笔记</text><text x="132" y="16">山口 07 / 1840 M</text><text x="123" y="115">山脊剖面</text>
     </g>
   </symbol>
   <symbol id="chart" viewBox="0 0 220 116">
@@ -19,7 +19,7 @@
       <path d="m56 44 2-4 1 4 4 3-4 2-1 4-2-4-4-2Zm52-25 2-5 2 5 4 3-4 2-2 5-2-5-4-2Zm38 59 2-4 1 4 4 2-4 2-1 4-2-4-4-2Z" fill="currentColor" stroke="none"/>
       <g fill="currentColor"><circle cx="22" cy="76" r="2"/><circle cx="85" cy="57" r="2.4"/><circle cx="140" cy="40" r="2"/><circle cx="158" cy="33" r="2"/><circle cx="194" cy="68" r="2.4"/><circle cx="114" cy="65" r="1.6"/><circle cx="62" cy="86" r="1.7"/></g>
     </g>
-    <g fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1"><text x="19" y="14">CATALOG ASTRAL</text><text x="17" y="90">α3</text><text x="115" y="17">N.04</text><text x="126" y="108">TRACE / CYGNUS</text></g>
+    <g fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1"><text x="19" y="14">星图目录</text><text x="17" y="90">α3</text><text x="115" y="17">N.04</text><text x="126" y="108">轨迹 / 天鹅座</text></g>
   </symbol>
   <symbol id="proof" viewBox="0 0 220 116">
     <g fill="none" stroke="currentColor" stroke-linecap="square">
@@ -29,7 +29,7 @@
       <path d="M35 65 63 37m-24 33 30-30m-21 30 20-20m-10 20 10-10" stroke-width=".7"/>
       <path d="M96 18h26m-13-7v14m-5-11 10 8m0-8-10 8" stroke-width=".65"/>
     </g>
-    <g fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1"><text x="22" y="18">PROOF 03</text><text x="134" y="18">REG. / FRONT</text><text x="22" y="97">A. OVERPRINT</text><text x="121" y="97">B. LINE WEIGHT</text></g>
+    <g fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1"><text x="22" y="18">校样 03</text><text x="134" y="18">套准 / 正面</text><text x="22" y="97">A. 叠印</text><text x="121" y="97">B. 线宽</text></g>
   </symbol>
   <symbol id="relay" viewBox="0 0 220 116">
     <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -38,6 +38,6 @@
       <path d="M101 69h14l5-7 4 14 7-30 5 35 6-17 4 6h22l4-5 5 10 6-16 5 9h17m-98-14v30m-4-6h99" stroke-width="1"/>
       <path d="M7 13h13m-6-6v13m167 3h12m-6-6v12m-86 74h103" stroke-width=".8"/>
     </g>
-    <g fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1"><text x="24" y="17">FIELD RELAY</text><text x="115" y="16">STATION / 09</text><text x="113" y="104">SIGNAL RECORD</text></g>
+    <g fill="currentColor" font-family="monospace" font-size="7" letter-spacing="1"><text x="24" y="17">野外中继</text><text x="115" y="16">台站 / 09</text><text x="113" y="104">信号记录</text></g>
   </symbol>
 </svg>

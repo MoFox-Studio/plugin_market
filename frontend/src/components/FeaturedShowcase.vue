@@ -92,8 +92,8 @@ onBeforeUnmount(() => {
         <p>桌面自动轮播，移动端横向滑动浏览。</p>
       </div>
       <div class="featured-showcase-controls">
-        <button class="btn btn-ghost btn-sm" type="button" @click="previous">Prev</button>
-        <button class="btn btn-ghost btn-sm" type="button" @click="next">Next</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="previous">上一个</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="next">下一个</button>
       </div>
     </div>
 

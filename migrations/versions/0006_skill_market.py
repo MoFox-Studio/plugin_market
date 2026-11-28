@@ -1,9 +1,8 @@
-"""Skill market: skills, versions, likes, ratings, comments, subscriptions.
+"""技能市场：技能、版本、点赞、评分、评论和订阅。
 
-Adds six new tables (``skills``, ``skill_versions``, ``skill_likes``,
-``skill_ratings``, ``skill_comments``, ``skill_subscriptions``) and
-extends the ``reviewaction`` enum with five new skill-management values
-on PostgreSQL.
+新增六张表（``skills``、``skill_versions``、``skill_likes``、
+``skill_ratings``、``skill_comments``、``skill_subscriptions``），
+并在 PostgreSQL 的 ``reviewaction`` 枚举中添加五个技能管理操作值。
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ depends_on = None
 
 
 # ---------------------------------------------------------------------------
-# helpers
+# 辅助函数
 # ---------------------------------------------------------------------------
 
 NEW_REVIEW_ACTIONS = (
@@ -32,31 +31,29 @@ NEW_REVIEW_ACTIONS = (
 
 
 def _is_postgres() -> bool:
-    """Return True when running against PostgreSQL."""
-
+    """当前连接使用 PostgreSQL 时返回 True。"""
     bind = op.get_bind()
     return bind.dialect.name == "postgresql"
 
 
 # ---------------------------------------------------------------------------
-# upgrade
+# 升级
 # ---------------------------------------------------------------------------
 
 
 def upgrade() -> None:
-    """Create the skill-market schema additions."""
-
+    """创建技能市场新增的数据库结构。"""
     if _is_postgres():
         with op.get_context().autocommit_block():
-            # Clean up leftover types from previous failed migration attempts
+            # 清理先前迁移失败后遗留的类型。
             op.execute("DROP TYPE IF EXISTS skillstatus")
             for value in NEW_REVIEW_ACTIONS:
                 op.execute(
                     f"ALTER TYPE reviewaction ADD VALUE IF NOT EXISTS '{value}'"
                 )
 
-    # Clean up any partially-created tables from previous failed runs.
-    # We drop in reverse dependency order so FK constraints do not block us.
+    # 清理先前运行失败后未完整创建的表。
+    # 按依赖关系的逆序删除，避免受到外键约束阻碍。
     _cascade = " CASCADE" if _is_postgres() else ""
     for _tbl in ("skill_subscriptions", "skill_comments", "skill_ratings",
                  "skill_likes", "skill_versions", "skills"):
@@ -256,13 +253,12 @@ def upgrade() -> None:
 
 
 # ---------------------------------------------------------------------------
-# downgrade
+# 降级
 # ---------------------------------------------------------------------------
 
 
 def downgrade() -> None:
-    """Reverse all skill-market schema additions."""
-
+    """撤销技能市场新增的全部数据库结构。"""
     op.drop_index(
         "idx_skill_subscriptions_skill_created",
         table_name="skill_subscriptions",
@@ -305,9 +301,9 @@ def downgrade() -> None:
     op.drop_index("ix_skills_owner_id", table_name="skills")
     op.drop_table("skills")
 
-    # NOTE: PostgreSQL does not support removing values from an enum type.
-    # The new ``reviewaction`` values added in upgrade() are intentionally
-    # left in place during downgrade; they are unused but harmless.
+    # 注意：PostgreSQL 不支持删除枚举类型中的值。
+    # 降级时有意保留 upgrade() 添加的 ``reviewaction`` 值；
+    # 这些值虽未使用，但不会造成影响。
     if _is_postgres():
         with op.get_context().autocommit_block():
             op.execute("DROP TYPE IF EXISTS skillstatus")

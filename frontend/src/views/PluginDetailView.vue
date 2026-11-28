@@ -149,37 +149,37 @@ const threads = computed(() => {
 const path = () => `/api/v1/plugins/${encodeURIComponent(pluginId.value)}`;
 function loadVersions() {
   const p = path();
-  return versions.load(() =>
+  return versions.load((signal) =>
     api
-      .get<{ items: PluginVersion[] }>(`${p}/versions`)
+      .get<{ items: PluginVersion[] }>(`${p}/versions`, { signal })
       .then((res) => res.items || []),
   );
 }
 function loadReadme() {
   const p = path();
-  return readme.load(() => api.get(`${p}/readme`));
+  return readme.load((signal) => api.get(`${p}/readme`, { signal }));
 }
 function loadDependencies() {
   const p = path();
-  return dependencies.load(() =>
+  return dependencies.load((signal) =>
     api
-      .get<{ items: Dependency[] }>(`${p}/dependencies`)
+      .get<{ items: Dependency[] }>(`${p}/dependencies`, { signal })
       .then((res) => res.items || []),
   );
 }
 async function loadComments() {
   const p = path(),
     current = epoch;
-  await comments.load(() =>
+  await comments.load((signal) =>
     api
-      .get<{ items: Comment[] }>(`${p}/comments?limit=50`)
+      .get<{ items: Comment[] }>(`${p}/comments?limit=50`, { signal })
       .then((res) => res.items || []),
   );
   if (current === epoch) revealChapter();
 }
 function loadData() {
   const p = path();
-  void main.load(() => api.get(`${p}/community`));
+  void main.load((signal) => api.get(`${p}/community`, { signal }));
   void loadVersions();
   void loadReadme();
   void loadDependencies();

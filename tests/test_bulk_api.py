@@ -1,4 +1,4 @@
-"""API tests for the bulk governance route (task 16)."""
+"""批量治理路由的 API 测试（任务 16）。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ ADMIN_HEADERS = {"Authorization": "Bearer admin-token"}
 async def test_bulk_api_returns_207_and_partial_results(client: AsyncClient) -> None:
     await client.post(
         "/api/v1/plugins",
-        json=plugin_payload("bulk_plugin_a", display_name="Bulk Plugin A"),
+        json=plugin_payload("bulk_plugin_a", display_name="批量操作插件 A"),
         headers=AUTHOR_HEADERS,
     )
 
@@ -22,7 +22,7 @@ async def test_bulk_api_returns_207_and_partial_results(client: AsyncClient) -> 
         json={
             "plugin_ids": ["bulk_plugin_a", "missing_plugin"],
             "action": "block",
-            "params": {"reason": "risk"},
+            "params": {"reason": "存在风险"},
         },
         headers=ADMIN_HEADERS,
     )
@@ -39,7 +39,7 @@ async def test_bulk_api_returns_207_and_partial_results(client: AsyncClient) -> 
 async def test_bulk_api_set_trust_level(client: AsyncClient) -> None:
     await client.post(
         "/api/v1/plugins",
-        json=plugin_payload("bulk_plugin_b", display_name="Bulk Plugin B"),
+        json=plugin_payload("bulk_plugin_b", display_name="批量操作插件 B"),
         headers=AUTHOR_HEADERS,
     )
 
@@ -48,7 +48,7 @@ async def test_bulk_api_set_trust_level(client: AsyncClient) -> None:
         json={
             "plugin_ids": ["bulk_plugin_b"],
             "action": "set_trust_level",
-            "params": {"trust_level": "official", "reason": "internal"},
+            "params": {"trust_level": "official", "reason": "内部使用"},
         },
         headers=ADMIN_HEADERS,
     )

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 });
-// Search/GitHub and the three statistics icons retain the exact deployed SVG
-// geometry from AppHeader.vue and PluginCard.vue in the original source.
+// 搜索、GitHub 及三个统计图标完全保留原始源码中 AppHeader.vue 和
+// PluginCard.vue 已部署的 SVG 几何数据。
 const originalStats = new Set(['bookmark', 'download', 'comment']);
 const paths: Record<string, string> = {
   home: 'm3 10 9-7 9 7v10H3Z M9 20v-7h6v7',

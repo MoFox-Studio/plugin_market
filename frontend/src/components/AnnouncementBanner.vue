@@ -11,12 +11,12 @@ const severityLabel = computed(() => {
     return ''
   }
   if (banner.value.severity === 'critical') {
-    return 'Critical'
+    return '严重'
   }
   if (banner.value.severity === 'warning') {
-    return 'Warning'
+    return '警告'
   }
-  return 'Notice'
+  return '通知'
 })
 
 async function dismissBanner(): Promise<void> {

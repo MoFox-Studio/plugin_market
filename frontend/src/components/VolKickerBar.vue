@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 
 const props = defineProps<{
   count?: number
-  /** 显示当前页面标签，比如 "BROWSE" / "VOL.18" 等 */
+  /** 显示当前页面标签，比如 '浏览' / '第 18 期' 等。 */
   pageLabel?: string
 }>()
 
@@ -30,7 +30,7 @@ function goBrowse(): void {
 <template>
   <div class="vol-kicker">
     <div>
-      <span class="vol-num">{{ pageLabel || `VOL.${volNumber}` }}</span>
+      <span class="vol-num">{{ pageLabel || `第 ${volNumber} 期` }}</span>
       <span v-if="!pageLabel">五月号 · 周刊</span>
       <template v-if="count != null">
         <span> · 本期 {{ count }} 条更新</span>

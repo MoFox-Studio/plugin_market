@@ -17,11 +17,8 @@ const focused = ref(false);
 const pageHidden = ref(false);
 const inViewport = ref(false);
 const reducedMotion = ref(false);
-// null follows the system preference; the play control is an explicit override.
-const manualPlayback = ref<boolean | null>(null);
-const autoplayEnabled = computed(
-  () => manualPlayback.value ?? !reducedMotion.value,
-);
+// 默认停留在当前图版；用户可通过播放控件主动启用自动切换。
+const autoplayEnabled = ref(false);
 const current = computed(() => props.items[index.value] || props.items[0]);
 const folio = computed(() => String(index.value + 1).padStart(2, '0'));
 const category = computed(() =>
@@ -43,9 +40,7 @@ const canAutoplay = computed(
 );
 const playbackLabel = computed(() => {
   if (!autoplayEnabled.value)
-    return reducedMotion.value && manualPlayback.value === null
-      ? '已按减少动态偏好暂停'
-      : '自动切换已暂停';
+    return reducedMotion.value ? '当前为减少动效模式' : '可手动切换精选';
   if (flipped.value) return '翻阅档案时暂停';
   if (hovered.value || focused.value) return '阅读时暂停自动切换';
   return '每 5 秒切换下一个精选';
@@ -81,7 +76,7 @@ function change(delta: number) {
   scheduleAutoplay();
 }
 function togglePlayback() {
-  manualPlayback.value = !autoplayEnabled.value;
+  autoplayEnabled.value = !autoplayEnabled.value;
 }
 function enter(event: PointerEvent) {
   if (event.pointerType !== 'touch') hovered.value = true;
@@ -165,7 +160,7 @@ onBeforeUnmount(() => {
     @focusout="focusOut"
   >
     <header class="selection-heading">
-      <p>01 / EDITOR’S SELECTION</p>
+      <p>01 / 编辑精选</p>
       <div><h2>值得一试</h2><span>精选作品</span></div>
       <router-link :to="{ name: 'market', query: { sort: 'popular' } }">浏览热门 ↗</router-link>
     </header>
@@ -186,14 +181,14 @@ onBeforeUnmount(() => {
       >
         <div class="spotlight-flip__inner">
           <div class="spotlight-front" :aria-hidden="flipped || undefined">
-            <p v-if="author" class="spotlight-owner">
-              {{ author }}
-            </p>
             <h3>{{ current.display_name }}</h3>
+            <p v-if="author" class="spotlight-owner">
+              <span class="spotlight-owner-label">作者</span>{{ author }}
+            </p>
             <p class="spotlight-summary">{{ current.summary }}</p>
           </div>
           <div class="spotlight-back" :aria-hidden="!flipped || undefined">
-            <span class="eyebrow">PLUGIN DOSSIER</span>
+            <span class="eyebrow">插件档案</span>
             <h3>一份新的能力</h3>
             <dl>
               <div>
@@ -244,7 +239,7 @@ onBeforeUnmount(() => {
             :aria-pressed="autoplayEnabled"
             @click="togglePlayback"
           >
-            {{ autoplayEnabled ? '暂停' : '继续' }}
+            {{ autoplayEnabled ? '暂停' : '自动播放' }}
           </button>
           <button
             class="icon-button"
@@ -315,17 +310,23 @@ onBeforeUnmount(() => {
   transform: rotateX(180deg);
 }
 .spotlight-owner {
-  font: 11px var(--font-mono);
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
   color: var(--ink-500);
-  margin: 0 0 16px;
+  font: 12px/1.5 var(--font-sans);
+  margin: 0 0 14px;
+}
+.spotlight-owner-label {
+  color: var(--blue-700);
+  font-weight: 650;
 }
 .spotlight-content h3 {
-  font-family: var(--font-editorial, Georgia, serif);
   overflow-wrap: anywhere;
-  font-size: clamp(24px, 2.4vw, 36px);
-  line-height: 1.25;
-  letter-spacing: -0.04em;
-  margin: 0 0 20px;
+  font: 700 clamp(22px, 2vw, 30px) / 1.35 var(--font-docs-reading, var(--font-sans));
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  margin: 0 0 9px;
 }
 .spotlight-summary {
   font-size: 13px;
@@ -363,8 +364,11 @@ onBeforeUnmount(() => {
   gap: 24px;
 }
 .spotlight-flip-toggle {
-  font-size: 12px;
-  color: var(--ink-500);
+  min-height: 44px;
+  font: 650 14px/1.4 var(--font-sans);
+  color: var(--blue-700);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .spotlight-bottom {
   margin-top: 24px;
@@ -374,7 +378,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--ink-500);
 }
 .spotlight-bottom > div {
@@ -388,9 +392,9 @@ onBeforeUnmount(() => {
   min-height: 36px;
   padding: 8px;
   margin-right: 6px;
-  font: inherit;
-  color: var(--ink-700);
-  border: 1px solid var(--line);
+  font: 650 12px/1.4 var(--font-sans);
+  color: var(--blue-700);
+  border: 1px solid var(--line-strong);
   border-radius: 3px;
 }
 .spotlight-playback-toggle:hover {
@@ -432,8 +436,9 @@ onBeforeUnmount(() => {
 }
 .selection-heading > div { display: flex; align-items: baseline; gap: 12px; }
 .selection-heading h2 { font: 800 clamp(28px, 3vw, 44px)/1.15 var(--font-editorial); margin: 0; }
-.selection-heading span, .selection-heading a { font-size: 12px; color: var(--ink-500); }
-.selection-heading a:hover { color: var(--blue-700); }
+.selection-heading span { font-size: 12px; color: var(--ink-500); }
+.selection-heading a { color: var(--blue-700); font: 650 14px/1.4 var(--font-sans); }
+.selection-heading a:hover { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 600px) {
   .selection-heading { padding-block: 16px; }
   .selection-heading > div { align-items: start; flex-direction: column; gap: 6px; }

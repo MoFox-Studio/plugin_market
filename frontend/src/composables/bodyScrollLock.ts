@@ -1,7 +1,7 @@
 const locks = new Set<symbol>();
 let alreadyLocked = false;
 
-/** Each overlay owns its lock, so handing off between dialogs cannot unlock the page. */
+/** 每个浮层持有独立的锁，避免切换对话框时解除页面滚动锁定。 */
 export function lockBodyScroll(): () => void {
   if (typeof document === 'undefined') return () => {};
   const body = document.body;

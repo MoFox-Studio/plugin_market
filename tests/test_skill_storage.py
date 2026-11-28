@@ -1,4 +1,4 @@
-"""Skill package storage and download persistence tests."""
+"""技能包存储、下载及持久化测试。"""
 
 from __future__ import annotations
 
@@ -24,11 +24,18 @@ from plugin_market_backend.services.skill_service import synchronize_skill_stora
 
 def build_skill_zip(
     *,
-    name: str = "Demo Skill",
-    description: str = "Demo skill package.",
+    name: str = "示例技能",
+    description: str = "示例技能包。",
 ) -> bytes:
-    """Create a minimal valid skill zip for upload tests."""
+    """为上传测试创建最小有效技能 ZIP 包。
 
+    Args:
+        name: 技能展示名称。
+        description: 技能说明。
+
+    Returns:
+        包含 SKILL.md 的 ZIP 包字节数据。
+    """
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(
@@ -38,16 +45,15 @@ def build_skill_zip(
                 f"name: {name}\n"
                 f"description: {description}\n"
                 "---\n"
-                "# Demo Skill\n\n"
-                "This is a packaged skill.\n"
+                "# 示例技能\n\n"
+                "这是一个已打包的技能。\n"
             ),
         )
     return buffer.getvalue()
 
 
 async def test_publish_skill_stores_storage_relative_package_path(client: AsyncClient) -> None:
-    """Uploaded skills should persist under the shared storage root."""
-
+    """上传的技能应持久化到共享存储根目录。"""
     session_id = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", session_id, path="/")
     zip_bytes = build_skill_zip()
@@ -79,8 +85,7 @@ async def test_publish_skill_stores_storage_relative_package_path(client: AsyncC
 
 
 async def test_publish_skill_rejects_invalid_skill_id(client: AsyncClient) -> None:
-    """Multipart skill uploads should reject path-like identifiers."""
-
+    """多部分表单技能上传应拒绝路径形式的标识。"""
     session_id = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", session_id, path="/")
 
@@ -95,8 +100,7 @@ async def test_publish_skill_rejects_invalid_skill_id(client: AsyncClient) -> No
 
 
 async def test_publish_skill_allows_chinese_and_uppercase_identifiers(client: AsyncClient) -> None:
-    """Skill storage should accept Chinese and uppercase ids via encoded paths."""
-
+    """技能存储应通过编码路径支持中文和大写标识。"""
     session_id = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", session_id, path="/")
     skill_id = "科研助手AI"
@@ -140,14 +144,13 @@ async def test_recover_skill_from_storage_manifest_after_database_reset(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    """Recovery should recreate skill rows from persisted packages when the DB is reset."""
-
+    """数据库重置后，应能从持久化的技能包重建技能记录。"""
     storage_root = tmp_path / "storage"
     monkeypatch.setenv("PLUGIN_MARKET_STORAGE_DIR", str(storage_root))
     reset_settings_cache()
     session_id = await create_browser_session("mock-author", "browser-test-token")
     client.cookies.set("plugin_market_session", session_id, path="/")
-    zip_bytes = build_skill_zip(name="Recovered Skill")
+    zip_bytes = build_skill_zip(name="恢复的技能")
 
     created = await client.post(
         "/api/v1/skills",
@@ -181,14 +184,13 @@ async def test_recover_legacy_skill_package_without_manifest_uses_fallback_owner
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    """Legacy packages without sidecar metadata should still be recovered."""
-
+    """没有附属元数据文件的旧技能包仍应能够恢复。"""
     storage_root = tmp_path / "legacy-storage"
     monkeypatch.setenv("PLUGIN_MARKET_STORAGE_DIR", str(storage_root))
     reset_settings_cache()
     legacy_dir = storage_root / "skill_packages" / "Legacy技能"
     legacy_dir.mkdir(parents=True, exist_ok=True)
-    (legacy_dir / "V1.zip").write_bytes(build_skill_zip(name="Legacy Skill"))
+    (legacy_dir / "V1.zip").write_bytes(build_skill_zip(name="旧版技能"))
 
     await close_database()
     configure_database("sqlite+aiosqlite:///:memory:")
@@ -215,8 +217,7 @@ def test_resolve_skill_package_path_supports_legacy_data_prefix(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    """Legacy ``data/...`` package paths should still resolve after cwd changes."""
-
+    """工作目录改变后，旧版 data/... 技能包路径仍应正确解析。"""
     storage_root = tmp_path / "persisted-storage"
     monkeypatch.setenv("PLUGIN_MARKET_STORAGE_DIR", str(storage_root))
     reset_settings_cache()

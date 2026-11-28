@@ -68,7 +68,7 @@ docker compose up --build
 
 - `postgres` 仅在 Docker 网络内暴露，不直接开放到公网。
 - `api` 仅绑定宿主机 `127.0.0.1:8787`，用于给 Nginx、Caddy 等反向代理转发。
-- 反向代理再把公网域名，例如 `https://market.mofox-sama.com`，转发到 `http://127.0.0.1:8787`。
+- 反向代理再把公网域名，例如 `https://market.mofox.chat`，转发到 `http://127.0.0.1:8787`。
 
 Skill 存储说明：
 
@@ -94,8 +94,8 @@ docker compose logs -f api
 
 如果你要通过域名访问服务，至少需要：
 
-- 将 `market.mofox-sama.com` 的 DNS A 记录指向部署服务器公网 IP。
-- 将 `PLUGIN_MARKET_GITHUB_OAUTH_REDIRECT_URI` 改为 `https://market.mofox-sama.com/api/v1/auth/github/callback`。
+- 将 `market.mofox.chat` 的 DNS A 记录指向部署服务器公网 IP。
+- 将 `PLUGIN_MARKET_GITHUB_OAUTH_REDIRECT_URI` 改为 `https://market.mofox.chat/api/v1/auth/github/callback`。
 - 在反向代理中把域名转发到 `127.0.0.1:8787`。
 
 Nginx 反代示例：
@@ -103,16 +103,16 @@ Nginx 反代示例：
 ```nginx
 server {
 	listen 80;
-	server_name market.mofox-sama.com;
+	server_name market.mofox.chat;
 	return 301 https://$host$request_uri;
 }
 
 server {
 	listen 443 ssl http2;
-	server_name market.mofox-sama.com;
+	server_name market.mofox.chat;
 
-	ssl_certificate /etc/letsencrypt/live/market.mofox-sama.com/fullchain.pem;
-	ssl_certificate_key /etc/letsencrypt/live/market.mofox-sama.com/privkey.pem;
+	ssl_certificate /etc/letsencrypt/live/market.mofox.chat/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/market.mofox.chat/privkey.pem;
 
 	location / {
 		proxy_pass http://127.0.0.1:8787;
@@ -153,13 +153,18 @@ PLUGIN_MARKET_DATABASE_URL=postgresql+asyncpg://plugin_market:plugin_market@post
 
 公共查询接口不需要认证。
 
-浏览器用户只能通过 GitHub OAuth 登录。创建 GitHub OAuth App 时，callback URL 设置为：
+浏览器用户只能通过 GitHub OAuth 登录。生产环境创建 GitHub OAuth App 时设置为：
+
+- Homepage URL：`https://market.mofox.chat`
+- Authorization callback URL：`https://market.mofox.chat/api/v1/auth/github/callback`
+
+本地开发时可将 `PLUGIN_MARKET_GITHUB_OAUTH_REDIRECT_URI` 改为：
 
 ```text
 http://127.0.0.1:8787/api/v1/auth/github/callback
 ```
 
-生产环境应改成你的公网域名，并把管理员 GitHub 登录名写入 `PLUGIN_MARKET_ADMIN_GITHUB_LOGINS`。
+并把管理员 GitHub 登录名写入 `PLUGIN_MARKET_ADMIN_GITHUB_LOGINS`。
 
 作者侧接口使用：
 

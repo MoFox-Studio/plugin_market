@@ -1,8 +1,8 @@
 import { impressions } from './rareImpressions';
 import reverie from '@/assets/impressions/reverie.svg?no-inline';
 
-// The personal floral and portrait prints stay in the colophon, clear of the hero.
-// Four marked sites per sheet reveal the twenty field plates over five sheets.
+// 个人花卉与肖像版画保留在刊记中，不放入主视觉区。
+// 每个图幅设置四个标记点，在五个图幅中展示二十幅测绘图版。
 const fieldPrints = [
   ...impressions.filter((print) => print.id !== 'lycoris' && print.id !== 'tiger'),
   { id: 'airship', source: reverie + '#airship' },

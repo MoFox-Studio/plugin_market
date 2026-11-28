@@ -1,7 +1,7 @@
-"""Add readme_markdown column to skills table.
+"""为 skills 表添加 readme_markdown 列。
 
-Stores the full SKILL.md body (everything after the YAML front matter)
-so the market frontend can render a proper preview.
+存储 SKILL.md 的完整正文（YAML 前置元数据之后的全部内容），
+供市场前端正确渲染预览。
 """
 
 from __future__ import annotations

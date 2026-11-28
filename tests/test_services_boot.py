@@ -1,14 +1,13 @@
-"""Smoke-test the service-layer skeleton.
+"""服务层骨架的冒烟测试。
 
-This test guards the boundary that subsequent tasks (4-9) build on top of:
+验证后续任务（4–9）所依赖的边界：
 
-* every domain service module imports cleanly from a fresh interpreter,
-* the package re-exports each service class as a single source of truth,
-* there is no circular import between the new ``services`` package and the
-  legacy ``plugin_market_backend.service`` module (which still exposes
-  ``MarketService`` via direct definition),
-* the shared helpers ``assert_can_edit_plugin_metadata`` and
-  ``audience_matches`` are reachable from ``services``.
+* 每个领域服务模块都能在全新解释器中正常导入。
+* 包重新导出各服务类，作为统一访问入口。
+* 新的 services 包与旧的 plugin_market_backend.service 模块不存在循环导入；
+  后者仍通过直接定义提供 MarketService。
+* 可通过 services 访问共享辅助函数 assert_can_edit_plugin_metadata 和
+  audience_matches。
 """
 
 from __future__ import annotations
@@ -37,15 +36,13 @@ SERVICE_MODULES: tuple[str, ...] = (
 
 @pytest.mark.parametrize("module_name", SERVICE_MODULES)
 def test_service_modules_importable(module_name: str) -> None:
-    """Each service module must import without side effects."""
-
+    """各服务模块应能无副作用地导入。"""
     module = importlib.import_module(module_name)
     assert module is not None
 
 
 def test_services_package_exports_service_classes() -> None:
-    """The package surface exposes one class per domain plus shared helpers."""
-
+    """包应为每个领域公开一个服务类，并提供共享辅助函数。"""
     services = importlib.import_module("plugin_market_backend.services")
 
     expected = {
@@ -58,12 +55,12 @@ def test_services_package_exports_service_classes() -> None:
     }
     for name in expected:
         cls = getattr(services, name, None)
-        assert inspect.isclass(cls), f"{name} should be exported as a class"
-        # Each service follows the MarketService pattern: __init__(self, session).
+        assert inspect.isclass(cls), f"{name} 应作为类导出"
+        # 各服务遵循 MarketService 的构造模式：__init__(self, session)。
         signature = inspect.signature(cls.__init__)
         params = list(signature.parameters)
         assert params[:2] == ["self", "session"], (
-            f"{name}.__init__ must take (self, session) like MarketService"
+            f"{name}.__init__ 应与 MarketService 一样接收 (self, session)"
         )
 
     assert callable(services.assert_can_edit_plugin_metadata)
@@ -71,22 +68,18 @@ def test_services_package_exports_service_classes() -> None:
 
 
 def test_market_service_still_importable_from_service_module() -> None:
-    """Existing call sites still resolve ``MarketService``."""
-
+    """已有调用位置仍应能访问 MarketService。"""
     legacy = importlib.import_module("plugin_market_backend.service")
     assert hasattr(legacy, "MarketService")
 
 
 def test_no_circular_import_between_legacy_and_services() -> None:
-    """Importing each service module in isolation must not pull in service.py.
+    """独立导入各服务模块时，不应连带导入 service.py。
 
-    Property 8 (audit trail completeness) depends on ``services`` staying
-    independent of ``plugin_market_backend.service``; otherwise a future
-    refactor could accidentally reintroduce a cycle. We launch a fresh Python
-    process per module and assert that ``plugin_market_backend.service`` did
-    not get imported as a side effect.
+    属性 8（审计轨迹完整性）依赖 services 与 plugin_market_backend.service
+    保持独立，否则后续重构可能意外重新引入循环依赖。为每个模块启动全新的
+    Python 进程，并断言未因副作用导入 plugin_market_backend.service。
     """
-
     repo_root = Path(__file__).resolve().parents[1]
     src_root = repo_root / "src"
     for module in SERVICE_MODULES:
@@ -94,8 +87,8 @@ def test_no_circular_import_between_legacy_and_services() -> None:
             "import sys\n"
             f"import {module}\n"
             "assert 'plugin_market_backend.service' not in sys.modules, (\n"
-            f"    'Importing {module} pulled in plugin_market_backend.service, '\n"
-            "    'which would create a circular dependency.'\n"
+            f"    '导入 {module} 时连带导入了 plugin_market_backend.service，'\n"
+            "    '这将造成循环依赖。'\n"
             ")\n"
         )
         result = subprocess.run(
@@ -107,14 +100,17 @@ def test_no_circular_import_between_legacy_and_services() -> None:
             check=False,
         )
         assert result.returncode == 0, (
-            f"{module} failed isolation check:\n"
+            f"{module} 未通过隔离检查：\n"
             f"stdout={result.stdout}\nstderr={result.stderr}"
         )
 
 
 def _clean_env() -> dict[str, str]:
-    """Provide a minimal environment for isolated subprocess runs."""
+    """为隔离运行的子进程提供最小环境。
 
+    Returns:
+        仅包含必要系统变量的环境字典。
+    """
     import os
 
     keep = {

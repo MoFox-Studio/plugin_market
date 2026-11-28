@@ -1,4 +1,4 @@
-"""Business services for the plugin market backend."""
+"""插件市场后端的业务服务。"""
 
 from __future__ import annotations
 
@@ -60,8 +60,7 @@ from plugin_market_backend.schemas import (
 
 
 def _status_text(value: object) -> str | None:
-    """Convert enum values into stable audit text."""
-
+    """将枚举值转换为稳定的审计文本。"""
     if value is None:
         return None
     enum_value = getattr(value, "value", None)
@@ -71,8 +70,7 @@ def _status_text(value: object) -> str | None:
 
 
 def _version_key(value: str) -> tuple[int, Version | str]:
-    """Return a sorting key that prefers parsed versions but tolerates arbitrary tags."""
-
+    """返回优先使用已解析版本且兼容任意标签的排序键。"""
     try:
         return (1, Version(value))
     except InvalidVersion:
@@ -80,8 +78,7 @@ def _version_key(value: str) -> tuple[int, Version | str]:
 
 
 def _hash_access_token(token: str) -> str:
-    """Hash a market access token for storage."""
-
+    """对市场访问令牌取哈希后用于存储。"""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
@@ -91,16 +88,14 @@ _PLUGIN_DEPENDENCY_PATTERN = re.compile(
 
 
 class MarketService:
-    """Persistent market service using SQLAlchemy sessions."""
+    """使用 SQLAlchemy 会话的持久化市场服务。"""
 
     def __init__(self, session: AsyncSession) -> None:
-        """Create a service bound to one transactional session."""
-
+        """创建绑定到一个事务会话的服务。"""
         self.session = session
 
     def _review_required(self) -> bool:
-        """Return whether author submissions should wait for manual review."""
-
+        """返回作者提交是否需要等待人工审核。"""
         return get_settings().require_review
 
     async def ensure_author(
@@ -113,10 +108,9 @@ class MarketService:
         avatar_url: str | None = None,
         is_admin: bool = False,
     ) -> AuthorORM:
-        """Return an author, creating a verified local record when missing."""
-
-        # Avoid query-triggered autoflush while the caller may still have
-        # pending relationship rows that point at this author.
+        """返回作者，不存在时创建已验证的本地记录。"""
+        # 调用方可能仍有指向该作者的待处理关联记录，
+        # 此时避免查询触发自动刷新。
         with self.session.no_autoflush:
             record = await self.session.get(AuthorORM, author_id)
         if record is not None:
@@ -134,9 +128,9 @@ class MarketService:
             record.updated_at = utc_now()
             return record
         login = github_login or author_id
-        # Check by github_login to avoid unique-constraint violation.
-        # Use no_autoflush so pending PluginMaintainerORM rows (whose
-        # author_id may not be in the DB yet) don't get flushed here.
+        # 按 github_login 检查，避免违反唯一约束。
+        # 使用 no_autoflush，防止此处刷新待处理的 PluginMaintainerORM 记录，
+        # 因为其 author_id 可能尚未存入数据库。
         with self.session.no_autoflush:
             stmt = select(AuthorORM).where(AuthorORM.github_login == login)
             existing = (await self.session.execute(stmt)).scalar_one_or_none()
@@ -157,15 +151,14 @@ class MarketService:
                 self.session.add(record)
                 await self.session.flush()
         except IntegrityError:
-            # Savepoint was rolled back; author already exists with different id
+            # 保存点已回滚；作者已存在，但使用了不同的 ID。
             with self.session.no_autoflush:
                 stmt = select(AuthorORM).where(AuthorORM.github_login == login)
                 return (await self.session.execute(stmt)).scalar_one()
         return record
 
     async def search_authors(self, prefix: str, *, limit: int = 8) -> list[MentionCandidate]:
-        """Return authors matching a GitHub login or display-name prefix."""
-
+        """返回匹配 GitHub 登录名或显示名称前缀的作者。"""
         normalized = prefix.strip().lower()
         if not normalized:
             return []
@@ -192,11 +185,10 @@ class MarketService:
         return [self._mention_candidate_schema(author) for author in rows]
 
     async def register_plugin(self, payload: PluginCreate, owner_id: str) -> Plugin:
-        """Register a plugin and publish it immediately."""
-
+        """注册插件，并根据审核配置决定发布状态。"""
         owner_id = await self._canonical_author_id(owner_id)
         if await self.session.get(PluginORM, payload.plugin_id) is not None:
-            raise ApiError(409, "PLUGIN_ALREADY_EXISTS", "Plugin already exists.", {"plugin_id": payload.plugin_id})
+            raise ApiError(409, "PLUGIN_ALREADY_EXISTS", "插件已存在。", {"plugin_id": payload.plugin_id})
         now = utc_now()
         icon_url = store_plugin_icon(payload.plugin_id, payload.icon_png_base64) if payload.icon_png_base64 else (str(payload.icon_url) if payload.icon_url else None)
         plugin = PluginORM(
@@ -240,8 +232,7 @@ class MarketService:
         limit: int = 50,
         viewer_id: str | None = None,
     ) -> tuple[list[Plugin], int]:
-        """List public plugins with filters and pagination."""
-
+        """按筛选条件分页列出公开插件。"""
         effective_status = status or PluginStatus.PUBLISHED
         stmt = (
             select(PluginORM)
@@ -279,8 +270,7 @@ class MarketService:
         return [self._plugin_schema(plugin, stats.get(plugin.plugin_id)) for plugin in paged], total
 
     async def list_admin_plugins(self, *, offset: int = 0, limit: int = 100) -> tuple[list[Plugin], int]:
-        """List all plugins for the admin console."""
-
+        """为管理控制台列出所有插件。"""
         stmt = (
             select(PluginORM)
             .options(selectinload(PluginORM.maintainers), selectinload(PluginORM.owner), selectinload(PluginORM.versions))
@@ -291,8 +281,7 @@ class MarketService:
         return [self._plugin_schema(plugin, stats.get(plugin.plugin_id)) for plugin in rows[offset : offset + limit]], len(rows)
 
     async def list_owner_plugins(self, owner_id: str) -> list[Plugin]:
-        """List plugins owned or maintained by one author."""
-
+        """列出作者拥有或维护的插件。"""
         stmt = (
             select(PluginORM)
             .options(selectinload(PluginORM.maintainers), selectinload(PluginORM.owner), selectinload(PluginORM.versions))
@@ -304,8 +293,7 @@ class MarketService:
         return [self._plugin_schema(plugin, stats.get(plugin.plugin_id)) for plugin in owned]
 
     async def featured_plugins(self, *, limit: int = 8, viewer_id: str | None = None) -> dict[str, list[Plugin]]:
-        """Return marketplace landing sections."""
-
+        """返回市场首页各分区。"""
         stmt = (
             select(PluginORM)
             .options(selectinload(PluginORM.maintainers), selectinload(PluginORM.owner), selectinload(PluginORM.versions))
@@ -333,8 +321,7 @@ class MarketService:
         categories_limit: int = 6,
         viewer_id: str | None = None,
     ) -> dict[str, CategoryPreviewSection]:
-        """Return preview buckets for the most populated published categories."""
-
+        """返回已发布插件数量最多的分类预览分组。"""
         stmt = (
             select(PluginORM)
             .options(
@@ -372,8 +359,7 @@ class MarketService:
         viewer_has_plugin: bool = False,
         now: datetime | None = None,
     ) -> list[CurationEntryDTO]:
-        """Return visible curation entries expanded for the home aggregate."""
-
+        """返回首页聚合数据中展开的可见精选条目。"""
         from plugin_market_backend.services.curation_service import is_visible as curation_is_visible
 
         when = now or utc_now()
@@ -468,15 +454,13 @@ class MarketService:
         return result
 
     async def get_plugin(self, plugin_id: str, viewer_id: str | None = None) -> Plugin:
-        """Return plugin details or raise not found."""
-
+        """返回插件详情，不存在时抛出未找到错误。"""
         plugin = await self._get_plugin_orm(plugin_id)
         stats = await self._community_stats_for([plugin_id], viewer_id)
         return self._plugin_schema(plugin, stats.get(plugin_id))
 
     async def get_plugin_dependencies(self, plugin_id: str) -> PluginDependenciesResponse:
-        """Return resolved plugin dependency data for one plugin detail page."""
-
+        """返回插件详情页使用的已解析依赖数据。"""
         plugin = await self._get_plugin_orm(plugin_id)
         raw_items = self._normalize_plugin_dependencies(plugin.plugin_dependencies)
         parsed_items: list[tuple[str, str, str | None]] = []
@@ -512,8 +496,7 @@ class MarketService:
         )
 
     async def update_plugin(self, plugin_id: str, payload: PluginUpdate, operator_id: str) -> Plugin:
-        """Update mutable plugin metadata and keep it published unless blocked."""
-
+        """更新插件可变元数据，未封禁时按审核配置更新发布状态。"""
         plugin = await self._get_plugin_orm(plugin_id)
         await self._ensure_owner(plugin, operator_id)
         update_data = payload.model_dump(exclude_unset=True)
@@ -549,15 +532,14 @@ class MarketService:
         return await self.get_plugin(plugin_id)
 
     async def submit_version(self, plugin_id: str, payload: PluginVersionCreate, operator_id: str) -> PluginVersion:
-        """Submit a plugin version and publish it immediately."""
-
+        """提交插件版本并立即发布。"""
         plugin = await self._get_plugin_orm(plugin_id)
         await self._ensure_owner(plugin, operator_id)
         if plugin.status == PluginStatus.BLOCKED:
-            raise ApiError(409, "PLUGIN_BLOCKED", "Blocked plugins cannot accept new versions.", {"plugin_id": plugin_id})
+            raise ApiError(409, "PLUGIN_BLOCKED", "已封禁的插件不能提交新版本。", {"plugin_id": plugin_id})
         existing = await self._get_version_orm_or_none(plugin_id, payload.version)
         if existing is not None:
-            raise ApiError(409, "VERSION_ALREADY_EXISTS", "Plugin version already exists.", {"plugin_id": plugin_id, "version": payload.version})
+            raise ApiError(409, "VERSION_ALREADY_EXISTS", "插件版本已存在。", {"plugin_id": plugin_id, "version": payload.version})
         now = utc_now()
         version = PluginVersionORM(
             plugin_id=plugin_id,
@@ -587,31 +569,28 @@ class MarketService:
         await self._fan_out_plugin_event(
             plugin,
             event="version_published",
-            preview=f"{plugin.display_name} published {payload.version}",
+            preview=f"{plugin.display_name} 发布了 {payload.version}",
             source_author_id=plugin.owner_id,
             version=payload.version,
         )
         return self._version_schema(version)
 
     def _is_public_version(self, version: PluginVersionORM) -> bool:
-        """Return whether a version should appear on public endpoints."""
-
+        """返回版本是否应显示在公开接口中。"""
         return version.status in {VersionStatus.PUBLISHED, VersionStatus.YANKED}
 
     async def list_versions(self, plugin_id: str) -> list[PluginVersion]:
-        """List versions for a plugin."""
-
+        """列出插件的版本。"""
         await self._get_plugin_orm(plugin_id)
         stmt = select(PluginVersionORM).where(PluginVersionORM.plugin_id == plugin_id).order_by(PluginVersionORM.published_at.desc())
         versions = list((await self.session.scalars(stmt)).all())
         return [self._version_schema(item) for item in versions if self._is_public_version(item)]
 
     async def get_version(self, plugin_id: str, version: str) -> PluginVersion:
-        """Return a plugin version or raise not found."""
-
+        """返回插件版本，未找到或不公开时抛出错误。"""
         record = await self._get_version_orm(plugin_id, version)
         if not self._is_public_version(record):
-            raise ApiError(404, "VERSION_NOT_FOUND", "Plugin version was not found.", {"plugin_id": plugin_id, "version": version})
+            raise ApiError(404, "VERSION_NOT_FOUND", "未找到插件版本。", {"plugin_id": plugin_id, "version": version})
         return self._version_schema(record)
 
     async def get_recommended_version(
@@ -623,11 +602,10 @@ class MarketService:
         platform: str | None = None,
         include_prerelease: bool = False,
     ) -> PluginVersion:
-        """Return the newest compatible published version."""
-
+        """返回最新的兼容已发布版本。"""
         plugin = await self._get_plugin_orm(plugin_id)
         if plugin.status == PluginStatus.BLOCKED:
-            raise ApiError(404, "VERSION_NOT_FOUND", "No installable version found.", {"plugin_id": plugin_id})
+            raise ApiError(404, "VERSION_NOT_FOUND", "未找到可安装的版本。", {"plugin_id": plugin_id})
         versions = list((await self.session.scalars(select(PluginVersionORM).where(PluginVersionORM.plugin_id == plugin_id))).all())
         candidates = [
             version
@@ -641,13 +619,12 @@ class MarketService:
         ]
         if not candidates:
             code = "NO_COMPATIBLE_VERSION" if host_version or plugin_api_version or platform else "VERSION_NOT_FOUND"
-            raise ApiError(404, code, "No installable version found.", {"plugin_id": plugin_id})
+            raise ApiError(404, code, "未找到可安装的版本。", {"plugin_id": plugin_id})
         candidates.sort(key=lambda item: (_version_key(item.version), item.published_at), reverse=True)
         return self._version_schema(candidates[0])
 
     async def get_status(self, plugin_id: str) -> PluginStatusResponse:
-        """Return plugin and version status for CLI."""
-
+        """返回 CLI 使用的插件与版本状态。"""
         plugin = await self._get_plugin_orm(plugin_id)
         records = list((await self.session.scalars(select(PluginVersionORM).where(PluginVersionORM.plugin_id == plugin_id))).all())
         return PluginStatusResponse(
@@ -666,8 +643,7 @@ class MarketService:
         )
 
     async def sync_version(self, plugin_id: str, payload: VersionSyncRequest, operator_id: str) -> PluginVersion:
-        """Apply CLI sync metadata to an existing version."""
-
+        """将 CLI 同步的元数据应用到已有版本。"""
         plugin = await self._get_plugin_orm(plugin_id)
         await self._ensure_owner(plugin, operator_id)
         version = await self._get_version_orm(plugin_id, payload.version)
@@ -684,15 +660,13 @@ class MarketService:
         return self._version_schema(version)
 
     async def yank_version(self, plugin_id: str, version: str, operator_id: str, reason: str | None = None) -> PluginVersion:
-        """Allow a plugin owner to yank a version."""
-
+        """允许插件所有者或维护者撤回版本。"""
         plugin = await self._get_plugin_orm(plugin_id)
         await self._ensure_owner(plugin, operator_id)
         return await self.set_version_status(plugin_id, version, VersionStatus.YANKED, ReviewAction.YANK_VERSION, operator_id, reason, is_yanked=True)
 
     async def delete_owner_plugin(self, plugin_id: str, operator_id: str) -> None:
-        """Allow a plugin owner or maintainer to delete one of their plugins."""
-
+        """允许插件所有者或维护者删除其插件。"""
         plugin = await self._get_plugin_orm(plugin_id)
         await self._ensure_owner(plugin, operator_id)
         await self.delete_plugin(plugin_id)
@@ -705,8 +679,7 @@ class MarketService:
         operator_id: str | None = None,
         review_limit: int = 25,
     ) -> PluginGovernanceSnapshot:
-        """Return a management snapshot for admin or owner workflows."""
-
+        """返回管理员或所有者工作流使用的管理快照。"""
         plugin = await self._get_plugin_orm(plugin_id)
         if operator_id is not None:
             await self._ensure_owner(plugin, operator_id)
@@ -725,8 +698,7 @@ class MarketService:
         )
 
     async def delete_plugin(self, plugin_id: str) -> None:
-        """Delete a plugin and all marketplace records associated with it."""
-
+        """删除插件及其关联的全部市场记录。"""
         plugin = await self._get_plugin_orm(plugin_id)
         await self.session.execute(delete(PluginLikeORM).where(PluginLikeORM.plugin_id == plugin_id))
         await self.session.execute(delete(PluginSubscriptionORM).where(PluginSubscriptionORM.plugin_id == plugin_id))
@@ -750,8 +722,7 @@ class MarketService:
         await self.session.flush()
 
     async def set_plugin_status(self, plugin_id: str, status: PluginStatus, action: ReviewAction, operator_id: str, reason: str | None = None) -> Plugin:
-        """Set plugin status and record the action."""
-
+        """设置插件状态并记录操作。"""
         plugin = await self._get_plugin_orm(plugin_id)
         before = plugin.status
         plugin.status = status
@@ -765,7 +736,7 @@ class MarketService:
         await self._fan_out_plugin_event(
             plugin,
             event=f"plugin_{status.value}",
-            preview=f"{plugin.display_name} status changed to {status.value}",
+            preview=f"{plugin.display_name} 的状态已变更为 {status.value}",
             source_author_id=plugin.owner_id,
         )
         return await self.get_plugin(plugin_id)
@@ -777,8 +748,7 @@ class MarketService:
         operator_id: str,
         reason: str | None = None,
     ) -> Plugin:
-        """Set plugin trust level and record the action."""
-
+        """设置插件信任级别并记录操作。"""
         plugin = await self._get_plugin_orm(plugin_id)
         before = plugin.trust_level
         plugin.trust_level = trust_level
@@ -801,8 +771,7 @@ class MarketService:
         reason: str | None = None,
         is_yanked: bool | None = None,
     ) -> PluginVersion:
-        """Set version status and record the action."""
-
+        """设置版本状态并记录操作。"""
         record = await self._get_version_orm(plugin_id, version)
         before = record.status
         record.status = status
@@ -820,21 +789,19 @@ class MarketService:
         await self._fan_out_plugin_event(
             plugin,
             event=f"version_{status.value}",
-            preview=f"{plugin.display_name} version {version} status changed to {status.value}",
+            preview=f"{plugin.display_name} 的版本 {version} 状态已变更为 {status.value}",
             source_author_id=plugin.owner_id,
             version=version,
         )
         return self._version_schema(record)
 
     async def list_reviews(self) -> list[ReviewRecord]:
-        """List audit records newest last to match existing mock behavior."""
-
+        """按时间由旧到新列出审计记录，与现有模拟行为一致。"""
         stmt = select(ReviewRecordORM).order_by(ReviewRecordORM.id.asc())
         return [self._review_schema(item) for item in await self.session.scalars(stmt)]
 
     async def stats(self) -> MarketStats:
-        """Return aggregate market stats."""
-
+        """返回市场聚合统计。"""
         plugins_total = await self.session.scalar(select(func.count()).select_from(PluginORM))
         versions_total = await self.session.scalar(select(func.count()).select_from(PluginVersionORM))
         comments_total = await self.session.scalar(
@@ -871,8 +838,7 @@ class MarketService:
         )
 
     async def admin_dashboard(self, *, days: int = 7, top_limit: int = 6) -> AdminDashboard:
-        """Return a richer management dashboard payload."""
-
+        """返回更丰富的管理面板数据。"""
         stats = await self.stats()
         plugin_status_breakdown = {status.value: 0 for status in PluginStatus}
         version_status_breakdown = {status.value: 0 for status in VersionStatus}
@@ -928,28 +894,24 @@ class MarketService:
         )
 
     async def categories(self) -> list[str]:
-        """Return all known categories."""
-
+        """返回所有已知分类。"""
         rows = await self.session.scalars(select(PluginORM.categories))
         return sorted({category for categories in rows for category in (categories or [])})
 
     async def tags(self) -> list[str]:
-        """Return all known tags."""
-
+        """返回所有已知标签。"""
         rows = await self.session.scalars(select(PluginORM.tags))
         return sorted({tag for tags in rows for tag in (tags or [])})
 
     async def record_webhook(self, event_id: str, event_name: str, action: str | None, payload: dict[str, Any]) -> None:
-        """Persist a GitHub webhook event and audit marker."""
-
+        """持久化 GitHub Webhook 事件与审计标记。"""
         if await self.session.get(WebhookEventORM, event_id) is not None:
             return
         self.session.add(WebhookEventORM(event_id=event_id, event_name=event_name, action=action, payload=payload))
         await self._record("webhook", event_id, ReviewAction.WEBHOOK_RECEIVED, None, action or event_name, "github")
 
     async def _get_plugin_orm(self, plugin_id: str) -> PluginORM:
-        """Return a plugin ORM object with maintainers, owner and versions loaded."""
-
+        """返回已加载维护者、所有者和版本的插件 ORM 对象。"""
         stmt = (
             select(PluginORM)
             .options(
@@ -961,40 +923,36 @@ class MarketService:
         )
         plugin = await self.session.scalar(stmt)
         if plugin is None:
-            raise ApiError(404, "PLUGIN_NOT_FOUND", "Plugin not found.", {"plugin_id": plugin_id})
+            raise ApiError(404, "PLUGIN_NOT_FOUND", "未找到插件。", {"plugin_id": plugin_id})
         return plugin
 
     async def _get_version_orm_or_none(self, plugin_id: str, version: str) -> PluginVersionORM | None:
-        """Return a version ORM object or None."""
-
+        """返回版本 ORM 对象，不存在时返回 None。"""
         return await self.session.scalar(select(PluginVersionORM).where(PluginVersionORM.plugin_id == plugin_id, PluginVersionORM.version == version))
 
     async def _get_version_orm(self, plugin_id: str, version: str) -> PluginVersionORM:
-        """Return a version ORM object or raise not found."""
-
+        """返回版本 ORM 对象，不存在时抛出未找到错误。"""
         await self._get_plugin_orm(plugin_id)
         record = await self._get_version_orm_or_none(plugin_id, version)
         if record is None:
-            raise ApiError(404, "VERSION_NOT_FOUND", "Plugin version not found.", {"plugin_id": plugin_id, "version": version})
+            raise ApiError(404, "VERSION_NOT_FOUND", "未找到插件版本。", {"plugin_id": plugin_id, "version": version})
         return record
 
     async def _ensure_owner(self, plugin: PluginORM, operator_id: str) -> None:
-        """Require the operator to own or maintain the plugin."""
-
+        """要求操作者是插件所有者或维护者。"""
         maintainer_ids = {item.author_id for item in plugin.maintainers}
         if plugin.owner_id != operator_id and operator_id not in maintainer_ids:
-            raise ApiError(403, "FORBIDDEN", "You do not have permission to modify this plugin.", {"plugin_id": plugin.plugin_id})
+            raise ApiError(403, "FORBIDDEN", "您没有修改此插件的权限。", {"plugin_id": plugin.plugin_id})
 
     async def _replace_maintainers(self, plugin_id: str, maintainer_ids: Iterable[str]) -> None:
-        """Replace plugin maintainer records."""
-
+        """替换插件维护者记录。"""
         await self.session.execute(delete(PluginMaintainerORM).where(PluginMaintainerORM.plugin_id == plugin_id))
         for maintainer_id in await self._canonical_author_ids(maintainer_ids):
             self.session.add(PluginMaintainerORM(plugin_id=plugin_id, author_id=maintainer_id))
         try:
             await self.session.flush()
         except IntegrityError as exc:
-            raise ApiError(409, "MAINTAINER_CONFLICT", "Maintainer mapping already exists.", {"plugin_id": plugin_id}) from exc
+            raise ApiError(409, "MAINTAINER_CONFLICT", "维护者映射已存在。", {"plugin_id": plugin_id}) from exc
 
     async def _record(
         self,
@@ -1006,8 +964,7 @@ class MarketService:
         operator_id: str,
         reason: str | None = None,
     ) -> None:
-        """Append a review record."""
-
+        """追加审核记录。"""
         self.session.add(
             ReviewRecordORM(
                 target_type=target_type,
@@ -1021,8 +978,7 @@ class MarketService:
         )
 
     async def _plugin_reviews(self, plugin_id: str, *, limit: int = 25) -> list[ReviewRecord]:
-        """Return recent review records for one plugin and its versions."""
-
+        """返回插件及其版本的近期审核记录。"""
         stmt = (
             select(ReviewRecordORM)
             .where(
@@ -1037,8 +993,7 @@ class MarketService:
         return [self._review_schema(item) for item in await self.session.scalars(stmt)]
 
     async def get_plugin_readme(self, plugin_id: str) -> PluginReadmeResponse:
-        """Return rendered README content for a plugin detail page."""
-
+        """返回插件详情页使用的已渲染 README 内容。"""
         plugin = await self._get_plugin_orm(plugin_id)
         html = render_readme_html(plugin.readme_markdown)
         return PluginReadmeResponse(plugin_id=plugin.plugin_id, exists=html is not None, html=html)
@@ -1052,8 +1007,7 @@ class MarketService:
         source_author_id: str,
         version: str | None = None,
     ) -> None:
-        """Fan out plugin and author activity events to subscribers / followers."""
-
+        """向订阅者或关注者分发插件与作者活动事件。"""
         from plugin_market_backend.services.inbox_service import InboxService
 
         inbox_service = InboxService(self.session)
@@ -1080,8 +1034,7 @@ class MarketService:
         )
 
     def _latest_public_version(self, plugin: PluginORM) -> PluginVersionORM | None:
-        """Return the latest published non-yanked version for a plugin."""
-
+        """返回插件最新的已发布且未撤回版本。"""
         published = [
             item
             for item in (plugin.versions or [])
@@ -1092,8 +1045,7 @@ class MarketService:
         return max(published, key=lambda item: (_version_key(item.version), item.published_at))
 
     def _plugin_schema(self, plugin: PluginORM, stats: dict[str, Any] | None = None) -> Plugin:
-        """Convert a plugin ORM object to API schema."""
-
+        """将插件 ORM 对象转换为 API 数据模型。"""
         stats = stats or {}
         owner = plugin.owner if getattr(plugin, "owner", None) is not None else None
         versions = list(plugin.versions or [])
@@ -1133,8 +1085,7 @@ class MarketService:
         )
 
     def _normalize_plugin_dependencies(self, values: Iterable[str] | None) -> list[str]:
-        """Normalize plugin dependency references from manifest payloads."""
-
+        """规范化清单数据中的插件依赖引用。"""
         normalized: list[str] = []
         for value in values or []:
             item = str(value).strip()
@@ -1143,8 +1094,7 @@ class MarketService:
         return normalized
 
     def _parse_plugin_dependency_ref(self, ref: str) -> tuple[str, str | None]:
-        """Split a dependency reference into plugin id and version spec."""
-
+        """将依赖引用拆分为插件 ID 与版本约束。"""
         value = str(ref or "").strip()
         if not value:
             return "", None
@@ -1159,8 +1109,7 @@ class MarketService:
         return value, None
 
     def _version_schema(self, version: PluginVersionORM) -> PluginVersion:
-        """Convert a version ORM object to API schema."""
-
+        """将版本 ORM 对象转换为 API 数据模型。"""
         return PluginVersion(
             plugin_id=version.plugin_id,
             version=version.version,
@@ -1185,8 +1134,7 @@ class MarketService:
         )
 
     def _review_schema(self, record: ReviewRecordORM) -> ReviewRecord:
-        """Convert an audit ORM object to API schema."""
-
+        """将审计 ORM 对象转换为 API 数据模型。"""
         return ReviewRecord(
             target_type=record.target_type,
             target_id=record.target_id,
@@ -1199,8 +1147,7 @@ class MarketService:
         )
 
     def _author_schema(self, author: AuthorORM) -> Author:
-        """Convert an author ORM object to the public author schema."""
-
+        """将作者 ORM 对象转换为公开作者数据模型。"""
         return Author(
             author_id=author.author_id,
             github_user_id=author.github_user_id,
@@ -1213,21 +1160,18 @@ class MarketService:
         )
 
     def _maintainer_ids(self, maintainers: Iterable[str], owner_id: str) -> list[str]:
-        """Normalize maintainer lists and always include the owner."""
-
+        """规范化维护者列表并确保包含所有者。"""
         values = [item for item in maintainers if item]
         if owner_id not in values:
             values.append(owner_id)
         return list(dict.fromkeys(values))
 
     async def _canonical_author_id(self, author_id: str) -> str:
-        """Resolve one author identifier to the persisted canonical author id."""
-
+        """将作者标识符解析为已持久化的规范作者 ID。"""
         return (await self.ensure_author(author_id)).author_id
 
     async def _canonical_author_ids(self, author_ids: Iterable[str]) -> list[str]:
-        """Resolve author identifiers and de-duplicate by canonical id."""
-
+        """解析作者标识符并按规范 ID 去重。"""
         resolved: list[str] = []
         seen: set[str] = set()
         for author_id in author_ids:
@@ -1239,14 +1183,12 @@ class MarketService:
         return resolved
 
     async def _is_admin_operator(self, operator_id: str) -> bool:
-        """Return whether ``operator_id`` currently belongs to an admin."""
-
+        """返回 ``operator_id`` 当前是否属于管理员。"""
         author = await self.session.get(AuthorORM, operator_id)
         return bool(author and author.is_admin)
 
     def _matches_host(self, version: PluginVersionORM, host_version: str | None) -> bool:
-        """Return whether the version supports the requested host version."""
-
+        """返回该版本是否支持所请求的宿主版本。"""
         if not host_version:
             return True
         try:
@@ -1260,25 +1202,22 @@ class MarketService:
         return maximum is None or host <= maximum
 
     def _matches_api(self, version: PluginVersionORM, plugin_api_version: str | None) -> bool:
-        """Return whether the version supports the requested plugin API version."""
-
+        """返回该版本是否支持所请求的插件 API 版本。"""
         return not plugin_api_version or version.plugin_api_version == plugin_api_version
 
     def _matches_platform(self, version: PluginVersionORM, platform: str | None) -> bool:
-        """Return whether the version supports the requested platform."""
-
+        """返回该版本是否支持所请求的平台。"""
         if not platform:
             return True
         platforms = {item.lower() for item in (version.supported_platforms or [])}
         return "all" in platforms or platform.lower() in platforms
 
     # ------------------------------------------------------------------
-    # Community features: likes, ratings, comments, downloads, authors
+    # 社区功能：点赞、评分、评论、下载与作者
     # ------------------------------------------------------------------
 
     async def _community_stats_for(self, plugin_ids: list[str], viewer_id: str | None) -> dict[str, dict[str, Any]]:
-        """Aggregate community counters for a batch of plugins."""
-
+        """批量聚合插件的社区计数。"""
         if not plugin_ids:
             return {}
         stats: dict[str, dict[str, Any]] = {
@@ -1344,7 +1283,7 @@ class MarketService:
     def _sort_plugins(
         self, rows: list[PluginORM], stats: dict[str, dict[str, Any]], sort: str
     ) -> list[PluginORM]:
-        """Sort plugins by a named strategy using pre-computed community stats."""
+        """使用预先计算的社区统计按指定策略对插件排序。"""
 
         def score(plugin: PluginORM) -> tuple:
             data = stats.get(plugin.plugin_id, {})
@@ -1375,8 +1314,7 @@ class MarketService:
         return sorted(rows, key=score, reverse=reverse)
 
     async def toggle_subscription(self, plugin_id: str, viewer_id: str) -> PluginSubscriptionState:
-        """Toggle a subscription for the given user and return current state."""
-
+        """切换指定用户的订阅并返回当前状态。"""
         plugin = await self._get_plugin_orm(plugin_id)
         viewer_id = await self._canonical_author_id(viewer_id)
         existing = await self.session.scalar(
@@ -1406,11 +1344,10 @@ class MarketService:
         author_id: str,
         viewer_id: str | None,
     ) -> AuthorFollowState:
-        """Return the current follow state for one author."""
-
+        """返回作者的当前关注状态。"""
         author = await self.session.get(AuthorORM, author_id)
         if author is None:
-            raise ApiError(404, "AUTHOR_NOT_FOUND", "Author was not found.", {"author_id": author_id})
+            raise ApiError(404, "AUTHOR_NOT_FOUND", "未找到作者。", {"author_id": author_id})
         followers_count = await self.session.scalar(
             select(func.count()).select_from(AuthorFollowORM).where(AuthorFollowORM.author_id == author_id)
         )
@@ -1435,14 +1372,13 @@ class MarketService:
         author_id: str,
         viewer_id: str,
     ) -> AuthorFollowState:
-        """Toggle a follow relationship between viewer and author."""
-
+        """切换访问者与作者之间的关注关系。"""
         viewer_id = await self._canonical_author_id(viewer_id)
         if author_id == viewer_id:
-            raise ApiError(400, "CANNOT_FOLLOW_SELF", "You cannot follow yourself.")
+            raise ApiError(400, "CANNOT_FOLLOW_SELF", "不能关注自己。")
         author = await self.session.get(AuthorORM, author_id)
         if author is None:
-            raise ApiError(404, "AUTHOR_NOT_FOUND", "Author was not found.", {"author_id": author_id})
+            raise ApiError(404, "AUTHOR_NOT_FOUND", "未找到作者。", {"author_id": author_id})
         existing = await self.session.scalar(
             select(AuthorFollowORM).where(
                 AuthorFollowORM.follower_id == viewer_id,
@@ -1457,8 +1393,7 @@ class MarketService:
         return await self.author_follow_state(author_id, viewer_id)
 
     async def access_token_status(self, author_id: str) -> AccessTokenStatus:
-        """Return metadata for the author's current market token."""
-
+        """返回作者当前市场令牌的元数据。"""
         record = await self.session.get(AuthorAccessTokenORM, author_id)
         if record is None:
             return AccessTokenStatus(author_id=author_id, has_token=False)
@@ -1472,8 +1407,7 @@ class MarketService:
         )
 
     async def rotate_access_token(self, author_id: str) -> AccessTokenRotateResponse:
-        """Create or replace the author's single active market token."""
-
+        """创建或替换作者唯一有效的市场令牌。"""
         author_id = await self._canonical_author_id(author_id)
         plain_token = f"mfox_{secrets.token_urlsafe(32)}"
         token_hash = _hash_access_token(plain_token)
@@ -1506,8 +1440,7 @@ class MarketService:
         )
 
     async def revoke_access_token(self, author_id: str) -> AccessTokenStatus:
-        """Delete the author's current market token."""
-
+        """删除作者当前的市场令牌。"""
         record = await self.session.get(AuthorAccessTokenORM, author_id)
         if record is not None:
             await self.session.delete(record)
@@ -1518,8 +1451,7 @@ class MarketService:
         self,
         author_id: str,
     ) -> MachineSubscriptionListResponse:
-        """Return published plugin subscriptions for one machine author."""
-
+        """返回机器客户端对应作者已订阅的已发布插件。"""
         stmt = (
             select(PluginORM)
             .options(
@@ -1559,8 +1491,7 @@ class MarketService:
         self,
         author_id: str,
     ) -> MySubscriptionListResponse:
-        """Return plugins the viewer has subscribed to."""
-
+        """返回访问者已订阅的插件。"""
         subq = (
             select(PluginSubscriptionORM)
             .where(PluginSubscriptionORM.author_id == author_id)
@@ -1601,8 +1532,7 @@ class MarketService:
         self,
         author_id: str,
     ) -> MyFollowListResponse:
-        """Return authors the viewer follows."""
-
+        """返回访问者关注的作者。"""
         subq = (
             select(AuthorFollowORM)
             .where(AuthorFollowORM.follower_id == author_id)
@@ -1633,8 +1563,7 @@ class MarketService:
         )
 
     async def rate_plugin(self, plugin_id: str, viewer_id: str, score: int) -> RatingSummary:
-        """Upsert the viewer's rating and return aggregate stats."""
-
+        """创建或更新访问者评分并返回聚合统计。"""
         plugin = await self._get_plugin_orm(plugin_id)
         viewer_id = await self._canonical_author_id(viewer_id)
         existing = await self.session.scalar(
@@ -1652,8 +1581,7 @@ class MarketService:
         return await self.rating_summary(plugin.plugin_id, viewer_id)
 
     async def clear_rating(self, plugin_id: str, viewer_id: str) -> RatingSummary:
-        """Remove the viewer's rating and return aggregate stats."""
-
+        """删除访问者评分并返回聚合统计。"""
         plugin = await self._get_plugin_orm(plugin_id)
         existing = await self.session.scalar(
             select(PluginRatingORM).where(
@@ -1667,8 +1595,7 @@ class MarketService:
         return await self.rating_summary(plugin.plugin_id, viewer_id)
 
     async def rating_summary(self, plugin_id: str, viewer_id: str | None) -> RatingSummary:
-        """Return rating aggregate and viewer's own score."""
-
+        """返回评分聚合统计与访问者本人的评分。"""
         await self._get_plugin_orm(plugin_id)
         avg = await self.session.scalar(
             select(func.avg(PluginRatingORM.score)).where(PluginRatingORM.plugin_id == plugin_id)
@@ -1704,8 +1631,7 @@ class MarketService:
     async def list_comments(
         self, plugin_id: str, *, offset: int = 0, limit: int = 50
     ) -> tuple[list[Comment], int]:
-        """List comments for a plugin, newest first."""
-
+        """按时间由新到旧列出插件评论。"""
         await self._get_plugin_orm(plugin_id)
         total = await self.session.scalar(
             select(func.count()).select_from(PluginCommentORM).where(
@@ -1725,17 +1651,16 @@ class MarketService:
         return [self._comment_schema(row, authors, mentions) for row in rows], int(total or 0)
 
     async def add_comment(self, plugin_id: str, viewer_id: str, content: str, parent_id: int | None) -> Comment:
-        """Create a new comment on a plugin."""
-
+        """为插件创建新评论。"""
         plugin = await self._get_plugin_orm(plugin_id)
         viewer_id = await self._canonical_author_id(viewer_id)
         normalized_content = content.strip()
         if parent_id is not None:
             parent = await self.session.get(PluginCommentORM, parent_id)
             if parent is None or parent.plugin_id != plugin.plugin_id or parent.is_deleted:
-                raise ApiError(404, "COMMENT_NOT_FOUND", "Parent comment was not found.", {"parent_id": parent_id})
+                raise ApiError(404, "COMMENT_NOT_FOUND", "未找到父评论。", {"parent_id": parent_id})
             if parent.parent_id is not None:
-                raise ApiError(400, "COMMENT_REPLY_DEPTH_EXCEEDED", "Replies may only target top-level comments.", {"parent_id": parent_id})
+                raise ApiError(400, "COMMENT_REPLY_DEPTH_EXCEEDED", "只能回复顶层评论。", {"parent_id": parent_id})
         comment = PluginCommentORM(
             plugin_id=plugin.plugin_id,
             author_id=viewer_id,
@@ -1754,13 +1679,12 @@ class MarketService:
         return self._comment_schema(comment, authors, comment_mentions)
 
     async def delete_comment(self, plugin_id: str, comment_id: int, viewer_id: str, is_admin: bool) -> None:
-        """Soft-delete a comment owned by the author or by an admin."""
-
+        """由评论作者或管理员软删除评论。"""
         comment = await self.session.get(PluginCommentORM, comment_id)
         if comment is None or comment.plugin_id != plugin_id or comment.is_deleted:
-            raise ApiError(404, "COMMENT_NOT_FOUND", "Comment was not found.", {"comment_id": comment_id})
+            raise ApiError(404, "COMMENT_NOT_FOUND", "未找到评论。", {"comment_id": comment_id})
         if comment.author_id != viewer_id and not is_admin:
-            raise ApiError(403, "FORBIDDEN", "You cannot delete this comment.", {"comment_id": comment_id})
+            raise ApiError(403, "FORBIDDEN", "您不能删除此评论。", {"comment_id": comment_id})
         comment.is_deleted = True
         comment.content = ""
         comment.updated_at = utc_now()
@@ -1770,8 +1694,7 @@ class MarketService:
         await InboxService(self.session).revoke_messages_for_comment(comment_id)
 
     async def record_install(self, plugin_id: str, version: str | None = None) -> PluginVersion:
-        """Increment the download counter and return the affected version."""
-
+        """增加下载计数并返回对应版本。"""
         plugin = await self._get_plugin_orm(plugin_id)
         if version is not None:
             version_row = await self._get_version_orm(plugin_id, version)
@@ -1784,8 +1707,7 @@ class MarketService:
         return self._version_schema(version_row)
 
     async def trending_authors(self, *, limit: int = 8) -> list[TrendingItem]:
-        """Return authors ranked by engagement on their plugins."""
-
+        """按插件互动热度返回作者排名。"""
         stmt = (
             select(PluginORM)
             .options(selectinload(PluginORM.owner), selectinload(PluginORM.versions))
@@ -1793,8 +1715,8 @@ class MarketService:
         rows = list((await self.session.scalars(stmt)).all())
         stats = await self._community_stats_for([plugin.plugin_id for plugin in rows], None)
         buckets: dict[str, dict[str, Any]] = {}
-        # Track each author's plugin metrics so we can pick a "best" one as a
-        # fallback signature plugin for the home page.
+        # 跟踪每位作者的插件指标，以便选出表现最佳的插件，
+        # 作为首页的默认代表作。
         plugins_by_author: dict[str, list[tuple[float, PluginORM]]] = {}
         for plugin in rows:
             owner = plugin.owner
@@ -1824,8 +1746,8 @@ class MarketService:
             bucket["downloads_total"] += downloads
             bucket["rating_score_total"] += rating_avg * rating_count
             bucket["rating_count"] += rating_count
-            # Score is biased toward published plugins so we don't surface
-            # drafts as someone's signature work.
+            # 评分优先考虑已发布的插件，避免将草稿
+            # 展示为作者的代表作。
             published_bonus = 0.0
             if plugin.status == PluginStatus.PUBLISHED:
                 published_bonus = 1.0
@@ -1838,7 +1760,7 @@ class MarketService:
             plugins_by_author.setdefault(owner.author_id, []).append((score, plugin))
 
         items: list[TrendingItem] = []
-        # Batch-load profiles for bio enrichment.
+        # 批量加载个人资料以补充简介。
         author_ids = list(buckets.keys())
         bios: dict[str, str] = {}
         if author_ids:
@@ -1878,8 +1800,7 @@ class MarketService:
         return items[:limit]
 
     async def _load_authors(self, author_ids: list[str]) -> dict[str, AuthorORM]:
-        """Fetch authors keyed by id for comment serialization."""
-
+        """按 ID 获取作者，供评论序列化使用。"""
         unique_ids = [value for value in dict.fromkeys(author_ids)]
         if not unique_ids:
             return {}
@@ -1887,8 +1808,7 @@ class MarketService:
         return {author.author_id: author for author in rows}
 
     async def _load_comment_mentions(self, comment_ids: list[int]) -> dict[int, list[MentionCandidate]]:
-        """Fetch resolved mentions for each comment keyed by comment id."""
-
+        """按评论 ID 获取各评论已解析的提及信息。"""
         unique_ids = [value for value in dict.fromkeys(comment_ids)]
         if not unique_ids:
             return {}
@@ -1910,8 +1830,7 @@ class MarketService:
         authors: dict[str, AuthorORM],
         mentions: dict[int, list[MentionCandidate]],
     ) -> Comment:
-        """Convert a comment ORM object to schema."""
-
+        """将评论 ORM 对象转换为数据模型。"""
         author = authors.get(comment.author_id)
         return Comment(
             id=comment.id,
@@ -1932,8 +1851,7 @@ class MarketService:
         )
 
     def _mention_candidate_schema(self, author: AuthorORM) -> MentionCandidate:
-        """Convert an author ORM object into a mention candidate payload."""
-
+        """将作者 ORM 对象转换为提及候选项数据。"""
         return MentionCandidate(
             author_id=author.author_id,
             github_login=author.github_login,

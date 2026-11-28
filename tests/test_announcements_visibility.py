@@ -1,4 +1,4 @@
-"""Property tests for announcement visibility against the public API."""
+"""通过公开 API 验证公告可见性的属性测试。"""
 
 from __future__ import annotations
 
@@ -75,9 +75,9 @@ async def _create_owned_plugin(author_id: str) -> None:
     async with session_scope() as session:
         payload = PluginCreate(
             plugin_id=f'{author_id}-plugin',
-            display_name=f'{author_id} plugin',
-            summary='property test plugin',
-            description='property test plugin',
+            display_name=f'{author_id} 的插件',
+            summary='属性测试插件',
+            description='属性测试插件',
             repository_url=f'https://github.com/MoFox-Studio/{author_id}-plugin',
             license='MIT',
             categories=['tool'],
@@ -98,8 +98,8 @@ def _expected_ids(
     for announcement_id, case in records:
         announcement = AnnouncementORM(
             id=announcement_id,
-            title=f'Announcement {announcement_id}',
-            body_markdown='body',
+            title=f'公告 {announcement_id}',
+            body_markdown='正文',
             display_mode=case.display_mode,
             severity='info',
             dismissible=case.dismissible,
@@ -176,8 +176,8 @@ async def _run_case(
             records: list[tuple[int, AnnouncementCase]] = []
             for index, case in enumerate(cases, start=1):
                 row = AnnouncementORM(
-                    title=f'Announcement {index}',
-                    body_markdown='body',
+                    title=f'公告 {index}',
+                    body_markdown='正文',
                     display_mode=case.display_mode,
                     severity='info',
                     dismissible=case.dismissible,

@@ -30,8 +30,8 @@ function createSlugger() {
     return id;
   };
 }
-// The Skill API supplies Markdown source. Keep its text exact and safe, while
-// exposing actual heading anchors without executing embedded HTML.
+// Skill API 提供 Markdown 源码。在原样、安全地保留文本的同时，
+// 提供真实的标题锚点，且不执行嵌入的 HTML。
 const sourceLines = computed(() => {
   const slug = createSlugger();
   let fence = '';
@@ -69,7 +69,7 @@ watch(
     const nestedDocument = entries.some((heading) => heading.tagName === 'H1');
     headings.value = entries.map((source) => {
       let heading = source;
-      // The resource title owns the page's h1. Keep the README's internal hierarchy.
+      // 页面 h1 留给资源标题，同时保留 README 内部的层级关系。
       if (nestedDocument) {
         const level = Math.min(6, Number(source.tagName[1]) + 1);
         heading = document.createElement(`h${level}`);
@@ -102,7 +102,7 @@ watch(
         >
       </nav>
     </div>
-    <!-- HTML is the backend's sanitized README response, never raw Markdown. -->
+    <!-- HTML 来自后端净化后的 README 响应，绝不是原始 Markdown。 -->
     <div v-if="html" ref="content" class="markdown-content" v-html="html"></div>
     <pre
       v-else
@@ -124,10 +124,11 @@ watch(
   gap: 12px;
   padding: 14px 16px;
   font-size: 12px;
+  line-height: 1.6;
   text-align: left;
 }
 .document-outline small {
-  font: 8px var(--font-mono);
+  font: 12px/1.6 var(--font-mono);
   margin-left: 10px;
   color: var(--ink-500);
 }
@@ -137,9 +138,9 @@ watch(
   padding: 6px 16px 18px;
 }
 .document-outline a {
-  color: var(--blue-600);
+  color: var(--blue-700);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 .document-outline .is-subheading {
@@ -154,7 +155,7 @@ watch(
   padding: 20px;
   border: 1px solid var(--line);
   background: var(--surface-soft);
-  font: 12px/1.95 var(--font-mono);
+  font: 15px/1.85 var(--font-mono);
   color: var(--ink-700);
   tab-size: 2;
 }
@@ -167,6 +168,23 @@ watch(
 .source-heading {
   color: var(--blue-700);
   font-weight: 600;
+}
+.readme-document .markdown-content {
+  font: 400 16px/1.85 var(--font-reading);
+  color: var(--ink-700);
+  overflow-wrap: anywhere;
+}
+.markdown-content :deep(pre) {
+  font: 15px/1.85 var(--font-mono);
+  color: var(--ink-700);
+  background: var(--surface-soft);
+  overflow-x: auto;
+}
+.markdown-content :deep(code) {
+  font-size: 0.95em;
+}
+.markdown-content :deep(pre code) {
+  font: inherit;
 }
 .markdown-content :deep(h1),
 .markdown-content :deep(h2),
@@ -201,7 +219,7 @@ watch(
   text-align: left;
 }
 .markdown-content :deep(a) {
-  color: var(--blue-600);
+  color: var(--blue-700);
   text-decoration: underline;
   text-underline-offset: 3px;
 }

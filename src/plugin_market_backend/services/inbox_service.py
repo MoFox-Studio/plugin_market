@@ -1,50 +1,35 @@
-"""Inbox derivation, fan-out, and query service.
+"""提供收件箱消息生成、分发和查询服务。
 
-This module owns every derived ``inbox_messages`` row in the system. Its
-shape mirrors the surfaces called out in the design document:
+本模块管理系统中派生生成的 ``inbox_messages`` 记录，接口对应设计文档中的职责：
 
-* :meth:`InboxService.parse_mentions` — pure-ish content scan that resolves
-  ``@<github_login>`` tokens to existing authors (Requirement 9.1-9.3,
-  Property 10).
-* :meth:`InboxService.fan_out_for_comment` — write ``comment_mentions`` rows
-  and derive ``mention`` / ``reply`` inbox messages with the reply-over-mention
-  precedence rule from Requirement 10.6 / Property 4.
-* :meth:`InboxService.fan_out_for_governance` — derive ``governance`` inbox
-  messages for owner + maintainers when an admin governance action lands on
-  a plugin, with a 5-second sliding-window dedupe so a noisy admin tab does
-  not flood inboxes (Requirements 11.4-11.7).
-* :meth:`InboxService.fan_out_for_announcement` — derive ``announcement``
-  inbox messages for an explicit recipient iterable; the caller decides
-  whether to invoke this based on ``announcement.emit_inbox``.
-* :meth:`InboxService.revoke_messages_for_comment` — when a comment is
-  deleted, mark any derived inbox messages as ``revoked`` so they remain
-  auditable but disappear from active flows (Requirement 9.6).
-* :meth:`InboxService.list_messages`,
-  :meth:`InboxService.unread_count`,
-  :meth:`InboxService.mark_read`,
-  :meth:`InboxService.mark_all_read` — viewer-scoped query / mutation
-  surface backing ``GET /api/v1/inbox/*`` (Requirements 11.1-11.8).
+* ``InboxService.parse_mentions`` 扫描内容，将 ``@<github_login>`` 标记解析为
+  已有作者（需求 9.1 至 9.3、性质 10）。
+* ``InboxService.fan_out_for_comment`` 写入 ``comment_mentions``，
+  按回复优先于提及的规则生成 ``mention`` 或 ``reply`` 消息
+  （需求 10.6、性质 4）。
+* ``InboxService.fan_out_for_governance`` 在管理员治理插件时，向所有者和维护者
+  生成 ``governance`` 消息；通过 5 秒滑动窗口去重，避免管理页面的重复操作
+  刷满收件箱（需求 11.4 至 11.7）。
+* ``InboxService.fan_out_for_announcement`` 向指定收件人生成 ``announcement``
+  消息；调用方根据 ``announcement.emit_inbox`` 决定是否调用。
+* ``InboxService.revoke_messages_for_comment`` 在评论删除后，将派生消息标记为
+  ``revoked``，保留审计记录但不再作为有效消息处理（需求 9.6）。
+* ``InboxService.list_messages``、``unread_count``、``mark_read`` 和
+  ``mark_all_read`` 提供按访问者隔离的查询和写入接口，服务于
+  ``GET /api/v1/inbox/*``（需求 11.1 至 11.8）。
 
-All write paths leverage the unique constraint
-``unique_inbox_dedup(recipient_id, dedup_key)`` declared on
-:class:`plugin_market_backend.orm.InboxMessageORM` so duplicate fan-out
-events upsert rather than insert. The dedup key formats are stable across
-calls so out-of-band callers (e.g. admin retries) can reason about them:
+消息分发利用 ``plugin_market_backend.orm.InboxMessageORM`` 上的唯一约束
+``unique_inbox_dedup(recipient_id, dedup_key)``，对重复事件更新而非重复插入。
+去重键格式在各次调用间保持稳定，便于外部调用方（例如管理员重试）使用：
 
-* ``mention:{comment_id}:{recipient_id}`` for mentions,
-* ``reply:{comment_id}:{recipient_id}`` for replies,
-* ``governance:{plugin_id}:{action}:{ts_micros}`` for governance, where
-  the timestamp suffix is the microsecond epoch the row was first created
-  in. The 5-second sliding window dedupe is enforced in code (we look up
-  any existing governance row for the same (recipient, plugin, action)
-  within the last 5 seconds and refresh its ``created_at`` instead of
-  inserting). Microsecond resolution ensures that two governance fan-outs
-  arriving in the same wall-clock second but separated by more than the
-  dedupe window (e.g. a delayed retry) still produce distinct dedup_keys
-  and therefore distinct inbox rows.
-* ``announcement:{announcement_id}:{recipient_id}:{dismiss_token}`` for
-  announcements, so an admin "resurface" (which bumps ``dismiss_token``)
-  yields a fresh inbox message without colliding with the prior one.
+* 提及：``mention:{comment_id}:{recipient_id}``。
+* 回复：``reply:{comment_id}:{recipient_id}``。
+* 治理：``governance:{plugin_id}:{action}:{ts_micros}``，时间戳后缀为
+  记录首次创建时的微秒级纪元时间。代码通过查找最近 5 秒内相同收件人、插件和
+  操作的消息实现滑动窗口去重，找到后刷新 ``created_at`` 而非插入。
+  微秒精度用于降低不同分发事件的去重键冲突风险。
+* 公告：``announcement:{announcement_id}:{recipient_id}:{dismiss_token}``，
+  管理员重新展示公告时递增 ``dismiss_token``，从而生成新消息，避免与旧消息冲突。
 """
 
 from __future__ import annotations
@@ -76,28 +61,27 @@ from plugin_market_backend.schemas import (
 
 
 # ---------------------------------------------------------------------------
-# Module-level constants
+# 模块级常量
 # ---------------------------------------------------------------------------
 
 
 MENTION_RE = re.compile(
     r"@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))(?![A-Za-z0-9-])"
 )
-"""GitHub-login mention pattern.
+"""匹配基于 GitHub 登录名的提及标记。
 
-Matches ``@<login>`` where ``<login>`` is a 1-39 character GitHub username:
-starts with alphanumeric, contains only alphanumerics or single dashes, and
-is not followed by another alphanumeric / dash (so ``@foo-bar`` matches once,
-not ``foo`` then ``bar``).
+匹配 ``@<login>``，其中 ``<login>`` 长度为 1 至 39 个字符，
+以字母或数字开头，仅包含字母、数字和连字符，后面不能紧接字母、数字或连字符。
+例如 ``@foo-bar`` 只匹配一次，不会拆成 ``foo`` 和 ``bar``。
 """
 
 
 GOVERNANCE_DEDUPE_WINDOW = timedelta(seconds=5)
-"""Sliding window in which a duplicate governance fan-out is suppressed."""
+"""抑制重复治理消息分发的滑动时间窗口。"""
 
 
 PREVIEW_MAX_LENGTH = 200
-"""Maximum number of characters retained in the inbox payload preview."""
+"""收件箱载荷预览保留的最大字符数。"""
 
 
 _VALID_TYPES: frozenset[str] = frozenset(
@@ -106,46 +90,40 @@ _VALID_TYPES: frozenset[str] = frozenset(
 
 
 # ---------------------------------------------------------------------------
-# Service
+# 服务
 # ---------------------------------------------------------------------------
 
 
 class InboxService:
-    """Derive and serve per-recipient inbox messages."""
+    """为每位收件人生成并提供收件箱消息。"""
 
     def __init__(self, session: AsyncSession) -> None:
-        """Bind the service to one transactional async session."""
-
+        """将服务绑定到单个异步事务会话。"""
         self.session = session
 
     # ------------------------------------------------------------------
-    # Mention parsing (Property 10 / Requirements 9.1-9.3)
+    # 提及解析（性质 10、需求 9.1 至 9.3）
     # ------------------------------------------------------------------
 
     async def parse_mentions(
         self, content: str, sender_id: str
     ) -> list[AuthorORM]:
-        """Resolve ``@<login>`` tokens in ``content`` to existing authors.
+        """将 ``content`` 中的 ``@<login>`` 标记解析为已有作者。
 
-        Tokens that do not match an existing author are silently dropped
-        (Requirement 9.3). The sender's own author row is filtered out so
-        we never write a self-mention to the inbox (Requirement 9.4 /
-        Property 4). The result is deduplicated by ``author_id``.
+        不匹配已有作者的标记会被忽略（需求 9.3）。结果排除发送者本人，
+        避免向收件箱写入自我提及消息（需求 9.4、性质 4），并按 ``author_id`` 去重。
 
         Args:
-            content: The raw comment content.
-            sender_id: The author submitting the comment. Self-mentions
-                are filtered out.
+            content: 原始评论内容。
+            sender_id: 提交评论的作者 ID，用于过滤自我提及。
 
         Returns:
-            A list of :class:`AuthorORM` rows for the resolved mentions, in
-            the order their first matching ``@<login>`` token appeared.
+            解析出的 ``AuthorORM`` 记录列表，按对应 ``@<login>`` 首次出现的顺序排列。
         """
-
         if not content:
             return []
 
-        # Preserve first-occurrence order so the resulting list is stable.
+        # 保留首次出现的顺序，使结果列表保持稳定。
         ordered_logins: list[str] = []
         seen_logins: set[str] = set()
         for match in MENTION_RE.finditer(content):
@@ -184,7 +162,7 @@ class InboxService:
         return result
 
     # ------------------------------------------------------------------
-    # Fan-out: comments (Requirements 9.4, 10.5, 10.6)
+    # 评论消息分发（需求 9.4、10.5、10.6）
     # ------------------------------------------------------------------
 
     async def fan_out_for_comment(
@@ -192,25 +170,22 @@ class InboxService:
         comment: PluginCommentORM,
         mentions: Iterable[AuthorORM],
     ) -> None:
-        """Persist ``comment_mentions`` rows and derive mention/reply messages.
+        """持久化 ``comment_mentions`` 记录并生成提及或回复消息。
 
-        The fan-out follows Property 4's reply-over-mention rule: when a
-        single comment both replies to and mentions the same recipient, only
-        the ``reply`` message is emitted; the mention message is suppressed
-        for that recipient. All other mentioned authors still receive a
-        ``mention`` message.
+        分发遵循性质 4 的回复优先规则：同一评论同时回复并提及同一收件人时，
+        仅发送 ``reply`` 消息，不再发送提及消息；其他被提及作者仍收到 ``mention``。
 
         Args:
-            comment: The freshly-flushed comment ORM row. Must have an
-                assigned ``id`` (i.e. caller has flushed the session).
-            mentions: Author rows for every resolved mention. Self-mentions
-                must already be filtered out by the caller (typically via
-                :meth:`parse_mentions`).
-        """
+            comment: 已刷入数据库的评论 ORM 记录，必须已分配 ``id``。
+            mentions: 所有已解析提及对应的作者记录。调用方通常通过
+                ``parse_mentions`` 预先排除自我提及。
 
-        if comment.id is None:  # pragma: no cover - defensive
+        Raises:
+            ValueError: 评论尚未分配 ``id``。
+        """
+        if comment.id is None:  # pragma: no cover - 防御性处理
             raise ValueError(
-                "fan_out_for_comment requires a flushed comment with an id"
+                "fan_out_for_comment 要求评论已刷入数据库并具有 ID"
             )
 
         sender_id = comment.author_id
@@ -220,9 +195,9 @@ class InboxService:
             if author.author_id != sender_id
         ]
 
-        # Persist normalized comment_mentions rows for every resolved mention
-        # (even the one whose inbox message is suppressed by the reply rule),
-        # so downstream queries / property tests see a complete graph.
+        # 为每个已解析提及持久化规范化的 comment_mentions 记录，
+        # 包括因回复优先规则而不发送提及消息的作者，
+        # 使下游查询和性质测试获得完整的关联关系。
         for author in mention_authors:
             already = await self.session.scalar(
                 select(CommentMentionORM.id).where(
@@ -239,7 +214,7 @@ class InboxService:
                     )
                 )
 
-        # Resolve the reply target (if any).
+        # 若存在回复目标，则解析其收件人。
         reply_recipient_id: str | None = None
         if comment.parent_id is not None:
             parent = await self.session.get(
@@ -252,8 +227,7 @@ class InboxService:
             ):
                 reply_recipient_id = parent.author_id
 
-        # Mention fan-out: skip the one author who will receive a reply
-        # message instead (Requirement 10.6).
+        # 分发提及消息时，跳过将收到回复消息的作者（需求 10.6）。
         for author in mention_authors:
             if author.author_id == reply_recipient_id:
                 continue
@@ -281,7 +255,7 @@ class InboxService:
         await self.session.flush()
 
     # ------------------------------------------------------------------
-    # Fan-out: governance (Requirements 11.4, 11.5, 11.7)
+    # 治理消息分发（需求 11.4、11.5、11.7）
     # ------------------------------------------------------------------
 
     async def fan_out_for_governance(
@@ -291,24 +265,21 @@ class InboxService:
         operator_id: str,
         reason: str | None = None,
     ) -> None:
-        """Derive governance messages for a plugin's owner and maintainers.
+        """为插件所有者和维护者生成治理消息。
 
-        Within a 5-second sliding window, repeated calls for the same
-        ``(recipient, plugin_id, action)`` are coalesced: instead of
-        inserting a new row we refresh the existing message's ``created_at``
-        so the recipient sees one notification per noisy burst rather than
-        N (Requirement 11.7). The unique constraint ``unique_inbox_dedup``
-        backstops same-second collisions.
+        在 5 秒滑动窗口内，对相同 ``(recipient, plugin_id, action)`` 的重复调用
+        进行合并：刷新已有消息的 ``created_at`` 而非插入新记录，
+        使收件人在一轮密集操作中只收到一条通知（需求 11.7）。
+        唯一约束 ``unique_inbox_dedup`` 为去重键冲突提供额外保护。
 
         Args:
-            plugin: The targeted plugin ORM row.
-            action: A short identifier of the governance action (e.g.
-                ``"block_plugin"`` or ``"set_trust_level"``).
-            operator_id: The admin who performed the action; recorded as
-                ``source_author_id`` so the UI can render an attribution.
-            reason: Optional free-text reason supplied by the operator.
+            plugin: 目标插件的 ORM 记录。
+            action: 治理操作的简短标识，例如 ``"block_plugin"`` 或
+                ``"set_trust_level"``。
+            operator_id: 执行操作的管理员 ID，记录为 ``source_author_id``，
+                供界面展示操作来源。
+            reason: 操作者提供的可选自由文本理由。
         """
-
         recipients = await self._collect_governance_recipients(plugin)
         if not recipients:
             return
@@ -324,8 +295,8 @@ class InboxService:
         }
 
         for recipient_id in recipients:
-            # Look for any governance message for this recipient/plugin
-            # within the dedupe window and refresh it instead of inserting.
+            # 查找去重窗口内该收件人和插件对应的治理消息，
+            # 后续匹配操作后刷新已有消息，而非重复插入。
             recent_rows = list(
                 (
                     await self.session.scalars(
@@ -373,7 +344,7 @@ class InboxService:
         await self.session.flush()
 
     # ------------------------------------------------------------------
-    # Fan-out: announcements (Requirement 11.3)
+    # 公告消息分发（需求 11.3）
     # ------------------------------------------------------------------
 
     async def fan_out_for_announcement(
@@ -381,26 +352,26 @@ class InboxService:
         announcement: AnnouncementORM,
         recipients_iter: Iterable[str | AuthorORM],
     ) -> int:
-        """Derive announcement messages for the supplied recipients.
+        """为指定收件人生成公告消息。
 
-        The caller is responsible for honoring ``announcement.emit_inbox`` —
-        invoking this method implies the admin has opted into inbox fan-out.
-        A no-op announcement (``emit_inbox=False``) raises ``ValueError`` so
-        accidental calls fail fast in development.
+        调用方负责遵守 ``announcement.emit_inbox``：调用本方法意味着管理员
+        已选择分发到收件箱。若 ``emit_inbox=False``，立即报错以暴露误调用。
 
         Args:
-            announcement: The announcement to broadcast.
-            recipients_iter: An iterable of author ids (str) or
-                :class:`AuthorORM` rows. Duplicates are deduped by id.
+            announcement: 待广播的公告。
+            recipients_iter: 作者 ID 字符串或 ``AuthorORM`` 记录的可迭代对象，
+                按 ID 去重。
 
         Returns:
-            The number of newly written / refreshed inbox messages.
-        """
+            新写入或刷新的收件箱消息数量。
 
+        Raises:
+            ValueError: 公告的 ``emit_inbox`` 为 ``False``。
+        """
         if not announcement.emit_inbox:
             raise ValueError(
-                "fan_out_for_announcement called for an announcement with "
-                "emit_inbox=False; the caller must guard this."
+                "fan_out_for_announcement 收到的公告设置了 "
+                "emit_inbox=False；调用方必须预先检查。"
             )
 
         recipient_ids: list[str] = []
@@ -452,8 +423,7 @@ class InboxService:
         payload: dict[str, Any],
         related_plugin_id: str | None = None,
     ) -> int:
-        """Derive author activity messages for followers of one author."""
-
+        """为指定作者的关注者生成作者动态消息。"""
         follower_ids = list(
             (
                 await self.session.scalars(
@@ -488,8 +458,7 @@ class InboxService:
         dedup_key: str,
         payload: dict[str, Any],
     ) -> int:
-        """Derive plugin activity messages for plugin subscribers."""
-
+        """为插件订阅者生成插件动态消息。"""
         subscriber_ids = list(
             (
                 await self.session.scalars(
@@ -517,17 +486,20 @@ class InboxService:
         return count
 
     # ------------------------------------------------------------------
-    # Revocation (Requirement 9.6)
+    # 撤销消息（需求 9.6）
     # ------------------------------------------------------------------
 
     async def revoke_messages_for_comment(self, comment_id: int) -> int:
-        """Mark every inbox message derived from ``comment_id`` as ``revoked``.
+        """将 ``comment_id`` 派生的所有收件箱消息标记为 ``revoked``。
 
-        Returns the number of rows affected. Already-revoked rows are left
-        untouched so the audit trail records the *first* revocation time in
-        ``read_at``-adjacent state.
+        已撤销的记录保持不变。
+
+        Args:
+            comment_id: 作为消息来源的评论 ID。
+
+        Returns:
+            本次修改的消息记录数。
         """
-
         rows = list(
             (
                 await self.session.scalars(
@@ -545,7 +517,7 @@ class InboxService:
         return len(rows)
 
     # ------------------------------------------------------------------
-    # Read surface (Requirements 11.1, 11.2, 11.6, 11.7, 11.8)
+    # 消息读取接口（需求 11.1、11.2、11.6、11.7、11.8）
     # ------------------------------------------------------------------
 
     async def list_messages(
@@ -556,26 +528,20 @@ class InboxService:
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[InboxMessage], int]:
-        """Return the paginated inbox for ``viewer_id`` ordered newest-first.
+        """按时间从新到旧分页返回 ``viewer_id`` 的收件箱消息。
 
         Args:
-            viewer_id: The viewing author. Only messages whose ``recipient_id``
-                matches are returned (cross-recipient access is impossible by
-                construction here, in addition to the authorization check the
-                route layer performs).
-            type: Optional message-type filter. When supplied, must be one of
-                ``mention | reply | governance | announcement | system``.
-                Unknown values yield an empty result rather than raising, so
-                a misconfigured client cannot crash the endpoint.
-            offset: Pagination offset (>= 0).
-            limit: Page size (>= 1).
+            viewer_id: 当前查看消息的作者 ID。仅返回 ``recipient_id`` 匹配的消息，
+                在路由层权限检查之外进一步隔离不同收件人的数据。
+            type: 可选的消息类型过滤条件，支持 ``_VALID_TYPES`` 中的值。
+                未知值返回空结果，不抛出异常，避免客户端配置错误导致端点失败。
+            offset: 分页偏移量，小于 0 时按 0 处理。
+            limit: 单页条目数，小于或等于 0 时返回空结果。
 
         Returns:
-            ``(messages, total)`` where ``messages`` is the page projected
-            into :class:`InboxMessage` and ``total`` is the unfiltered
-            count for the same query.
+            ``(messages, total)`` 元组；``messages`` 为转换成 ``InboxMessage``
+            的当前页消息，``total`` 为相同过滤条件下未分页的总数。
         """
-
         if limit <= 0:
             return [], 0
 
@@ -608,12 +574,10 @@ class InboxService:
         return await self._project_messages(rows), total
 
     async def unread_count(self, viewer_id: str) -> int:
-        """Return the number of ``unread`` messages for ``viewer_id``.
+        """返回 ``viewer_id`` 的 ``unread`` 消息数量。
 
-        Revoked and read messages are excluded so the navbar bell reflects
-        actionable items only.
+        排除已撤销和已读消息，使导航栏通知图标仅反映待处理事项。
         """
-
         stmt = (
             select(func.count())
             .select_from(InboxMessageORM)
@@ -627,15 +591,18 @@ class InboxService:
     async def mark_read(
         self, viewer_id: str, ids: Iterable[int]
     ) -> int:
-        """Mark the given inbox messages as read.
+        """将指定收件箱消息标记为已读。
 
-        Only rows where ``recipient_id == viewer_id`` and ``status='unread'``
-        are mutated. ``revoked`` messages are left alone so we never resurrect
-        a soft-deleted thread by mistake. Already-read messages are no-ops.
+        仅修改满足 ``recipient_id == viewer_id`` 且 ``status='unread'`` 的记录。
+        ``revoked`` 消息保持不变，避免误恢复已软删除的会话；已读消息也不再修改。
 
-        Returns the number of rows actually transitioned to ``read``.
+        Args:
+            viewer_id: 当前查看消息的作者 ID。
+            ids: 待标记为已读的消息 ID。
+
+        Returns:
+            实际转换为 ``read`` 状态的记录数。
         """
-
         ids_list = [int(i) for i in ids if i is not None]
         if not ids_list:
             return 0
@@ -660,8 +627,7 @@ class InboxService:
         return len(rows)
 
     async def mark_all_read(self, viewer_id: str) -> int:
-        """Mark every unread message for ``viewer_id`` as read."""
-
+        """将 ``viewer_id`` 的所有未读消息标记为已读。"""
         result = await self.session.execute(
             update(InboxMessageORM)
             .where(
@@ -674,14 +640,13 @@ class InboxService:
         return int(result.rowcount or 0)
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # 内部辅助函数
     # ------------------------------------------------------------------
 
     async def _collect_governance_recipients(
         self, plugin: PluginORM
     ) -> list[str]:
-        """Return the deduplicated owner + maintainer ids for ``plugin``."""
-
+        """返回 ``plugin`` 的所有者和维护者 ID，并去除重复项。"""
         recipients: list[str] = []
         seen: set[str] = set()
         if plugin.owner_id:
@@ -716,14 +681,11 @@ class InboxService:
         source_author_id: str | None = None,
         created_at: Any | None = None,
     ) -> InboxMessageORM:
-        """Insert or refresh an inbox message keyed by ``(recipient, dedup_key)``.
+        """按 ``(recipient, dedup_key)`` 插入或刷新收件箱消息。
 
-        When a row already exists (same recipient + dedup_key) we update the
-        payload, bump ``created_at``, and resurrect any ``revoked`` row to
-        ``unread``. This honors the design note that the unique constraint
-        is the source of truth for fan-out idempotency.
+        相同收件人和去重键的记录已存在时，更新载荷及关联字段、刷新 ``created_at``，
+        并将 ``revoked`` 状态恢复为 ``unread``，遵循以唯一约束保证分发幂等性的设计。
         """
-
         existing = await self.session.scalar(
             select(InboxMessageORM).where(
                 InboxMessageORM.recipient_id == recipient_id,
@@ -761,8 +723,7 @@ class InboxService:
     def _comment_payload(
         comment: PluginCommentORM, *, kind: str
     ) -> dict[str, Any]:
-        """Build the JSON payload stored alongside mention/reply messages."""
-
+        """构建随提及或回复消息保存的 JSON 载荷。"""
         text = (comment.content or "").strip()
         return {
             "kind": kind,
@@ -774,8 +735,7 @@ class InboxService:
     async def _project_messages(
         self, rows: list[InboxMessageORM]
     ) -> list[InboxMessage]:
-        """Convert ORM rows to :class:`InboxMessage` schemas."""
-
+        """将 ORM 记录转换为 ``InboxMessage`` 数据模型。"""
         if not rows:
             return []
 
@@ -836,17 +796,16 @@ class InboxService:
 
 
 # ---------------------------------------------------------------------------
-# Module-level helpers
+# 模块级辅助函数
 # ---------------------------------------------------------------------------
 
 
 def _build_link(row: InboxMessageORM) -> InboxMessageLink:
-    """Synthesize a navigation hint for an inbox message.
+    """为收件箱消息构建导航目标。
 
-    The frontend uses this to deep-link mentions and replies to the comment
-    anchor, governance to the plugin page, and announcements to the modal.
+    前端据此将提及和回复定位到评论锚点，将治理消息链接到插件页面，
+    并将公告消息定位到对应弹窗。
     """
-
     if row.related_comment_id is not None:
         return InboxMessageLink(
             kind="comment",

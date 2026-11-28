@@ -10,10 +10,10 @@ const expanded = ref(false);
 const dialog = ref<HTMLDialogElement | null>(null);
 let previousFocus: HTMLElement | null = null;
 const items = [
-  { to: '/', label: '发现', en: 'DISCOVER', icon: 'home' },
-  { to: '/browse', label: '插件目录', en: 'PLUGINS', icon: 'grid' },
-  { to: '/skills', label: '技能市场', en: 'SKILLS', icon: 'skill' },
-  { to: '/me', label: '我的工作台', en: 'WORKSPACE', icon: 'user' },
+  { to: '/', label: '发现', en: '探索', icon: 'home' },
+  { to: '/browse', label: '插件目录', en: '插件', icon: 'grid' },
+  { to: '/skills', label: '技能市场', en: '技能', icon: 'skill' },
+  { to: '/me', label: '我的工作台', en: '工作区', icon: 'user' },
 ];
 watch(
   () => props.open,
@@ -72,7 +72,7 @@ watch(
         class="rail-link"
         v-market-tooltip:right="'服务状态'"
         ><AppIcon name="status" /><span>服务状态</span></router-link
-      ><span class="rail-caption" aria-hidden="true">OPEN POSSIBILITIES</span>
+      ><span class="rail-caption" aria-hidden="true">开启更多可能</span>
     </div>
   </aside>
   <dialog
@@ -87,7 +87,7 @@ watch(
     "
   >
     <div class="mobile-navigation__head">
-      <FoxMark /><strong>MOFOX MARKET</strong
+      <FoxMark /><strong>MOFOX 插件市场</strong
       ><button class="icon-button" aria-label="关闭导航" @click="emit('close')">
         <AppIcon name="close" />
       </button>

@@ -1,4 +1,4 @@
-"""Helpers for plugin market rich content and uploaded assets."""
+"""插件市场富文本内容与上传资源辅助工具。"""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from plugin_market_backend.errors import ApiError
 _LEGACY_DATA_PREFIX = "data"
 SKILL_MANIFEST_SCHEMA_VERSION = 1
 
-# Upload limits (must match documented behaviour for the frontend).
+# 上传限制（必须与前端文档中约定的行为一致）。
 MAX_ICON_BYTES = 2 * 1024 * 1024  # 2 MiB
 MAX_BACKGROUND_BYTES = 5 * 1024 * 1024  # 5 MiB
 ALLOWED_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP", "GIF"}
@@ -61,7 +61,7 @@ ALLOWED_MARKDOWN_ATTRIBUTES = {
 
 @dataclass(slots=True)
 class SkillArchiveMetadata:
-    """Parsed metadata extracted from an uploaded skill zip package."""
+    """从上传的技能 ZIP 包中解析出的元数据。"""
 
     name: str
     description: str
@@ -70,30 +70,28 @@ class SkillArchiveMetadata:
 
 
 def ensure_plugin_media_dirs() -> None:
-    """Ensure directories for stored plugin media exist."""
-
+    """确保插件媒体资源的存储目录存在。"""
     plugin_icon_dir().mkdir(parents=True, exist_ok=True)
     profile_background_dir().mkdir(parents=True, exist_ok=True)
 
 
 def store_plugin_icon(plugin_id: str, icon_png_base64: str) -> str:
-    """Normalize and persist a plugin icon, returning its public URL."""
-
+    """规范化并保存插件图标，返回其公开 URL。"""
     ensure_plugin_media_dirs()
     try:
         raw = base64.b64decode(icon_png_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
-        raise ApiError(422, "INVALID_ICON", "Plugin icon must be valid base64-encoded PNG data.") from exc
+        raise ApiError(422, "INVALID_ICON", "插件图标必须是有效的 Base64 编码 PNG 数据。") from exc
 
     try:
         with Image.open(io.BytesIO(raw)) as image:
             if (image.format or "").upper() != "PNG":
-                raise ApiError(422, "INVALID_ICON", "Plugin icon must be a PNG image.")
+                raise ApiError(422, "INVALID_ICON", "插件图标必须是 PNG 图片。")
             working = ImageOps.contain(image.convert("RGBA"), (512, 512), method=Image.Resampling.LANCZOS)
     except ApiError:
         raise
     except Exception as exc:
-        raise ApiError(422, "INVALID_ICON", "Plugin icon could not be decoded as a PNG image.") from exc
+        raise ApiError(422, "INVALID_ICON", "无法将插件图标解码为 PNG 图片。") from exc
 
     canvas = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
     offset = ((512 - working.width) // 2, (512 - working.height) // 2)
@@ -106,28 +104,24 @@ def store_plugin_icon(plugin_id: str, icon_png_base64: str) -> str:
 
 
 def delete_plugin_icon(plugin_id: str) -> None:
-    """Delete a stored plugin icon when the plugin clears it."""
-
+    """在插件清除图标时删除已存储的图标。"""
     icon_path = plugin_icon_path(plugin_id)
     if icon_path.exists():
         icon_path.unlink()
 
 
 def plugin_icon_path(plugin_id: str) -> Path:
-    """Return the icon path for a plugin."""
-
+    """返回插件图标的存储路径。"""
     return plugin_icon_dir() / f"{plugin_id}.png"
 
 
 def plugin_icon_url(plugin_id: str) -> str:
-    """Return the public URL for a stored plugin icon."""
-
+    """返回已存储插件图标的公开 URL。"""
     return f"/plugin-media/icons/{plugin_id}.png"
 
 
 def normalize_readme_markdown(value: str | None) -> str | None:
-    """Normalize README markdown before persistence."""
-
+    """在保存之前规范化 README Markdown。"""
     if value is None:
         return None
     normalized = value.strip()
@@ -135,8 +129,7 @@ def normalize_readme_markdown(value: str | None) -> str | None:
 
 
 def render_readme_html(value: str | None) -> str | None:
-    """Render README markdown into sanitized HTML."""
-
+    """将 README Markdown 渲染为经过安全清洗的 HTML。"""
     normalized = normalize_readme_markdown(value)
     if normalized is None:
         return None
@@ -151,24 +144,33 @@ def render_readme_html(value: str | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Multipart image uploads (icon / profile background)
+# 多部分表单图片上传（图标 / 个人空间背景）
 # ---------------------------------------------------------------------------
 
 def store_plugin_icon_from_bytes(plugin_id: str, raw_bytes: bytes) -> str:
-    """Persist a plugin icon from raw uploaded bytes.
+    """保存上传的插件图标。
 
-    Accepts PNG / JPEG / WEBP / GIF, normalizes everything to a 512×512 PNG
-    (transparent canvas, contained), and returns the public URL.
+    接受 PNG / JPEG / WEBP / GIF，等比缩放并放入透明画布，
+    统一保存为 512×512 的 PNG 图片。
+
+    Args:
+        plugin_id: 插件标识符。
+        raw_bytes: 上传的原始图片字节。
+
+    Returns:
+        图标的公开 URL。
+
+    Raises:
+        ApiError: 文件为空、超过大小限制、格式不受支持或无法解码。
     """
-
     ensure_plugin_media_dirs()
     if len(raw_bytes) == 0:
-        raise ApiError(422, "INVALID_ICON", "Plugin icon file is empty.")
+        raise ApiError(422, "INVALID_ICON", "插件图标文件为空。")
     if len(raw_bytes) > MAX_ICON_BYTES:
         raise ApiError(
             422,
             "INVALID_ICON",
-            f"Plugin icon must not exceed {MAX_ICON_BYTES // 1024 // 1024} MiB.",
+            f"插件图标不得超过 {MAX_ICON_BYTES // 1024 // 1024} MiB。",
             {"max_bytes": MAX_ICON_BYTES, "received": len(raw_bytes)},
         )
 
@@ -179,7 +181,7 @@ def store_plugin_icon_from_bytes(plugin_id: str, raw_bytes: bytes) -> str:
                 raise ApiError(
                     422,
                     "INVALID_ICON",
-                    "Unsupported image format. Allowed: PNG / JPEG / WEBP / GIF.",
+                    "不支持此图片格式。允许的格式：PNG / JPEG / WEBP / GIF。",
                     {"format": fmt},
                 )
             working = ImageOps.contain(
@@ -188,7 +190,7 @@ def store_plugin_icon_from_bytes(plugin_id: str, raw_bytes: bytes) -> str:
     except ApiError:
         raise
     except Exception as exc:
-        raise ApiError(422, "INVALID_ICON", "Plugin icon could not be decoded as an image.") from exc
+        raise ApiError(422, "INVALID_ICON", "无法将插件图标解码为图片。") from exc
 
     canvas = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
     offset = ((512 - working.width) // 2, (512 - working.height) // 2)
@@ -201,21 +203,29 @@ def store_plugin_icon_from_bytes(plugin_id: str, raw_bytes: bytes) -> str:
 
 
 def store_profile_background(author_id: str, raw_bytes: bytes) -> str:
-    """Persist a personal-space background image from uploaded bytes.
+    """保存上传的个人空间背景图片。
 
-    Accepts PNG / JPEG / WEBP, resizes to fit within 1920×1080 (covers most
-    desktop hero positions while keeping bytes reasonable), saves as JPEG
-    (quality 86) for compactness, returns a public URL.
+    接受 PNG / JPEG / WEBP，等比缩放至 1920×1080 范围内，
+    兼顾桌面端主视觉展示与文件大小，并以质量 86 保存为 JPEG。
+
+    Args:
+        author_id: 作者标识符。
+        raw_bytes: 上传的原始图片字节。
+
+    Returns:
+        背景图片的公开 URL。
+
+    Raises:
+        ApiError: 文件为空、超过大小限制、格式不受支持或无法解码。
     """
-
     ensure_plugin_media_dirs()
     if len(raw_bytes) == 0:
-        raise ApiError(422, "PROFILE_BACKGROUND_EMPTY", "Background image file is empty.")
+        raise ApiError(422, "PROFILE_BACKGROUND_EMPTY", "背景图片文件为空。")
     if len(raw_bytes) > MAX_BACKGROUND_BYTES:
         raise ApiError(
             422,
             "PROFILE_BACKGROUND_TOO_LARGE",
-            f"Background image must not exceed {MAX_BACKGROUND_BYTES // 1024 // 1024} MiB.",
+            f"背景图片不得超过 {MAX_BACKGROUND_BYTES // 1024 // 1024} MiB。",
             {"max_bytes": MAX_BACKGROUND_BYTES, "received": len(raw_bytes)},
         )
 
@@ -226,7 +236,7 @@ def store_profile_background(author_id: str, raw_bytes: bytes) -> str:
                 raise ApiError(
                     422,
                     "PROFILE_BACKGROUND_INVALID_FORMAT",
-                    "Background image format must be PNG / JPEG / WEBP.",
+                    "背景图片格式必须为 PNG / JPEG / WEBP。",
                     {"format": fmt},
                 )
             rgb = image.convert("RGB")
@@ -237,7 +247,7 @@ def store_profile_background(author_id: str, raw_bytes: bytes) -> str:
         raise ApiError(
             422,
             "PROFILE_BACKGROUND_INVALID",
-            "Background image could not be decoded.",
+            "无法解码背景图片。",
         ) from exc
 
     safe_id = "".join(ch for ch in author_id if ch.isalnum() or ch in {"-", "_"}).strip("-_") or "anon"
@@ -249,8 +259,7 @@ def store_profile_background(author_id: str, raw_bytes: bytes) -> str:
 
 
 def delete_profile_background_url(url: str | None) -> None:
-    """Best-effort delete a previously stored profile background asset."""
-
+    """尽力删除之前保存的个人空间背景资源。"""
     if not url or not url.startswith("/plugin-media/profile_backgrounds/"):
         return
     name = url.split("/")[-1]
@@ -265,39 +274,34 @@ def delete_profile_background_url(url: str | None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Skill package storage
+# 技能包存储
 # ---------------------------------------------------------------------------
 
 MAX_SKILL_PACKAGE_BYTES = 10 * 1024 * 1024  # 10 MiB
 
 
 def storage_root_dir() -> Path:
-    """Return the configured storage root directory."""
-
+    """返回配置的存储根目录。"""
     return get_settings().storage_path
 
 
 def plugin_media_dir() -> Path:
-    """Return the root directory for uploaded public media."""
-
+    """返回上传的公开媒体资源的根目录。"""
     return storage_root_dir() / "plugin_media"
 
 
 def plugin_icon_dir() -> Path:
-    """Return the directory for normalized plugin icons."""
-
+    """返回规范化插件图标的存储目录。"""
     return plugin_media_dir() / "icons"
 
 
 def profile_background_dir() -> Path:
-    """Return the directory for uploaded profile backgrounds."""
-
+    """返回个人空间背景图片的存储目录。"""
     return plugin_media_dir() / "profile_backgrounds"
 
 
 def skill_packages_dir() -> Path:
-    """Return the directory for stored skill zip packages."""
-
+    """返回技能 ZIP 包的存储目录。"""
     return storage_root_dir() / "skill_packages"
 
 
@@ -305,39 +309,36 @@ PLUGIN_MEDIA_DIR = plugin_media_dir()
 
 
 def ensure_skill_dirs() -> None:
-    """Ensure the skill package storage directory exists."""
-
+    """确保技能包存储目录存在。"""
     skill_packages_dir().mkdir(parents=True, exist_ok=True)
 
 
 def _validate_storage_segment(value: str, *, field_name: str, error_code: str) -> str:
-    """Validate a logical identifier that will become one encoded path segment."""
-
+    """校验逻辑标识符，确保可安全用于存储路径。"""
     normalized = value.strip()
     if not normalized:
-        raise ApiError(422, error_code, f"{field_name} must not be empty.", {field_name: value})
+        raise ApiError(422, error_code, f"{field_name} 不得为空。", {field_name: value})
     if normalized in {".", ".."}:
-        raise ApiError(422, error_code, f"{field_name} must not be '.' or '..'.", {field_name: value})
+        raise ApiError(422, error_code, f"{field_name} 不得为 '.' 或 '..'。", {field_name: value})
     if "/" in normalized or "\\" in normalized:
         raise ApiError(
             422,
             error_code,
-            f"{field_name} must not contain path separators.",
+            f"{field_name} 不得包含路径分隔符。",
             {field_name: value},
         )
     if any(ord(char) < 32 or ord(char) == 127 for char in normalized):
         raise ApiError(
             422,
             error_code,
-            f"{field_name} must not contain control characters.",
+            f"{field_name} 不得包含控制字符。",
             {field_name: value},
         )
     return normalized
 
 
 def validate_skill_id(skill_id: str) -> str:
-    """Validate and normalize a skill id used in APIs and storage."""
-
+    """校验当前 API 接受的逻辑技能 ID。"""
     return _validate_storage_segment(
         skill_id,
         field_name="skill_id",
@@ -346,8 +347,7 @@ def validate_skill_id(skill_id: str) -> str:
 
 
 def validate_skill_version(version: str) -> str:
-    """Validate and normalize a skill version used in APIs and storage."""
-
+    """校验当前 API 接受的逻辑技能版本。"""
     return _validate_storage_segment(
         version,
         field_name="version",
@@ -356,20 +356,17 @@ def validate_skill_version(version: str) -> str:
 
 
 def _encode_storage_segment(value: str) -> str:
-    """Encode an arbitrary identifier into a single filesystem-safe segment."""
-
+    """将任意标识符编码为单个安全的文件系统路径段。"""
     return quote(value, safe="")
 
 
 def _decode_storage_segment(value: str) -> str:
-    """Decode one storage path segment back to its logical identifier."""
-
+    """将存储路径段解码为原始逻辑标识符。"""
     return unquote(value)
 
 
 def _skill_storage_segments(owner_id: str, skill_id: str, version: str) -> tuple[str, str, str]:
-    """Return encoded storage path segments for a skill package."""
-
+    """返回技能包经过编码的存储路径段。"""
     normalized_owner = _validate_storage_segment(
         owner_id,
         field_name="owner_id",
@@ -385,8 +382,7 @@ def _skill_storage_segments(owner_id: str, skill_id: str, version: str) -> tuple
 
 
 def infer_skill_storage_identifiers(stored_path: str) -> tuple[str | None, str | None, str | None]:
-    """Infer ``(owner_id, skill_id, version)`` from a stored package path."""
-
+    """从已存储的技能包路径推断 ``(owner_id, skill_id, version)``。"""
     raw_path = Path(stored_path)
     parts = list(raw_path.parts)
     if parts and parts[0] == _LEGACY_DATA_PREFIX:
@@ -409,14 +405,12 @@ def infer_skill_storage_identifiers(stored_path: str) -> tuple[str | None, str |
 
 
 def skill_package_manifest_path(package_path: Path) -> Path:
-    """Return the sidecar manifest path for one stored skill zip package."""
-
+    """返回已存储技能 ZIP 包的配套清单路径。"""
     return package_path.with_suffix(".json")
 
 
 def iter_skill_package_files() -> list[tuple[str, Path]]:
-    """Return all stored skill package files as ``(stored_path, absolute_path)``."""
-
+    """以 ``(stored_path, absolute_path)`` 形式返回所有已存储的技能包文件。"""
     root = skill_packages_dir()
     if not root.exists():
         return []
@@ -430,20 +424,27 @@ def iter_skill_package_files() -> list[tuple[str, Path]]:
 
 
 def skill_package_storage_path(owner_id: str, skill_id: str, version: str) -> str:
-    """Return the relative storage path for one skill package."""
-
+    """返回技能包的相对存储路径。"""
     safe_owner_id, safe_skill_id, safe_version = _skill_storage_segments(owner_id, skill_id, version)
     return Path("skill_packages", safe_owner_id, safe_skill_id, f"{safe_version}.zip").as_posix()
 
 
 def store_skill_package(owner_id: str, skill_id: str, version: str, zip_bytes: bytes) -> str:
-    """Persist a skill zip package and return its storage path.
+    """保存技能 ZIP 包并返回存储路径。
 
-    The package is stored under the configured storage root as
-    ``skill_packages/{owner_id}/{skill_id}/{version}.zip`` using encoded
-    path segments, so logical ids may include Chinese characters or uppercase.
+    技能包存储在配置的根目录下，路径为
+    ``skill_packages/{owner_id}/{skill_id}/{version}.zip``。
+    路径段经过编码，因此逻辑标识符可以包含中文或大写字母。
+
+    Args:
+        owner_id: 技能所有者的标识符。
+        skill_id: 技能标识符。
+        version: 技能版本。
+        zip_bytes: ZIP 包的原始字节。
+
+    Returns:
+        技能包相对于存储根目录的路径。
     """
-
     ensure_skill_dirs()
     stored_path = skill_package_storage_path(owner_id, skill_id, version)
     safe_owner_id, safe_skill_id, safe_version = _skill_storage_segments(owner_id, skill_id, version)
@@ -455,8 +456,7 @@ def store_skill_package(owner_id: str, skill_id: str, version: str, zip_bytes: b
 
 
 def write_skill_package_manifest(stored_package_path: str, payload: dict[str, Any]) -> None:
-    """Persist a JSON sidecar manifest for one stored skill package."""
-
+    """保存已存储技能包的配套 JSON 清单。"""
     package_path = resolve_skill_package_path(stored_package_path)
     manifest_path = skill_package_manifest_path(package_path)
     data = {"schema_version": SKILL_MANIFEST_SCHEMA_VERSION, **payload}
@@ -467,8 +467,7 @@ def write_skill_package_manifest(stored_package_path: str, payload: dict[str, An
 
 
 def load_skill_package_manifest(stored_package_path: str) -> dict[str, Any] | None:
-    """Load the optional JSON sidecar manifest for one stored skill package."""
-
+    """加载已存储技能包可选的配套 JSON 清单。"""
     manifest_path = skill_package_manifest_path(resolve_skill_package_path(stored_package_path))
     if not manifest_path.exists():
         return None
@@ -480,13 +479,17 @@ def load_skill_package_manifest(stored_package_path: str) -> dict[str, Any] | No
 
 
 def resolve_skill_package_path(stored_path: str) -> Path:
-    """Resolve a stored skill package path to an absolute filesystem path.
+    """将已存储的技能包路径解析为绝对文件系统路径。
 
-    Supports both the current storage-relative format and legacy values like
-    ``data/skill_packages/...`` that were persisted before the storage-root
-    normalization.
+    同时支持当前相对于存储根目录的格式，以及存储根目录规范化之前
+    保存的 ``data/skill_packages/...`` 等旧格式。
+
+    Args:
+        stored_path: 已保存的技能包路径。
+
+    Returns:
+        首个存在的候选路径；均不存在时返回首个候选路径。
     """
-
     raw_path = Path(stored_path)
     if raw_path.is_absolute():
         return raw_path
@@ -519,15 +522,14 @@ def resolve_skill_package_path(stored_path: str) -> Path:
 
 
 def inspect_skill_archive(zip_bytes: bytes) -> SkillArchiveMetadata:
-    """Validate a skill zip package and return parsed metadata."""
-
+    """校验技能 ZIP 包并返回解析出的元数据。"""
     if len(zip_bytes) == 0:
-        raise ApiError(422, "SKILL_PACKAGE_EMPTY", "Skill package is empty.")
+        raise ApiError(422, "SKILL_PACKAGE_EMPTY", "技能包为空。")
     if len(zip_bytes) > MAX_SKILL_PACKAGE_BYTES:
         raise ApiError(
             422,
             "SKILL_PACKAGE_TOO_LARGE",
-            f"Skill package must not exceed {MAX_SKILL_PACKAGE_BYTES // 1024 // 1024} MiB.",
+            f"技能包不得超过 {MAX_SKILL_PACKAGE_BYTES // 1024 // 1024} MiB。",
             {"max_bytes": MAX_SKILL_PACKAGE_BYTES, "received": len(zip_bytes)},
         )
 
@@ -538,7 +540,7 @@ def inspect_skill_archive(zip_bytes: bytes) -> SkillArchiveMetadata:
                     raise ApiError(
                         422,
                         "SKILL_PACKAGE_INSECURE_PATH",
-                        f"Skill package contains an insecure path: {name!r}.",
+                        f"技能包包含不安全的路径：{name!r}。",
                     )
 
             skill_md_candidates = [
@@ -550,7 +552,7 @@ def inspect_skill_archive(zip_bytes: bytes) -> SkillArchiveMetadata:
                 raise ApiError(
                     422,
                     "SKILL_PACKAGE_NO_SKILL_MD",
-                    "Skill package must contain a SKILL.md file (exact uppercase) at the zip root.",
+                    "技能包的 ZIP 根目录必须包含 SKILL.md 文件（大小写须完全一致）。",
                 )
 
             skill_md_name = "SKILL.md" if "SKILL.md" in skill_md_candidates else skill_md_candidates[0]
@@ -585,7 +587,7 @@ def inspect_skill_archive(zip_bytes: bytes) -> SkillArchiveMetadata:
                 raise ApiError(
                     422,
                     "SKILL_PACKAGE_MISSING_NAME",
-                    "SKILL.md 的 YAML 头部必须包含非空的 name 字段，例如: `name: My Skill`",
+                    "SKILL.md 的 YAML 头部必须包含非空的 name 字段，例如: `name: 我的技能`",
                 )
             description = str(front_matter.get("description", "")).strip()
             body = "\n".join(body_lines).strip()
@@ -602,18 +604,17 @@ def inspect_skill_archive(zip_bytes: bytes) -> SkillArchiveMetadata:
         raise ApiError(
             422,
             "SKILL_PACKAGE_NOT_ZIP",
-            "Skill package is not a valid zip archive.",
+            "技能包不是有效的 ZIP 归档文件。",
         ) from exc
     except UnicodeDecodeError as exc:
         raise ApiError(
             422,
             "SKILL_PACKAGE_ENCODING",
-            "SKILL.md must be a UTF-8 encoded text file.",
+            "SKILL.md 必须是 UTF-8 编码的文本文件。",
         ) from exc
 
 
 def extract_and_validate_skill(zip_bytes: bytes) -> tuple[str, str, str]:
-    """Validate a skill zip package and extract core metadata."""
-
+    """校验技能 ZIP 包并提取核心元数据。"""
     metadata = inspect_skill_archive(zip_bytes)
     return metadata.name, metadata.description, metadata.readme_text

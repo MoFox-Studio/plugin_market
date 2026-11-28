@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for the plugin market frontend
+ * 插件市场前端共用的类型定义。
  */
 
 export type Audience = 'all' | 'logged_in' | 'anonymous' | 'admins' | 'authors_with_plugin'
@@ -504,7 +504,7 @@ export interface ActivityDay {
   ratings_created: number
 }
 
-// ── Skill market types ──
+// ── Skill 市场类型 ──
 
 export interface Skill {
   skill_id: string

@@ -1,4 +1,4 @@
-# Stage 1: Build frontend
+# 第一阶段：构建前端
 FROM node:22-slim AS frontend-build
 
 WORKDIR /frontend
@@ -9,7 +9,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Python backend
+# 第二阶段：Python 后端
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -20,7 +20,7 @@ COPY pyproject.toml uv.lock README.md alembic.ini ./
 COPY migrations ./migrations
 COPY src ./src
 
-# Copy frontend build output into backend static directory
+# 将前端构建产物复制到后端静态文件目录
 COPY --from=frontend-build /src/plugin_market_backend/static/ ./src/plugin_market_backend/static/
 
 RUN uv sync --frozen --no-dev

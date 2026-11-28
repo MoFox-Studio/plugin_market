@@ -6,7 +6,6 @@ import AppFooter from './AppFooter.vue';
 import AppHeader from './AppHeader.vue';
 import AppSidebar from './AppSidebar.vue';
 import ContourField from './ContourField.vue';
-import GlobalPointerReveal from './GlobalPointerReveal.vue';
 const route = useRoute();
 const sidebarOpen = ref(false);
 watch(
@@ -20,7 +19,6 @@ const showFooter = computed(
 <template>
   <div class="market-shell">
     <ContourField />
-    <GlobalPointerReveal />
     <a class="skip-link" href="#main-content">跳到主要内容</a>
     <AppSidebar :open="sidebarOpen" @close="sidebarOpen = false" />
     <div class="market-stage">

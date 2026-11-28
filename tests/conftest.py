@@ -1,4 +1,4 @@
-"""Test fixtures for the plugin market backend."""
+"""插件市场后端的测试夹具。"""
 
 from __future__ import annotations
 
@@ -16,8 +16,14 @@ from plugin_market_backend.seed import seed_database
 
 @pytest.fixture(autouse=True)
 async def reset_database(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[None, None]:
-    """Reset the database before each test."""
+    """在每个测试前重置数据库。
 
+    Args:
+        monkeypatch: 用于隔离测试环境变量的 pytest 夹具。
+
+    Yields:
+        None: 数据库准备就绪后运行测试，随后清理数据。
+    """
     monkeypatch.setenv("PLUGIN_MARKET_AUTHOR_TOKEN", "dev-token")
     monkeypatch.setenv("PLUGIN_MARKET_ADMIN_TOKEN", "admin-token")
     monkeypatch.setenv("PLUGIN_MARKET_REQUIRE_REVIEW", "false")
@@ -42,8 +48,11 @@ async def reset_database(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[None
 
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
-    """Create an ASGI test client."""
+    """创建 ASGI 测试客户端。
 
+    Yields:
+        通过 ASGI 访问应用的异步 HTTP 客户端。
+    """
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as http_client:
         yield http_client

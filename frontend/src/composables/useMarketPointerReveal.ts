@@ -21,12 +21,6 @@ const state: MarketPointerRevealState = {
   local: false,
   surface: 'field',
 };
-const properties = [
-  '--market-pointer-x',
-  '--market-pointer-y',
-  '--market-pointer-radius',
-  '--market-pointer-active',
-];
 let fine: MediaQueryList | null = null;
 let reduced: MediaQueryList | null = null;
 let preferenceObserver: MutationObserver | null = null;
@@ -37,13 +31,12 @@ let fromRadius = BASE_RADIUS;
 let targetRadius = BASE_RADIUS;
 let animationStart = 0;
 let animationDuration = 0;
+let pendingTarget: EventTarget | null = null;
+let targetPending = false;
+let refreshTarget = false;
 
 function publish() {
-  const style = document.documentElement.style;
-  style.setProperty(properties[0], `${state.x}px`);
-  style.setProperty(properties[1], `${state.y}px`);
-  style.setProperty(properties[2], `${state.radius.toFixed(3)}px`);
-  style.setProperty(properties[3], state.active ? '1' : '0');
+  // 订阅方只更新自身有边界的图层，不将样式发布到会被继承的根节点。
   for (const listener of listeners) listener(state);
 }
 function stopFrame() {
@@ -51,7 +44,11 @@ function stopFrame() {
   frame = 0;
 }
 function deactivate() {
+  if (!state.active && !frame) return;
   stopFrame();
+  pendingTarget = null;
+  targetPending = false;
+  refreshTarget = false;
   state.active = false;
   state.local = false;
   state.radius = fromRadius = targetRadius = BASE_RADIUS;
@@ -81,10 +78,20 @@ function aimRadius(next: number, now: number) {
 function animate(now: number) {
   frame = 0;
   if (!state.active || !enabled) return;
+  if (refreshTarget) {
+    pendingTarget = document.elementFromPoint?.(state.x, state.y) || null;
+    targetPending = true;
+    refreshTarget = false;
+  }
+  if (targetPending) {
+    inspectTarget(pendingTarget);
+    pendingTarget = null;
+    targetPending = false;
+  }
   if (now - lastMove >= STOP_DELAY) aimRadius(BASE_RADIUS, now);
   sampleRadius(now);
   publish();
-  // A settled stationary lens does not keep the rendering loop alive.
+  // 镜片静止且半径稳定后，不再维持渲染循环。
   if (state.radius !== targetRadius || targetRadius !== BASE_RADIUS)
     frame = requestAnimationFrame(animate);
 }
@@ -119,14 +126,14 @@ function move(event: PointerEvent) {
   state.x = event.clientX;
   state.y = event.clientY;
   state.active = true;
-  inspectTarget(event.target);
+  pendingTarget = event.target;
+  targetPending = true;
+  refreshTarget = false;
   lastMove = now;
   aimRadius(radiusForSpeed(speed), now);
-  // Coordinates are written during the event, never interpolated from an old point.
-  sampleRadius(now);
-  publish();
-  if (!frame && (state.radius !== targetRadius || targetRadius !== BASE_RADIUS))
-    frame = requestAnimationFrame(animate);
+  // 保留原有随速度变化的半径，但每个显示帧只提交一次最新输入，
+  // 而不是在每次硬件指针事件发生时都提交。
+  if (!frame) frame = requestAnimationFrame(animate);
 }
 function syncPreference() {
   enabled =
@@ -143,10 +150,8 @@ function outside(event: PointerEvent) {
 }
 function refreshAnchor() {
   if (!state.active) return;
-  inspectTarget(
-    document.elementFromPoint?.(state.x, state.y) || null,
-  );
-  publish();
+  refreshTarget = true;
+  if (!frame) frame = requestAnimationFrame(animate);
 }
 function connect() {
   fine = window.matchMedia?.('(hover: hover) and (pointer: fine)') || null;
@@ -191,11 +196,9 @@ function disconnect() {
   document.removeEventListener('visibilitychange', visibility);
   deactivate();
   enabled = false;
-  for (const property of properties)
-    document.documentElement.style.removeProperty(property);
 }
 
-/** One pointer stream and radius animation shared by the global and local lenses. */
+/** 全局与局部镜片共用一套指针事件流和半径动画。 */
 export function useMarketPointerReveal(listener: Listener) {
   onMounted(() => {
     listeners.add(listener);

@@ -153,7 +153,7 @@ function scheduleHide(state: TooltipState) {
   if (state.hovered || state.focused || (active === state && bubbleHovered))
     return;
   if (state.hideTimer !== null) clearTimeout(state.hideTimer);
-  // Allows a pointer to cross the small gap and read the tooltip itself.
+  // 留出时间，让指针跨过间隙并停留在提示框上阅读内容。
   state.hideTimer = setTimeout(() => hide(state), 120);
 }
 function show(state: TooltipState) {

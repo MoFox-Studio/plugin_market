@@ -44,7 +44,7 @@ onBeforeUnmount(() => {
     aria-labelledby="disclaimer-title"
     @cancel.prevent
   >
-    <span class="eyebrow">BEFORE YOU EXPLORE / 首次访问</span>
+    <span class="eyebrow">探索之前 / 首次访问</span>
     <h2 id="disclaimer-title">开始探索之前</h2>
     <div class="welcome-copy">
       <p>
@@ -59,11 +59,11 @@ onBeforeUnmount(() => {
       </p>
     </div>
     <div class="welcome-bottom">
-      <span>MOFOX · PLUGIN MARKET</span
+      <span>MOFOX · 插件市场</span
       ><button class="btn btn-primary" :disabled="remaining > 0" @click="close">
         {{
           remaining > 0
-            ? '我已知悉（' + remaining + 's）'
+            ? '我已知悉（' + remaining + '秒）'
             : '我已知悉，开始探索 ↗'
         }}
       </button>

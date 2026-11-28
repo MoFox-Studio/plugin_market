@@ -1,4 +1,4 @@
-"""Shared lifecycle and permission enums for the plugin market backend."""
+"""插件市场后端共享的生命周期与权限枚举。"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from enum import StrEnum
 
 
 class PluginStatus(StrEnum):
-    """Plugin lifecycle states."""
+    """插件生命周期状态。"""
 
     DRAFT = "draft"
     PENDING_REVIEW = "pending_review"
@@ -17,7 +17,7 @@ class PluginStatus(StrEnum):
 
 
 class VersionStatus(StrEnum):
-    """Plugin version lifecycle states."""
+    """插件版本的生命周期状态。"""
 
     SUBMITTED = "submitted"
     PENDING_REVIEW = "pending_review"
@@ -27,7 +27,7 @@ class VersionStatus(StrEnum):
 
 
 class SyncStatus(StrEnum):
-    """Release metadata synchronization states."""
+    """发布元数据的同步状态。"""
 
     NONE = "none"
     SUCCESS = "success"
@@ -35,7 +35,7 @@ class SyncStatus(StrEnum):
 
 
 class TrustLevel(StrEnum):
-    """Plugin trust levels shown by clients."""
+    """客户端展示的插件信任级别。"""
 
     OFFICIAL = "official"
     VERIFIED = "verified"
@@ -43,21 +43,21 @@ class TrustLevel(StrEnum):
 
 
 class AuthorType(StrEnum):
-    """Author account types."""
+    """作者账号类型。"""
 
     USER = "user"
     ORGANIZATION = "organization"
 
 
 class SkillStatus(StrEnum):
-    """Skill lifecycle states."""
+    """技能生命周期状态。"""
 
     PUBLISHED = "published"
     BLOCKED = "blocked"
 
 
 class ReviewAction(StrEnum):
-    """Audited market actions."""
+    """纳入审计的市场操作。"""
 
     REGISTER_PLUGIN = "register_plugin"
     UPDATE_PLUGIN = "update_plugin"
@@ -76,7 +76,7 @@ class ReviewAction(StrEnum):
     WEBHOOK_RECEIVED = "webhook_received"
     MAINTAINER_ADD = "maintainer_add"
     MAINTAINER_REMOVE = "maintainer_remove"
-    # --- plugin-market-overhaul phase 1 (0004) ---
+    # --- 插件市场改版第一阶段（0004）---
     CREATE_CURATION = "create_curation"
     UPDATE_CURATION = "update_curation"
     DISABLE_CURATION = "disable_curation"
@@ -90,7 +90,7 @@ class ReviewAction(StrEnum):
     BULK_DEPRECATE = "bulk_deprecate"
     BULK_SET_TRUST_LEVEL = "bulk_set_trust_level"
     BULK_DELETE = "bulk_delete"
-    # --- skill market (0006) ---
+    # --- 技能市场（0006）---
     PUBLISH_SKILL = "publish_skill"
     UPDATE_SKILL = "update_skill"
     PUBLISH_SKILL_VERSION = "publish_skill_version"

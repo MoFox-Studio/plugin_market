@@ -47,6 +47,11 @@ const pageSize = 24,
   totalPages = computed(() =>
     Math.max(1, Math.ceil(results.data.total / pageSize)),
   );
+const railItems = [
+  { id: 'market-overview', label: '目录概览' },
+  { id: 'market-filters', label: '分类与标签' },
+  { id: 'market-results', label: '插件列表' },
+];
 const hasFilters = computed(
   () => !!(query.value || category.value || tag.value || trust.value),
 );
@@ -90,8 +95,8 @@ async function load() {
   if (tag.value) params.set('tag', tag.value);
   if (trust.value) params.set('trust_level', trust.value);
   const key = route.fullPath;
-  await results.load(async () => ({
-    ...await api.get<{ items: Plugin[]; total: number }>(`/api/v1/plugins?${params}`),
+  await results.load(async (signal) => ({
+    ...await api.get<{ items: Plugin[]; total: number }>(`/api/v1/plugins?${params}`, { signal }),
     loadedPage: requestedPage,
   }));
   if (key === route.fullPath && !results.loading && !results.error && page.value > totalPages.value)
@@ -113,8 +118,9 @@ onMounted(() => {
 });
 </script>
 <template>
-  <CatalogFrame class="archive-page">
-    <CatalogMasthead
+  <CatalogFrame class="archive-page" :rail-items="railItems">
+    <div id="market-overview" tabindex="-1">
+      <CatalogMasthead
       title="插件总目"
 
       description="按用途、来源与标签查阅社区发布的插件。"
@@ -235,9 +241,10 @@ onMounted(() => {
             </button>
           </div>
         </div>
-    </CatalogMasthead>
+      </CatalogMasthead>
+    </div>
     <div class="catalog-workspace">
-      <aside class="catalog-filter-rail">
+      <aside id="market-filters" class="catalog-filter-rail" tabindex="-1">
         <CategoryIndex
           :loading="taxonomy.loading"
           :categories="taxonomy.categories"
@@ -263,7 +270,13 @@ onMounted(() => {
           <router-link to="/skills">发现更多 Skills ↗</router-link>
         </div>
       </aside>
-      <section class="catalog-results" aria-label="插件检索结果" :aria-busy="results.loading">
+      <section
+        id="market-results"
+        class="catalog-results"
+        tabindex="-1"
+        aria-label="插件检索结果"
+        :aria-busy="results.loading"
+      >
         <div class="workspace-result-head">
           <div>
             <span class="edition-index-label">本版目录</span>

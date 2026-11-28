@@ -1,4 +1,4 @@
-"""Property tests for plugin metadata authorization."""
+"""插件元数据授权的属性测试。"""
 
 from __future__ import annotations
 
@@ -39,8 +39,8 @@ async def _create_plugin(session, plugin_id: str, owner_id: str, *, categories: 
     payload = PluginCreate(
         plugin_id=plugin_id,
         display_name=plugin_id,
-        summary=f'summary for {plugin_id}',
-        description=f'description for {plugin_id}',
+        summary=f'{plugin_id} 的摘要',
+        description=f'{plugin_id} 的说明',
         repository_url=f'https://github.com/MoFox-Studio/{plugin_id}',
         license='MIT',
         categories=categories,
@@ -94,7 +94,7 @@ async def _run_case(
 valid_fields = st.fixed_dictionaries(
     {},
     optional={
-        'display_name': st.sampled_from(['Renamed Plugin', 'Updated Name']),
+        'display_name': st.sampled_from(['重命名的插件', '更新后的名称']),
         'icon_url': st.just('https://cdn.example.com/icons/plug-a.png'),
         'categories': st.sampled_from([['tool'], ['chat']]),
         'tags': st.sampled_from([['alpha'], ['alpha', 'beta']]),

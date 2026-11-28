@@ -1,7 +1,7 @@
-"""Generate an original static height-field texture (decorative, not geographic data).
+"""生成原创静态高度场纹理（仅用于装饰，不是地理数据）。
 
-Run `python frontend/scripts/generate-contours.py` from the repository root.
-Marching squares joins shared edges before simplifying to smooth SVG paths.
+在仓库根目录运行 `python frontend/scripts/generate-contours.py`。
+行进方格算法先连接共享边，再将其简化为平滑的 SVG 路径。
 """
 import math
 from pathlib import Path
@@ -104,7 +104,7 @@ def build():
     target = Path(__file__).resolve().parents[1] / 'src/assets/terrain-contours.svg'
     paths = ''.join(f'<path d="{path}" stroke-width="{1.15 if layer % 5 == 0 else .7}" opacity="{.85 if layer % 5 == 0 else .55}"/>' for layer, path in lines)
     target.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" fill="none"><g stroke="white" stroke-linecap="round" stroke-linejoin="round">{paths}</g></svg>\n', encoding='utf-8')
-    print(f'{len(lines)} joined contour paths; {target.stat().st_size} bytes')
+    print(f'已连接 {len(lines)} 条等高线路径；{target.stat().st_size} 字节')
 
 
 if __name__ == '__main__': build()

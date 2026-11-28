@@ -1,5 +1,5 @@
 /**
- * Utility functions for formatting and display
+ * 格式化与显示相关的工具函数。
  */
 
 export function formatNumber(n: number | string | null | undefined): string {
@@ -70,13 +70,13 @@ export function formatUptime(seconds: number | string | null | undefined): strin
   const days = Math.floor(total / 86400)
   const hours = Math.floor((total % 86400) / 3600)
   const minutes = Math.floor((total % 3600) / 60)
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  return `${minutes}m`
+  if (days > 0) return `${days}天 ${hours}小时`
+  if (hours > 0) return `${hours}小时 ${minutes}分钟`
+  return `${minutes}分钟`
 }
 
 export function escapeHtml(value: unknown): string {
-  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }
   return String(value ?? '').replace(/[&<>"']/g, (c) => map[c] || c)
 }
 

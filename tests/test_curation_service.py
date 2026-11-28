@@ -1,11 +1,11 @@
-"""Unit tests for ``CurationService`` (task 8).
+"""CurationService 的单元测试（任务 8）。
 
-These tests cover the task-8 slice only:
+仅覆盖任务 8 的范围：
 
-* the pure visibility predicate over ``enabled`` / schedule / audience,
-* Property 7 signature-plugin ownership checks,
-* create / update / disable / reorder happy paths,
-* audit-trail fan-out for every curation write.
+* 基于 enabled、排期和受众的纯可见性判断。
+* 代表作插件归属校验（属性 7）。
+* 成功创建、更新、禁用和重新排序。
+* 每次精选内容写入都生成审计记录。
 """
 
 from __future__ import annotations
@@ -61,8 +61,8 @@ async def _create_plugin(
     payload = PluginCreate(
         plugin_id=plugin_id,
         display_name=plugin_id,
-        summary=f"summary for {plugin_id}",
-        description=f"description for {plugin_id}",
+        summary=f"{plugin_id} 的摘要",
+        description=f"{plugin_id} 的说明",
         repository_url=f"https://github.com/MoFox-Studio/{plugin_id}",
         license="MIT",
         categories=["tool"],
@@ -124,7 +124,7 @@ class TestIsVisible:
             author_id="viewer",
             github_user_id="gh-viewer",
             github_login="viewer",
-            display_name="Viewer",
+            display_name="查看者",
             author_type=AuthorType.USER,
             is_admin=False,
         )
@@ -132,7 +132,7 @@ class TestIsVisible:
             author_id="admin",
             github_user_id="gh-admin",
             github_login="admin",
-            display_name="Admin",
+            display_name="管理员",
             author_type=AuthorType.USER,
             is_admin=True,
         )
@@ -244,11 +244,11 @@ async def test_create_update_disable_and_reorder_write_audit_rows() -> None:
 
         updated = await service.update(
             first.id,
-            CurationEntryUpdate(audience="admins", display_meta={"headline": "Top pick"}),
+            CurationEntryUpdate(audience="admins", display_meta={"headline": "首选推荐"}),
             operator_id="admin",
         )
         assert updated.audience == "admins"
-        assert updated.display_meta == {"headline": "Top pick"}
+        assert updated.display_meta == {"headline": "首选推荐"}
 
         disabled = await service.disable(second.id, operator_id="admin")
         assert disabled.enabled is False

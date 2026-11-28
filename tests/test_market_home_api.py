@@ -1,4 +1,4 @@
-"""API tests for the cached market home aggregate (task 17)."""
+"""带缓存的市场首页聚合 API 测试（任务 17）。"""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ async def test_market_home_returns_aggregate_and_etag(client: AsyncClient) -> No
     created = await client.post(
         "/api/v1/admin/announcements",
         json={
-            "title": "Banner One",
-            "body_markdown": "Hello",
+            "title": "横幅公告一",
+            "body_markdown": "你好",
             "display_mode": "banner",
             "audience": "all",
         },
@@ -46,7 +46,7 @@ async def test_market_home_returns_aggregate_and_etag(client: AsyncClient) -> No
     assert body["top_rated"]
     assert body["trending_authors"]
     assert body["stats"]["plugins_total"] >= 1
-    assert any(item["title"] == "Banner One" for item in body["active_announcements"])
+    assert any(item["title"] == "横幅公告一" for item in body["active_announcements"])
     assert any(item["target_id"] == "demo_plugin" for item in body["showcase"])
 
     assert second.status_code == 304

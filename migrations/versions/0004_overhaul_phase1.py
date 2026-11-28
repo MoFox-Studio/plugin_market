@@ -1,13 +1,13 @@
-"""Plugin market overhaul phase 1: profiles, pins, curation, announcements, inbox.
+"""插件市场第一阶段改造：个人资料、置顶、策展、公告和收件箱。
 
-Adds eight new tables (`author_profiles`, `pinned_plugins`, `curation_entries`,
-`announcements`, `announcement_dismissals`, `inbox_messages`, `comment_mentions`,
-`plugin_metadata_changes`), the new ``mention_payload`` JSON column on
-``plugin_comments`` and six supporting indexes (Plugin status/trust, plugin
-updated-at, comment fan-out, inbox lookup, pinned-author scan, curation slot
-lookup). On PostgreSQL the ``reviewaction`` enum type is extended with the new
-governance + bulk action values; SQLite stores enums as plain strings so it
-needs no DDL for the enum extension.
+新增八张表（`author_profiles`、`pinned_plugins`、`curation_entries`、
+`announcements`、`announcement_dismissals`、`inbox_messages`、`comment_mentions`、
+`plugin_metadata_changes`），并为 ``plugin_comments`` 添加 ``mention_payload``
+JSON 列和六个配套索引（插件状态与信任级别、插件更新时间、评论分发、
+收件箱查询、置顶作者扫描、策展位查询）。
+
+在 PostgreSQL 中，为 ``reviewaction`` 枚举类型添加治理与批量操作值；
+SQLite 将枚举存储为普通字符串，因此无需通过 DDL 扩展枚举。
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ depends_on = None
 
 
 # ---------------------------------------------------------------------------
-# helpers
+# 辅助函数
 # ---------------------------------------------------------------------------
 
 NEW_REVIEW_ACTIONS = (
@@ -43,24 +43,21 @@ NEW_REVIEW_ACTIONS = (
 
 
 def _is_postgres() -> bool:
-    """Return True when running against PostgreSQL."""
-
+    """当前连接使用 PostgreSQL 时返回 True。"""
     bind = op.get_bind()
     return bind.dialect.name == "postgresql"
 
 
 # ---------------------------------------------------------------------------
-# upgrade
+# 升级
 # ---------------------------------------------------------------------------
 
 
 def upgrade() -> None:
-    """Create the phase-1 overhaul schema additions."""
-
+    """创建第一阶段改造新增的数据库结构。"""
     if _is_postgres():
-        # ``ALTER TYPE ... ADD VALUE`` must run outside a transaction in
-        # PostgreSQL; ``IF NOT EXISTS`` makes the statement idempotent for
-        # re-runs / down-then-up sequences.
+        # PostgreSQL 要求在事务外执行 ``ALTER TYPE ... ADD VALUE``；
+        # ``IF NOT EXISTS`` 确保重复运行或先降级再升级时语句仍具备幂等性。
         with op.get_context().autocommit_block():
             for value in NEW_REVIEW_ACTIONS:
                 op.execute(
@@ -303,7 +300,7 @@ def upgrade() -> None:
         ["mentioned_author_id", "created_at"],
     )
 
-    # ----- plugin_metadata_changes ---------------------------------------
+    # 插件元数据变更（plugin_metadata_changes）。
     op.create_table(
         "plugin_metadata_changes",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
@@ -338,7 +335,7 @@ def upgrade() -> None:
         ["created_at"],
     )
 
-    # ----- plugin_comments.mention_payload + composite index --------------
+    # ----- plugin_comments.mention_payload 列与复合索引 -------------------
     with op.batch_alter_table("plugin_comments") as batch_op:
         batch_op.add_column(sa.Column("mention_payload", sa.JSON(), nullable=True))
     op.create_index(
@@ -347,7 +344,7 @@ def upgrade() -> None:
         ["plugin_id", "parent_id", "created_at"],
     )
 
-    # ----- additional plugins indexes -------------------------------------
+    # ----- plugins 附加索引 -----------------------------------------------
     op.create_index(
         "idx_plugins_status_trust",
         "plugins",
@@ -361,13 +358,12 @@ def upgrade() -> None:
 
 
 # ---------------------------------------------------------------------------
-# downgrade
+# 降级
 # ---------------------------------------------------------------------------
 
 
 def downgrade() -> None:
-    """Reverse all phase-1 schema additions."""
-
+    """撤销第一阶段新增的全部数据库结构。"""
     op.drop_index("idx_plugins_updated_at", table_name="plugins")
     op.drop_index("idx_plugins_status_trust", table_name="plugins")
 
@@ -426,8 +422,7 @@ def downgrade() -> None:
 
     op.drop_table("author_profiles")
 
-    # NOTE: PostgreSQL does not support removing values from an enum type.
-    # The new ``reviewaction`` values added in upgrade() are intentionally
-    # left in place during downgrade; they are unused but harmless. Restoring
-    # the previous enum requires a manual ``CREATE TYPE / ALTER TABLE / DROP
-    # TYPE`` rewrite that is out of scope for an automated downgrade.
+    # 注意：PostgreSQL 不支持删除枚举类型中的值。
+    # 降级时有意保留 upgrade() 添加的 ``reviewaction`` 值；
+    # 这些值虽未使用，但不会造成影响。恢复原枚举需要手动执行
+    # ``CREATE TYPE / ALTER TABLE / DROP TYPE`` 重建，不属于自动降级的范围。

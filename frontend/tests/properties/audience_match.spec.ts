@@ -26,8 +26,8 @@ function backendFixtureAudienceMatches(
   return false
 }
 
-describe('audienceMatches property', () => {
-  test('matches backend audience fixture for generated viewer states', () => {
+describe('audienceMatches 属性测试', () => {
+  test('生成的访问者状态与后端受众匹配测试数据的结果一致', () => {
     fc.assert(
       fc.property(
         fc.constantFrom<Audience>('all', 'logged_in', 'anonymous', 'admins', 'authors_with_plugin'),

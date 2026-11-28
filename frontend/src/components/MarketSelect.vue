@@ -356,7 +356,7 @@ onBeforeUnmount(() => {
       @keydown="keydown"
     >
       <span class="market-select-value">{{ label }}</span
-      ><span class="market-select-chevron" aria-hidden="true">⌄</span>
+      ><span class="market-select-chevron" aria-hidden="true"></span>
     </button>
     <span
       v-if="invalid"
@@ -378,7 +378,7 @@ onBeforeUnmount(() => {
           @pointerdown.prevent
         >
           <div class="market-select-caption" aria-hidden="true">
-            <span>MOFOX / SELECT</span
+            <span>MOFOX / 选择</span
             ><span>{{ options.length.toString().padStart(2, '0') }}</span>
           </div>
           <template
@@ -493,12 +493,19 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 .market-select-chevron {
-  color: var(--blue-600);
-  font: 18px/1 var(--font-mono);
+  display: block;
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-right: 2px solid var(--blue-600);
+  border-bottom: 2px solid var(--blue-600);
+  transform: rotate(45deg);
   transition: transform 180ms;
 }
 .market-select.is-open .market-select-chevron {
-  transform: rotate(180deg);
+  margin-top: 4px;
+  transform: rotate(225deg);
 }
 .market-select-popup {
   position: fixed;
