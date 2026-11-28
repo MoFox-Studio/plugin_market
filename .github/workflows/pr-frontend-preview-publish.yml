@@ -165,6 +165,13 @@ jobs:
             echo "::notice::已尝试启用 GitHub Pages（来源：gh-pages 分支）"
           fi
 
+      - name: 更新预览索引
+        if: steps.preview.outputs.deployment-action == 'deploy'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/update-preview-index.sh
+
       - name: 在 PR 中回复预览地址
         if: steps.resolve.outputs.reason == 'ok' && steps.preview.outputs.deployment-action == 'deploy'
         uses: marocchino/sticky-pull-request-comment@v2
@@ -264,6 +271,13 @@ jobs:
           action: remove
           comment: false
           qr-code: false
+
+      - name: 更新预览索引
+        if: steps.preview.outputs.deployment-action == 'remove'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/update-preview-index.sh
 
       - name: 在 PR 中说明清理结果
         if: steps.preview.outputs.deployment-action == 'remove'
