@@ -22,7 +22,7 @@ function loadLogo(): Promise<HTMLImageElement> {
         image.onload = image.onerror = null;
         reject(new Error('标志图像不可用'));
       };
-      image.src = '/logo.png';
+      image.src = `${import.meta.env.BASE_URL}logo.png`;
     }).catch((error) => {
       logoImage = null;
       throw error;
@@ -113,7 +113,7 @@ onMounted(() => {
     playing.value = true;
     if (!frame) frame = requestAnimationFrame(tick);
   }
-  async function initialize() {
+async function initialize() {
     if (initializing || render || failed || !canAnimate()) return;
     initializing = true;
     try {

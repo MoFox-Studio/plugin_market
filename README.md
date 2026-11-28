@@ -34,6 +34,27 @@ http://127.0.0.1:8787/me     # 当前 GitHub 用户发布的插件
 http://127.0.0.1:8787/admin  # 管理后台
 ```
 
+## PR 前端预览
+
+当 PR 修改 `frontend/` 时，前端预览会分两个阶段自动完成：
+
+1. **构建**（`pr-frontend-preview-build.yml`）：在 `pull_request` 上下文中以只读权限构建前端，并上传静态产物 artifact；
+2. **发布**（`pr-frontend-preview-publish.yml`）：由 `workflow_run` 在默认分支上下文中下载产物，发布到 GitHub Pages 的 `pr-preview/pr-<编号>/` 目录，并维护一条包含预览地址的 PR 评论；
+3. PR 关闭后，由 `pull_request_target` 的清理任务自动移除对应目录。
+
+这种拆分让 **fork PR 也能获得预览**，同时不会把写权限交给 PR 里运行的代码。构建阶段可能执行 PR 修改过的 `package.json`、`vite.config.js`，但它只有 `contents: read` 权限且没有任何 secret；发布阶段只处理静态文件，不 checkout、不执行 PR 代码。
+
+预览页面使用内置模拟数据（`VITE_PREVIEW_MOCK=1`），不连接生产后端，因此登录、评论、发布等写操作不可用；预览还使用 hash 路由，避免 GitHub Pages 直接刷新深层链接时 404。
+
+首次使用需要仓库管理员在仓库设置中完成：
+
+- **Settings → Pages → Build and deployment**：Source 选择 **Deploy from a branch**，分支选 `gh-pages`，目录选 `/ (root)`。
+- **Settings → Actions → General → Workflow permissions**：选择 **Read and write permissions**。
+
+注意：fork PR 的预览内容是**未经维护者审核的静态页面**，并运行在 `*.github.io` 源上。这套流程的边界是「写权限不落到 PR 代码手里」，而不是「预览内容一定安全」；如果无法接受这一点，请不要启用这个工作流。
+
+另外，`workflow_run` 只会对默认分支上存在的工作流生效，所以「引入这两个工作流」的那个 PR 本身不会产生预览，合并之后的 PR 才会。
+
 ## Docker 启动
 
 ```bash

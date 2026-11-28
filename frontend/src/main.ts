@@ -11,6 +11,12 @@ import { failBoot, finishBoot } from './composables/useLoadingState';
 import { installMarketTooltip } from './directives/marketTooltip';
 
 async function startApp() {
+  // PR 前端预览：用内置模拟数据接管 /api/v1 请求，生产构建不会加载这段代码。
+  if (import.meta.env.VITE_PREVIEW_MOCK === '1') {
+    const { installPreviewMock } = await import('./preview/mockApi');
+    installPreviewMock();
+  }
+
   const app = createApp(App);
   app.use(createPinia());
   app.use(router);

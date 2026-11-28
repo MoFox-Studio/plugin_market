@@ -1,0 +1,277 @@
+# 前端 PR 预览 · 第二阶段：发布 / 清理
+#
+# 为什么 fork PR 也能有预览：
+#   fork PR 的 GITHUB_TOKEN 只能是只读的，这是 GitHub 的安全模型，不是仓库配置
+#   能绕过的。所以这里把「构建」和「发布」拆成两个工作流：
+#
+#     1. pr-frontend-preview-build.yml 在 pull_request 上下文中构建，只读权限、
+#        无 secret，产物作为 artifact 上传；
+#     2. 本工作流由 workflow_run 触发，运行在默认分支的上下文里，拥有写权限，
+#        只下载静态产物并推送到 gh-pages，绝不 checkout 或执行 PR 里的代码。
+#
+#   写权限始终留在默认分支这一侧，不会落到 PR 提交的代码手里。
+#
+# 安全提醒：
+#   - fork PR 的产物仍然是「未经维护者审核的静态页面」，最终会运行在
+#     *.github.io 源上。如果不希望自动发布，请勿启用本工作流。
+#   - 发布前会校验产物：必须包含 index.html，且不能含符号链接或 .git。
+#
+# 首次使用需要仓库管理员完成两项设置：
+#   1. Settings → Pages → Build and deployment → Source 选择
+#      "Deploy from a branch"，分支 gh-pages，目录 / (root)。
+#   2. Settings → Actions → General → Workflow permissions 选择
+#      "Read and write permissions"。
+
+name: 前端预览发布
+
+on:
+  workflow_run:
+    workflows: ['前端预览构建']
+    types: [completed]
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  pages: write
+
+env:
+  PREVIEW_BRANCH: gh-pages
+  UMBRELLA_DIR: pr-preview
+
+jobs:
+  publish:
+    name: 发布预览
+    # 只处理目标构建工作流的 pull_request 运行；其他事件交给 cleanup。
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.path == '.github/workflows/pr-frontend-preview-build.yml'
+    runs-on: ubuntu-latest
+    concurrency:
+      # 与 cleanup 使用同一组，保证「发布」和「删除」不会互相踩踏。
+      group: frontend-preview-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha }}
+      cancel-in-progress: false
+    steps:
+      - name: 解析 PR 与发布条件
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          EVENT_PR_HEAD: ${{ github.event.workflow_run.pull_requests[0].head.sha }}
+        run: |
+          set -euo pipefail
+
+          echo "number=" >> "$GITHUB_OUTPUT"
+          echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          echo "reason=unknown" >> "$GITHUB_OUTPUT"
+
+          number="${EVENT_PR_NUMBER}"
+          if [ -z "$number" ]; then
+            number=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/pulls" \
+              --jq 'map(select(.state == "open"))[0].number // empty' || true)
+          fi
+
+          if [ -z "$number" ]; then
+            echo "::warning::无法从构建运行中解析 PR 编号，跳过预览发布。"
+            echo "reason=missing-pr" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "number=${number}" >> "$GITHUB_OUTPUT"
+
+          pr_json=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}")
+          state=$(echo "$pr_json" | jq -r '.state')
+          head_sha=$(echo "$pr_json" | jq -r '.head.sha')
+
+          if [ "$state" != "open" ]; then
+            echo "::notice::PR #${number} 已不是打开状态，跳过预览发布。"
+            echo "reason=closed" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 有人连续推送时，旧构建可能后完成。只发布仍然是 PR 当前 head 的那次构建。
+          if [ -n "${EVENT_PR_HEAD}" ] && [ "${EVENT_PR_HEAD}" != "${head_sha}" ]; then
+            echo "::notice::PR #${number} 已有更新的提交（${head_sha}），跳过旧构建的发布。"
+            echo "reason=stale" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "head_sha=${head_sha}" >> "$GITHUB_OUTPUT"
+          echo "reason=ok" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout 默认分支
+        if: steps.resolve.outputs.reason == 'ok' && github.event.workflow_run.conclusion == 'success'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: 下载构建产物
+        if: steps.resolve.outputs.reason == 'ok' && github.event.workflow_run.conclusion == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-preview
+          path: frontend/dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: 校验静态产物
+        if: steps.resolve.outputs.reason == 'ok' && github.event.workflow_run.conclusion == 'success'
+        run: |
+          set -euo pipefail
+          test -f frontend/dist/index.html || {
+            echo "::error::构建产物中缺少 index.html，拒绝发布。"
+            exit 1
+          }
+          if find frontend/dist -type l | grep -q .; then
+            echo "::error::构建产物包含符号链接，拒绝发布。"
+            exit 1
+          fi
+          if [ -e frontend/dist/.git ]; then
+            echo "::error::构建产物包含 .git 目录，拒绝发布。"
+            exit 1
+          fi
+
+      - name: 发布到 gh-pages
+        id: preview
+        if: steps.resolve.outputs.reason == 'ok' && github.event.workflow_run.conclusion == 'success'
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: frontend/dist
+          preview-branch: ${{ env.PREVIEW_BRANCH }}
+          umbrella-dir: ${{ env.UMBRELLA_DIR }}
+          pr-number: ${{ steps.resolve.outputs.number }}
+          action: deploy
+          comment: false
+          qr-code: false
+
+      # 如果仓库还没有启用 Pages，尝试以 gh-pages 分支为来源启用。
+      # 失败通常是因为 GITHUB_TOKEN 缺少仓库管理权限，此时由管理员手动设置。
+      - name: 首次运行时尝试启用 GitHub Pages
+        if: steps.preview.outputs.deployment-action == 'deploy'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" --input - >/dev/null <<'JSON'
+          {"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}
+          JSON
+            echo "::notice::已尝试启用 GitHub Pages（来源：gh-pages 分支）"
+          fi
+
+      - name: 在 PR 中回复预览地址
+        if: steps.resolve.outputs.reason == 'ok' && steps.preview.outputs.deployment-action == 'deploy'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: frontend-preview
+          number_force: ${{ steps.resolve.outputs.number }}
+          message: |
+            ## 🛫 前端预览已就绪
+
+            | 项目 | 内容 |
+            | --- | --- |
+            | 预览地址 | ${{ steps.preview.outputs.preview-url }} |
+            | 本次提交 | [`${{ steps.resolve.outputs.head_sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ steps.resolve.outputs.head_sha }}) |
+            | 数据来源 | 内置模拟数据，不连接生产后端 |
+
+            > 预览中的登录、评论、发布等写操作不可用。
+            > 每次推送新提交会自动更新此预览，PR 关闭后自动清理。
+            > 首次部署后 GitHub Pages 可能需要 30–60 秒完成构建，请稍后再打开链接。
+
+      - name: 构建失败提示
+        if: steps.resolve.outputs.reason == 'ok' && github.event.workflow_run.conclusion == 'failure'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: frontend-preview
+          number_force: ${{ steps.resolve.outputs.number }}
+          message: |
+            ## ❌ 前端预览构建失败
+
+            请查看 [构建日志](${{ github.event.workflow_run.html_url }}) 定位问题。
+
+      - name: 写入任务摘要
+        if: always() && github.event_name == 'workflow_run'
+        run: |
+          {
+            echo "## 前端 PR 预览"
+            echo ""
+            case "${{ steps.resolve.outputs.reason }}" in
+              ok)
+                echo "- PR：#${{ steps.resolve.outputs.number }}"
+                echo "- 提交：\`${{ steps.resolve.outputs.head_sha }}\`"
+                if [ "${{ steps.preview.outputs.deployment-action }}" = "deploy" ]; then
+                  echo "- 预览地址：${{ steps.preview.outputs.preview-url }}"
+                else
+                  echo "- 构建结论：${{ github.event.workflow_run.conclusion }}，未部署预览。"
+                fi
+                ;;
+              stale)
+                echo "- PR 已有更新的提交，跳过这次旧构建。"
+                ;;
+              closed)
+                echo "- PR 已关闭，跳过发布。"
+                ;;
+              missing-pr)
+                echo "- 未解析到 PR 编号。"
+                ;;
+              *)
+                echo "- 未部署预览。"
+                ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup:
+    name: 清理预览
+    if: github.event_name == 'pull_request_target' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: frontend-preview-${{ github.event.number }}
+      cancel-in-progress: false
+    steps:
+      # 注意：只 checkout 默认分支，绝不 checkout PR 的代码。
+      - name: Checkout 默认分支
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: 检查 gh-pages 是否存在
+        id: branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/branches/${{ env.PREVIEW_BRANCH }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 从 gh-pages 移除预览
+        id: preview
+        if: steps.branch.outputs.exists == 'true'
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: frontend/dist
+          preview-branch: ${{ env.PREVIEW_BRANCH }}
+          umbrella-dir: ${{ env.UMBRELLA_DIR }}
+          pr-number: ${{ github.event.number }}
+          action: remove
+          comment: false
+          qr-code: false
+
+      - name: 在 PR 中说明清理结果
+        if: steps.preview.outputs.deployment-action == 'remove'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: frontend-preview
+          number_force: ${{ github.event.number }}
+          message: |
+            ## 🛬 前端预览已清理
+
+            该 PR 已关闭，`${{ env.UMBRELLA_DIR }}/pr-${{ github.event.number }}` 已从 `${{ env.PREVIEW_BRANCH }}` 分支移除。
