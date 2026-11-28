@@ -170,7 +170,7 @@ jobs:
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: frontend-preview
-          number_force: ${{ steps.resolve.outputs.number }}
+          number: ${{ steps.resolve.outputs.number }}
           message: |
             ## 🛫 前端预览已就绪
 
@@ -189,7 +189,7 @@ jobs:
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: frontend-preview
-          number_force: ${{ steps.resolve.outputs.number }}
+          number: ${{ steps.resolve.outputs.number }}
           message: |
             ## ❌ 前端预览构建失败
 
@@ -270,7 +270,7 @@ jobs:
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: frontend-preview
-          number_force: ${{ github.event.number }}
+          number: ${{ github.event.number }}
           message: |
             ## 🛬 前端预览已清理
 
