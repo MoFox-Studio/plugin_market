@@ -247,7 +247,7 @@ async function undoFeedback() {
       v-if="batch.data?.items.length && batch.exhausted"
       class="recommendation-end"
     >
-      本轮合适的推荐已展示完毕。也可以<a href="/browse">浏览全部插件 ↗</a>
+      本轮合适的推荐已展示完毕。也可以<router-link to="/browse">浏览全部插件 ↗</router-link>
     </p>
     <RecommendationPreferences
       :open="preferencesOpen"

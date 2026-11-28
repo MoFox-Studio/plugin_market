@@ -64,7 +64,7 @@ onMounted(() => {
         image.src = '';
         reject(new Error('Logo loading cancelled'));
       };
-      image.src = '/logo.png';
+      image.src = `${import.meta.env.BASE_URL}logo.png`;
     });
   }
   async function initialize() {

@@ -34,6 +34,24 @@ http://127.0.0.1:8787/me     # 当前 GitHub 用户发布的插件
 http://127.0.0.1:8787/admin  # 管理后台
 ```
 
+## PR 前端预览
+
+当 PR 修改 `frontend/` 时，`.github/workflows/pr-frontend-preview.yml` 会自动：
+
+1. 构建前端；
+2. 发布到 GitHub Pages 的 `pr-preview/pr-<编号>/` 目录；
+3. 在 PR 中维护一条包含预览地址的评论；
+4. 在 PR 关闭后自动清理预览。
+
+预览页面使用内置模拟数据（`VITE_PREVIEW_MOCK=1`），不连接生产后端，因此登录、评论、发布等写操作不可用；预览还使用 hash 路由，避免 GitHub Pages 直接刷新深层链接时 404。
+
+首次使用需要仓库管理员在仓库设置中完成：
+
+- **Settings → Pages → Build and deployment**：Source 选择 **Deploy from a branch**，分支选 `gh-pages`，目录选 `/ (root)`。
+- **Settings → Actions → General → Workflow permissions**：选择 **Read and write permissions**。
+
+来自 fork 的 PR 无法获得写权限，因此只做构建校验，不发布预览。
+
 ## Docker 启动
 
 ```bash

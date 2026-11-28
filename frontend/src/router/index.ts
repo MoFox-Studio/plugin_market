@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
 import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import {
@@ -158,8 +158,14 @@ const routes: RouteRecordRaw[] = [
 ];
 
 const navigationTasks = new WeakMap<RouteLocationNormalized, number>();
+// GitHub Pages 是纯静态托管，没有 SPA 回退；PR 预览改用 hash 路由，
+// 这样刷新或直接打开深层链接也不会 404。生产环境仍然使用 history 路由。
+const history =
+  import.meta.env.VITE_ROUTER_MODE === 'hash'
+    ? createWebHashHistory(import.meta.env.BASE_URL)
+    : createWebHistory(import.meta.env.BASE_URL);
 const router = createRouter({
-  history: createWebHistory(),
+  history,
   routes,
   scrollBehavior(to, from, savedPosition) {
     return restoreRouteScroll({
