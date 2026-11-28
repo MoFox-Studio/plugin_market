@@ -124,45 +124,62 @@
     list.appendChild(li);
   }
 
-  fetch("https://api.github.com/repos/" + REPO + "/contents/pr-preview?ref=gh-pages", {
-    headers: { Accept: "application/vnd.github+json" }
-  })
+  function render(numbers) {
+    numbers = (numbers || [])
+      .map(Number)
+      .filter(function (n) { return Number.isInteger(n) && n > 0; })
+      .sort(function (a, b) { return b - a; });
+
+    if (numbers.length === 0) {
+      setMessage("目前没有打开的前端预览。");
+      return;
+    }
+
+    list.innerHTML = "";
+    numbers.forEach(function (number) {
+      var li = document.createElement("li");
+      var a = document.createElement("a");
+      a.href = "pr-preview/pr-" + number + "/";
+      a.innerHTML =
+        '<span class="num">#' + number + '</span>' +
+        '<span class="label">PR #' + number + ' 前端预览</span>' +
+        '<span class="go">打开 →</span>';
+      li.appendChild(a);
+      list.appendChild(li);
+    });
+  }
+
+  // 优先读取部署时生成的静态索引，不受 GitHub API 限流影响。
+  function fromApi() {
+    return fetch("https://api.github.com/repos/" + REPO + "/contents/pr-preview?ref=gh-pages", {
+      headers: { Accept: "application/vnd.github+json" }
+    })
+      .then(function (res) {
+        if (res.status === 404) return [];
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (items) {
+        return (Array.isArray(items) ? items : [])
+          .filter(function (item) {
+            return item.type === "dir" && /^pr-\d+$/.test(item.name);
+          })
+          .map(function (item) { return Number(item.name.slice(3)); });
+      });
+  }
+
+  fetch("previews.json", { cache: "no-store" })
     .then(function (res) {
-      if (res.status === 404) return [];
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
     })
-    .then(function (items) {
-      if (!Array.isArray(items)) items = [];
-      var previews = items
-        .filter(function (item) {
-          return item.type === "dir" && /^pr-\d+$/.test(item.name);
-        })
-        .map(function (item) {
-          return { name: item.name, number: Number(item.name.slice(3)) };
-        })
-        .sort(function (a, b) { return b.number - a.number; });
-
-      if (previews.length === 0) {
-        setMessage("目前没有打开的前端预览。");
-        return;
-      }
-
-      list.innerHTML = "";
-      previews.forEach(function (preview) {
-        var li = document.createElement("li");
-        var a = document.createElement("a");
-        a.href = "pr-preview/" + preview.name + "/";
-        a.innerHTML =
-          '<span class="num">#' + preview.number + '</span>' +
-          '<span class="label">PR #' + preview.number + ' 前端预览</span>' +
-          '<span class="go">打开 →</span>';
-        li.appendChild(a);
-        list.appendChild(li);
-      });
-    })
+    .then(function (index) { render(index && index.previews); })
     .catch(function () {
-      setMessage("无法读取预览列表（可能触发了 GitHub API 限流）。可以直接访问 pr-preview/pr-<编号>/。");
+      fromApi()
+        .then(render)
+        .catch(function () {
+          setMessage("暂时无法读取预览列表，可以直接访问 pr-preview/pr-<编号>/。");
+        });
     });
 })();
 </script>
